@@ -1,0 +1,581 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════
+   FULL DESIGN TOKEN SYSTEM — v8
+   Tokens: color · radius · spacing · shadow · typography
+   كل ثيم يحمل نظام كامل، ليس ألوان فقط.
+   ══════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Color ── */
+  --app-bg:        #020617;
+  --sidebar-bg:    #0f172a;
+  --header-bg:     rgba(2,6,23,0.95);
+  --accent:        #2563eb;
+  --accent-hover:  #1d4ed8;
+  --accent-shadow: rgba(37,99,235,0.25);
+  --border:        rgba(51,65,85,0.5);
+  --card-bg:       rgba(30,41,59,0.6);
+  --text-primary:  #f1f5f9;
+  --text-muted:    #64748b;
+
+  /* ── Radius ── */
+  --radius-sm:   6px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-full: 9999px;
+
+  /* ── Spacing scale ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* ── Shadows ── */
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.5);
+  --shadow-accent: 0 4px 20px var(--accent-shadow);
+
+  /* ── Typography ── */
+  --font-base:    'Segoe UI', Tahoma, sans-serif;
+  --font-size-xs: 10px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold:   700;
+  --font-weight-black:  900;
+  --line-height:  1.5;
+}
+
+/* ════════════════════════════════════
+   ── 1. Dark Ocean (default) ──
+   ════════════════════════════════════ */
+[data-theme="ocean"] {
+  --app-bg:        #020617;
+  --sidebar-bg:    #0f172a;
+  --header-bg:     rgba(2,6,23,0.95);
+  --accent:        #2563eb;
+  --accent-hover:  #1d4ed8;
+  --accent-shadow: rgba(37,99,235,0.25);
+  --border:        rgba(51,65,85,0.5);
+  --card-bg:       rgba(30,41,59,0.6);
+  --text-primary:  #f1f5f9;
+  --text-muted:    #64748b;
+  --radius-sm:   6px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --shadow-md:   0 4px 16px rgba(0,0,0,0.4);
+  --shadow-accent: 0 4px 20px rgba(37,99,235,0.30);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 2. Midnight Purple ──
+   ════════════════════════════════════ */
+[data-theme="purple"] {
+  --app-bg:        #0d0a1a;
+  --sidebar-bg:    #150f2a;
+  --header-bg:     rgba(13,10,26,0.95);
+  --accent:        #7c3aed;
+  --accent-hover:  #6d28d9;
+  --accent-shadow: rgba(124,58,237,0.25);
+  --border:        rgba(109,40,217,0.3);
+  --card-bg:       rgba(30,20,60,0.6);
+  --text-primary:  #ede9fe;
+  --text-muted:    #7c6faa;
+  --radius-sm:   8px;
+  --radius-md:   14px;
+  --radius-lg:   18px;
+  --radius-xl:   24px;
+  --shadow-md:   0 4px 20px rgba(0,0,0,0.5);
+  --shadow-accent: 0 4px 24px rgba(124,58,237,0.35);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 3. Emerald Dark ──
+   ════════════════════════════════════ */
+[data-theme="emerald"] {
+  --app-bg:        #021408;
+  --sidebar-bg:    #041f0f;
+  --header-bg:     rgba(2,20,8,0.95);
+  --accent:        #059669;
+  --accent-hover:  #047857;
+  --accent-shadow: rgba(5,150,105,0.25);
+  --border:        rgba(6,95,70,0.4);
+  --card-bg:       rgba(4,40,20,0.6);
+  --text-primary:  #d1fae5;
+  --text-muted:    #4a7c5f;
+  --radius-sm:   6px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --shadow-md:   0 4px 16px rgba(0,0,0,0.45);
+  --shadow-accent: 0 4px 20px rgba(5,150,105,0.30);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 4. Sunset Dark ──
+   ════════════════════════════════════ */
+[data-theme="sunset"] {
+  --app-bg:        #1a0a00;
+  --sidebar-bg:    #2a0f00;
+  --header-bg:     rgba(26,10,0,0.95);
+  --accent:        #ea580c;
+  --accent-hover:  #c2410c;
+  --accent-shadow: rgba(234,88,12,0.25);
+  --border:        rgba(194,65,12,0.35);
+  --card-bg:       rgba(50,20,5,0.6);
+  --text-primary:  #fed7aa;
+  --text-muted:    #7c4a2a;
+  --radius-sm:   4px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   18px;
+  --shadow-md:   0 4px 18px rgba(0,0,0,0.5);
+  --shadow-accent: 0 4px 22px rgba(234,88,12,0.30);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 5. Slate Light ──
+   ════════════════════════════════════ */
+[data-theme="light"] {
+  --app-bg:        #f1f5f9;
+  --sidebar-bg:    #e2e8f0;
+  --header-bg:     rgba(241,245,249,0.95);
+  --accent:        #2563eb;
+  --accent-hover:  #1d4ed8;
+  --accent-shadow: rgba(37,99,235,0.15);
+  --border:        rgba(203,213,225,0.8);
+  --card-bg:       rgba(255,255,255,0.7);
+  --text-primary:  #0f172a;
+  --text-muted:    #64748b;
+  --radius-sm:   6px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --shadow-md:   0 2px 12px rgba(0,0,0,0.10);
+  --shadow-accent: 0 4px 16px rgba(37,99,235,0.18);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 6. SaaS Pro ── (NEW)
+   Clean modern SaaS: cool gray, indigo accent,
+   sharp small radius, tight spacing.
+   ════════════════════════════════════ */
+[data-theme="saas"] {
+  --app-bg:        #0a0b0f;
+  --sidebar-bg:    #111318;
+  --header-bg:     rgba(10,11,15,0.97);
+  --accent:        #6366f1;
+  --accent-hover:  #4f46e5;
+  --accent-shadow: rgba(99,102,241,0.28);
+  --border:        rgba(99,102,241,0.18);
+  --card-bg:       rgba(17,19,24,0.8);
+  --text-primary:  #e2e8f0;
+  --text-muted:    #6b7280;
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   10px;
+  --radius-xl:   12px;
+  --shadow-md:   0 4px 20px rgba(0,0,0,0.6);
+  --shadow-accent: 0 4px 24px rgba(99,102,241,0.32);
+  --font-base:   'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 7. iOS ── (NEW)
+   Apple-inspired: frosted glass whites,
+   system blue, generous radius, soft shadows.
+   ════════════════════════════════════ */
+[data-theme="ios"] {
+  --app-bg:        #f2f2f7;
+  --sidebar-bg:    rgba(255,255,255,0.72);
+  --header-bg:     rgba(242,242,247,0.85);
+  --accent:        #007aff;
+  --accent-hover:  #0062cc;
+  --accent-shadow: rgba(0,122,255,0.22);
+  --border:        rgba(60,60,67,0.12);
+  --card-bg:       rgba(255,255,255,0.85);
+  --text-primary:  #1c1c1e;
+  --text-muted:    #8e8e93;
+  --radius-sm:   10px;
+  --radius-md:   16px;
+  --radius-lg:   20px;
+  --radius-xl:   28px;
+  --shadow-md:   0 4px 20px rgba(0,0,0,0.08);
+  --shadow-accent: 0 4px 18px rgba(0,122,255,0.22);
+  --font-base:   -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+}
+
+/* ══ Apply variables to layout elements ══ */
+body {
+  background-color: var(--app-bg);
+  color: var(--text-primary);
+  font-family: var(--font-base);
+  transition: background-color 0.25s, color 0.25s;
+}
+
+/* ════════════════════════════════════════════════════════
+   ── 8. NOVA — Glass Neon ── (NEW — الثيم المميّز)
+   
+   الفكرة: خلفية mesh gradient داكنة (indigo→violet→cyan)
+   + cards بـ frosted glass effect
+   + accent نيون أزرق-بنفسجي يتوهج
+   + كل العناصر شفافة تعكس الخلفية
+
+   مستوحى من: Figma Pro / Linear / Vercel dashboards
+   ════════════════════════════════════════════════════════ */
+[data-theme="nova"] {
+  --app-bg:        #07080f;
+  --sidebar-bg:    rgba(10,10,20,0.75);
+  --header-bg:     rgba(7,8,15,0.80);
+  --accent:        #818cf8;
+  --accent-hover:  #6366f1;
+  --accent-shadow: rgba(129,140,248,0.35);
+  --border:        rgba(129,140,248,0.15);
+  --card-bg:       rgba(15,16,30,0.55);
+  --text-primary:  #e2e8f0;
+  --text-muted:    #6b7280;
+  --radius-sm:   8px;
+  --radius-md:   14px;
+  --radius-lg:   20px;
+  --radius-xl:   26px;
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.5);
+  --shadow-md:   0 8px 32px rgba(0,0,0,0.6);
+  --shadow-lg:   0 20px 60px rgba(0,0,0,0.7);
+  --shadow-accent: 0 0 24px rgba(129,140,248,0.40), 0 4px 16px rgba(129,140,248,0.20);
+  --font-base:   'Inter', 'Segoe UI', sans-serif;
+
+  /* Aurora gradient — يتحرك في الخلفية */
+  --aurora-1: #3b0764;
+  --aurora-2: #1e1b4b;
+  --aurora-3: #0c1445;
+  --aurora-4: #083344;
+}
+
+/* ── Nova: mesh gradient background ── */
+[data-theme="nova"] body,
+[data-theme="nova"] .nova-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%,  rgba(99,102,241,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 80%,  rgba(168,85,247,0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 40% at 60% 30%,  rgba(6,182,212,0.10)  0%, transparent 50%),
+    #07080f;
+}
+
+/* ── Glass card utility ── */
+[data-theme="nova"] .glass {
+  background: rgba(15,16,30,0.55);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(129,140,248,0.15);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+/* ── Neon glow on active/hover ── */
+[data-theme="nova"] .neon-glow {
+  box-shadow: 0 0 20px rgba(129,140,248,0.4), 0 0 60px rgba(129,140,248,0.15);
+}
+
+/* ── Animated aurora orbs ── */
+[data-theme="nova"] .aurora-orb-1 {
+  position: fixed; pointer-events: none; z-index: 0;
+  width: 600px; height: 600px; border-radius: 50%;
+  top: -200px; right: -100px;
+  background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
+  animation: aurora-drift-1 18s ease-in-out infinite alternate;
+  filter: blur(40px);
+}
+[data-theme="nova"] .aurora-orb-2 {
+  position: fixed; pointer-events: none; z-index: 0;
+  width: 500px; height: 500px; border-radius: 50%;
+  bottom: -150px; left: -80px;
+  background: radial-gradient(circle, rgba(168,85,247,0.10) 0%, transparent 70%);
+  animation: aurora-drift-2 22s ease-in-out infinite alternate;
+  filter: blur(50px);
+}
+[data-theme="nova"] .aurora-orb-3 {
+  position: fixed; pointer-events: none; z-index: 0;
+  width: 400px; height: 400px; border-radius: 50%;
+  top: 40%; left: 40%;
+  background: radial-gradient(circle, rgba(6,182,212,0.08) 0%, transparent 70%);
+  animation: aurora-drift-3 26s ease-in-out infinite alternate;
+  filter: blur(60px);
+}
+
+@keyframes aurora-drift-1 {
+  0%   { transform: translate(0px, 0px)   scale(1);    }
+  50%  { transform: translate(-80px, 60px) scale(1.15); }
+  100% { transform: translate(40px, -40px) scale(0.95); }
+}
+@keyframes aurora-drift-2 {
+  0%   { transform: translate(0px, 0px)    scale(1);    }
+  50%  { transform: translate(100px, -70px) scale(1.2); }
+  100% { transform: translate(-50px, 30px) scale(0.9); }
+}
+@keyframes aurora-drift-3 {
+  0%   { transform: translate(0, 0)      scale(1);    }
+  50%  { transform: translate(-60px, 80px) scale(1.1); }
+  100% { transform: translate(80px, -60px) scale(1.05); }
+}
+
+/* ── Gradient text for headings ── */
+[data-theme="nova"] .grad-text {
+  background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #67e8f9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Shimmer border animation ── */
+@keyframes shimmer-border {
+  0%   { border-color: rgba(129,140,248,0.15); }
+  50%  { border-color: rgba(129,140,248,0.40); }
+  100% { border-color: rgba(129,140,248,0.15); }
+}
+[data-theme="nova"] .shimmer {
+  animation: shimmer-border 3s ease-in-out infinite;
+}
+
+/* ── Sidebar glass ── */
+[data-theme="nova"] aside {
+  background: rgba(10,10,20,0.70) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border-color: rgba(129,140,248,0.12) !important;
+}
+
+/* ── Header glass ── */
+[data-theme="nova"] header {
+  background: rgba(7,8,15,0.75) !important;
+  backdrop-filter: blur(24px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.5) !important;
+  border-color: rgba(129,140,248,0.10) !important;
+}
+
+/* ── Active nav item neon ── */
+[data-theme="nova"] nav button[style*="var(--accent)"] {
+  box-shadow: 0 0 20px rgba(129,140,248,0.35), 0 0 40px rgba(129,140,248,0.12) !important;
+}
+
+/* ── Scrollbar Nova style ── */
+[data-theme="nova"] ::-webkit-scrollbar { width: 4px; }
+[data-theme="nova"] ::-webkit-scrollbar-track { background: transparent; }
+[data-theme="nova"] ::-webkit-scrollbar-thumb {
+  background: rgba(129,140,248,0.3);
+  border-radius: 99px;
+}
+[data-theme="nova"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(129,140,248,0.5);
+}
+
+/* ════════════════════════════════════
+   ── 9. Crimson Dark ──
+   أحمر داكن جريء — دم ونار
+   ════════════════════════════════════ */
+[data-theme="crimson"] {
+  --app-bg:        #0f0202;
+  --sidebar-bg:    #1a0404;
+  --header-bg:     rgba(15,2,2,0.96);
+  --accent:        #dc2626;
+  --accent-hover:  #b91c1c;
+  --accent-shadow: rgba(220,38,38,0.30);
+  --border:        rgba(185,28,28,0.30);
+  --card-bg:       rgba(40,8,8,0.65);
+  --text-primary:  #fee2e2;
+  --text-muted:    #7f4040;
+  --radius-sm:   4px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   18px;
+  --shadow-md:   0 4px 18px rgba(0,0,0,0.55);
+  --shadow-accent: 0 4px 22px rgba(220,38,38,0.35);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 10. Gold Dark ──
+   ذهبي فاخر داكن — قيصري
+   ════════════════════════════════════ */
+[data-theme="gold"] {
+  --app-bg:        #0c0800;
+  --sidebar-bg:    #1a1000;
+  --header-bg:     rgba(12,8,0,0.96);
+  --accent:        #d97706;
+  --accent-hover:  #b45309;
+  --accent-shadow: rgba(217,119,6,0.30);
+  --border:        rgba(180,83,9,0.30);
+  --card-bg:       rgba(40,28,0,0.65);
+  --text-primary:  #fef3c7;
+  --text-muted:    #7a5c20;
+  --radius-sm:   5px;
+  --radius-md:   10px;
+  --radius-lg:   15px;
+  --radius-xl:   20px;
+  --shadow-md:   0 4px 18px rgba(0,0,0,0.55);
+  --shadow-accent: 0 4px 24px rgba(217,119,6,0.35);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+}
+
+/* ════════════════════════════════════
+   ── 11. Paper Warm (Light) ──
+   ورق دافئ — كريمي أنيق
+   ════════════════════════════════════ */
+[data-theme="paper"] {
+  --app-bg:        #faf7f2;
+  --sidebar-bg:    #f0ebe0;
+  --header-bg:     rgba(250,247,242,0.95);
+  --accent:        #b45309;
+  --accent-hover:  #92400e;
+  --accent-shadow: rgba(180,83,9,0.18);
+  --border:        rgba(180,140,80,0.25);
+  --card-bg:       rgba(255,252,245,0.85);
+  --text-primary:  #1c1008;
+  --text-muted:    #8a6d4a;
+  --radius-sm:   6px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   22px;
+  --shadow-md:   0 2px 12px rgba(0,0,0,0.09);
+  --shadow-accent: 0 4px 16px rgba(180,83,9,0.20);
+  --font-base:   Georgia, 'Times New Roman', serif;
+}
+
+/* ════════════════════════════════════
+   ── 12. Matrix ── (Special)
+   أخضر مصفوفي — هاكر كلاسيك
+   ════════════════════════════════════ */
+[data-theme="matrix"] {
+  --app-bg:        #000300;
+  --sidebar-bg:    #020802;
+  --header-bg:     rgba(0,3,0,0.97);
+  --accent:        #00ff41;
+  --accent-hover:  #00cc33;
+  --accent-shadow: rgba(0,255,65,0.30);
+  --border:        rgba(0,200,50,0.20);
+  --card-bg:       rgba(0,15,5,0.75);
+  --text-primary:  #c8ffcc;
+  --text-muted:    #2a6b30;
+  --radius-sm:   2px;
+  --radius-md:   4px;
+  --radius-lg:   6px;
+  --radius-xl:   8px;
+  --shadow-md:   0 4px 16px rgba(0,0,0,0.7);
+  --shadow-accent: 0 0 20px rgba(0,255,65,0.40), 0 4px 16px rgba(0,255,65,0.15);
+  --font-base:   'Courier New', 'Lucida Console', monospace;
+}
+
+/* Matrix: scanline subtle effect */
+[data-theme="matrix"] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,255,65,0.015) 2px,
+    rgba(0,255,65,0.015) 4px
+  );
+}
+
+/* Matrix scrollbar */
+[data-theme="matrix"] ::-webkit-scrollbar-thumb {
+  background: rgba(0,255,65,0.3);
+}
+[data-theme="matrix"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,255,65,0.5);
+}
+
+/* ════════════════════════════════════
+   ── 13. Rose Quartz ── (Special)
+   وردي غامق ناعم — مميز وعاطفي
+   ════════════════════════════════════ */
+[data-theme="rose"] {
+  --app-bg:        #0f0510;
+  --sidebar-bg:    rgba(25,8,28,0.85);
+  --header-bg:     rgba(15,5,16,0.90);
+  --accent:        #e879a0;
+  --accent-hover:  #db2777;
+  --accent-shadow: rgba(232,121,160,0.35);
+  --border:        rgba(232,121,160,0.15);
+  --card-bg:       rgba(35,10,40,0.60);
+  --text-primary:  #fce7f3;
+  --text-muted:    #7c4a6e;
+  --radius-sm:   8px;
+  --radius-md:   14px;
+  --radius-lg:   20px;
+  --radius-xl:   28px;
+  --shadow-md:   0 8px 28px rgba(0,0,0,0.55);
+  --shadow-accent: 0 0 24px rgba(232,121,160,0.40), 0 4px 16px rgba(232,121,160,0.20);
+  --font-base:   'Segoe UI', Tahoma, sans-serif;
+  --aurora-r1: #4a0a3a;
+  --aurora-r2: #2d0520;
+}
+
+/* Rose: soft gradient bg */
+[data-theme="rose"] body {
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 10%, rgba(232,121,160,0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 85% 85%, rgba(168,85,247,0.10) 0%, transparent 50%),
+    #0f0510;
+}
+
+/* Rose scrollbar */
+[data-theme="rose"] ::-webkit-scrollbar-thumb {
+  background: rgba(232,121,160,0.3);
+}
+[data-theme="rose"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(232,121,160,0.5);
+}
+
+/* ════════════════════════════════════
+   GLOBAL POLISH — كل الثيمات
+   ════════════════════════════════════ */
+
+/* Smooth theme transitions */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* Scrollbar — subtle across all themes */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Selection color */
+::selection {
+  background: var(--accent);
+  color: #fff;
+  opacity: 0.8;
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

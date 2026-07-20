@@ -1,0 +1,42 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "مركز الشرقاوي",
+    "version": "9.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": { "open": true },
+      "dialog": { "all": true },
+      "window": { "all": true }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.elshrqawy.system",
+      "icon": []
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "مركز الشرقاوي التعليمي",
+        "width": 900,
+        "height": 700,
+        "minWidth": 375,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "maximized": true,
+        "decorations": true
+      }
+    ]
+  }
+}

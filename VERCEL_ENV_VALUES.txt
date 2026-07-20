@@ -1,0 +1,29 @@
+# متغيرات البيئة على Vercel — انسخ كل سطر ولزقه في مكانه
+
+روح لـ Vercel → مشروعك (elshrqawy-system-978y) → Settings →
+Environment Variables، وضيف كل واحد من دول لوحده (الاسم في خانة،
+القيمة في الخانة اللي جنبها):
+
+VITE_FIREBASE_API_KEY
+AIzaSyCdrlB_yZFCBUqRQNNeQtrX5SRs6gPqlPg
+
+VITE_FIREBASE_AUTH_DOMAIN
+elshrqawy-system.firebaseapp.com
+
+VITE_FIREBASE_PROJECT_ID
+elshrqawy-system
+
+VITE_FIREBASE_STORAGE_BUCKET
+elshrqawy-system.firebasestorage.app
+
+VITE_FIREBASE_MESSAGING_SENDER_ID
+423692642898
+
+VITE_FIREBASE_APP_ID
+1:423692642898:web:b667be40dbe3702d8ccd8b
+
+---
+
+بعد ما تضيفهم الـ 6، روح لتبويب "Deployments"، دوس على النقط التلاتة
+(⋮) جنب آخر deployment، واختار "Redeploy" عشان الموقع الحي ياخد
+القيم الجديدة دي.
