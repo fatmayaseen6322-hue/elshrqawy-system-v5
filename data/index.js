@@ -24,9 +24,9 @@ export const INIT_SETTINGS = {
   //   cashier  → "cash123"
   //   teacher  → "teach123"
   // لتغييرها: الإعدادات → كلمة مرور الدور المطلوب
-  password:        "sha256:4da3060a44ae94eb285b1e0c3f95cbde082f0611e1cf23d07ed04f89a49bd5d1",
-  cashierPassword: "sha256:95cb240f3a1cfd60fe2cc8b1e7e8eb9e60f1caf72c8a1ac5d55c88d7a91e6e8d",
-  teacherPassword: "sha256:d6f1a0bca4cdfe38804c9c8a50c6c7e2b89fc0a7a9b27ac0f03b47fa42e3c09f",
+  password:        "sha256:703e1ba45df97a88dc8e7c27ac29ff2c9490055cac02d10a27ecd49560408cf7",
+  cashierPassword: "sha256:d716e892f84b4963347e3bfbae7e946b2a333d01a1f215debabe8be4d1d1a1d6",
+  teacherPassword: "sha256:5d284a8fa5b70176873cfc553d6da0008c212cb8c3f8ca8097e7f347d68bf3d2",
   logo: null,
   bg: null,
   waNumbers: [

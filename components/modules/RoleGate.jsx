@@ -26,22 +26,11 @@ export default function RoleGate({ settings, onEnter }) {
   const [err,     setErr]     = useState("");
   const [loading, setLoading] = useState(false);
 
+  // ⚠️ TEMP: كلمة المرور معطّلة مؤقتًا — دخول مباشر بمجرد اختيار الدور.
+  // لإعادة التفعيل: رجّع الكود القديم اللي كان بيستخدم checkPwd هنا.
   const handleEnter = async () => {
-    if (!role)    { setErr("اختر الدور أولاً"); return; }
-    if (!pw.trim()) { setErr("أدخل كلمة المرور"); return; }
-    setLoading(true);
-    setErr("");
-    try {
-      const stored = settings?.[role.pwdKey];
-      // لو كلمة المرور للدور ده مش محددة في الإعدادات → امنع الدخول
-      if (!stored) { setErr("كلمة المرور غير مُعيَّنة — راجع المدير"); setLoading(false); return; }
-      const ok = await checkPwd(pw, stored);
-      if (!ok) { setErr("كلمة المرور غير صحيحة"); setLoading(false); return; }
-      onEnter({ role: role.key, label: role.label, icon: role.icon });
-    } catch {
-      setErr("حصل خطأ، حاول تاني");
-      setLoading(false);
-    }
+    if (!role) { setErr("اختر الدور أولاً"); return; }
+    onEnter({ role: role.key, label: role.label, icon: role.icon });
   };
 
   return (

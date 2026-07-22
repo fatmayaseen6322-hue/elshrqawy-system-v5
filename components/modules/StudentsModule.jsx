@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY } from "../../constants";
 import { pct, fmt, genSID, waLink } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
+import ImportStudentsModal from "./ImportStudentsModal";
 
 // ══════════════════════════════════════════════════════════════
 // MODULE 2: STUDENTS
@@ -41,6 +42,7 @@ export default function StudentsModule({ students, setStudents, jumpTo, onJumpDo
   const [sel, setSel] = useState(null);
   const [toast, setToast] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
     if (jumpTo) {
@@ -122,7 +124,10 @@ export default function StudentsModule({ students, setStudents, jumpTo, onJumpDo
         <div className="border-t border-slate-800 pt-4">
           <div className="flex justify-between items-center mb-3">
             <span className="text-slate-400 text-xs font-medium">طلاب {grade} — مجموعة {group} ({grpStudents.length})</span>
-            <Btn size="sm" variant="ghost" onClick={() => setStep("add")}>+ طالب</Btn>
+            <div className="flex gap-2">
+              <Btn size="sm" variant="ghost" onClick={() => setShowImport(true)}>📥 استيراد من ملف</Btn>
+              <Btn size="sm" variant="ghost" onClick={() => setStep("add")}>+ طالب</Btn>
+            </div>
           </div>
           <div className="space-y-2">
             {grpStudents.slice(0, 5).map(s => {
@@ -143,6 +148,17 @@ export default function StudentsModule({ students, setStudents, jumpTo, onJumpDo
           </div>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+        {showImport && (
+          <ImportStudentsModal
+            onClose={() => setShowImport(false)}
+            onImport={(newStudents) => {
+              setStudents(prev => [...newStudents, ...prev]);
+              addActivity?.(`استيراد ${newStudents.length} طالب من ملف`);
+              setToast({ msg: `✓ تم استيراد ${newStudents.length} طالب بنجاح`, type: "success" });
+              setShowImport(false);
+            }}
+          />
+        )}
       </div>
     );
   }
