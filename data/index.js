@@ -20,12 +20,12 @@ export const INIT_SETTINGS = {
   centerName: "مركز الشرقاوي التعليمي",
   adminPhone: "01000000000",
   // كلمات المرور مشفّرة بـ SHA-256 — القيم الافتراضية:
-  //   admin    → "admin123"
-  //   cashier  → "cash123"
-  //   teacher  → "teach123"
+  //   المستر (admin)  → "123456789"
+  //   Assist (cashier) → "123456789"
+  //   teacher (غير مستخدم حاليًا بعد تقليص الأدوار لدورين)
   // لتغييرها: الإعدادات → كلمة مرور الدور المطلوب
-  password:        "sha256:703e1ba45df97a88dc8e7c27ac29ff2c9490055cac02d10a27ecd49560408cf7",
-  cashierPassword: "sha256:d716e892f84b4963347e3bfbae7e946b2a333d01a1f215debabe8be4d1d1a1d6",
+  password:        "sha256:15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225",
+  cashierPassword: "sha256:15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225",
   teacherPassword: "sha256:5d284a8fa5b70176873cfc553d6da0008c212cb8c3f8ca8097e7f347d68bf3d2",
   logo: null,
   bg: null,
