@@ -17,6 +17,7 @@ const KEYS = {
   students:    "app_students",
   settings:    "app_settings",
   finRecords:  "app_fin_records",
+  attRecords:  "app_att_records",   // سجلات الغياب اليومية (تعديل غياب قديم)
   webExams:    "app_web_exams",
   centerExams: "app_center_exams",
   examQs:      "app_exam_questions",
@@ -28,6 +29,7 @@ const KEYS = {
 function loadStudents()    { return lsGet(KEYS.students, INIT_STUDENTS); }
 function loadSettings()    { return { ...INIT_SETTINGS, ...(lsGet(KEYS.settings, {}) || {}) }; }
 function loadFinRecords()  { return lsGet(KEYS.finRecords, INIT_FIN_RECORDS); }
+function loadAttRecords()  { return lsGet(KEYS.attRecords, []); }
 function loadWebExams()    { return lsGet(KEYS.webExams, WEB_EXAMS); }
 function loadCenterExams() { return lsGet(KEYS.centerExams, CENTER_EXAMS); }
 function loadExamQs()      { return lsGet(KEYS.examQs, EXAM_QS.map(q => ({ ...q }))); }
@@ -74,6 +76,7 @@ export default function useAppData() {
   const [students,    setStudents]    = usePersisted(KEYS.students,    loadStudents);
   const [settings,    setSettings]    = usePersisted(KEYS.settings,    loadSettings);
   const [finRecords,  setFinRecords]  = usePersisted(KEYS.finRecords,  loadFinRecords);
+  const [attRecords,  setAttRecords]  = usePersisted(KEYS.attRecords,  loadAttRecords);
   const [webExams,    setWebExams]    = usePersisted(KEYS.webExams,    loadWebExams);
   const [centerExams, setCenterExams] = usePersisted(KEYS.centerExams, loadCenterExams);
   const [examQs,      setExamQs]      = usePersisted(KEYS.examQs,      loadExamQs);
@@ -129,6 +132,7 @@ export default function useAppData() {
             students:    lsGet(KEYS.students,    []),
             settings:    lsGet(KEYS.settings,    {}),
             finRecords:  lsGet(KEYS.finRecords,  []),
+            attRecords:  lsGet(KEYS.attRecords,  []),
             webExams:    lsGet(KEYS.webExams,    []),
             centerExams: lsGet(KEYS.centerExams, []),
             examQs:      lsGet(KEYS.examQs,      []),
@@ -167,6 +171,7 @@ export default function useAppData() {
         students:    lsGet(KEYS.students,    []),
         settings:    lsGet(KEYS.settings,    {}),
         finRecords:  lsGet(KEYS.finRecords,  []),
+        attRecords:  lsGet(KEYS.attRecords,  []),
         webExams:    lsGet(KEYS.webExams,    []),
         centerExams: lsGet(KEYS.centerExams, []),
         examQs:      lsGet(KEYS.examQs,      []),
@@ -193,6 +198,7 @@ export default function useAppData() {
       if (data.students)    setStudents(data.students);
       if (data.settings)    setSettings(data.settings);
       if (data.finRecords)  setFinRecords(data.finRecords);
+      if (data.attRecords)  setAttRecords(data.attRecords);
       if (data.webExams)    setWebExams(data.webExams);
       if (data.centerExams) setCenterExams(data.centerExams);
       if (data.examQs)      setExamQs(data.examQs);
@@ -206,6 +212,7 @@ export default function useAppData() {
     students,    setStudents,
     settings,    setSettings,
     finRecords,  setFinRecords,
+    attRecords,  setAttRecords,
     webExams,    setWebExams,
     centerExams, setCenterExams,
     examQs,      setExamQs,

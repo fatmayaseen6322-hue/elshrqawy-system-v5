@@ -136,7 +136,8 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
 // MODULE 3: FINANCE
 // finRecords + setFinRecords come from App.jsx (single source of truth)
 // ══════════════════════════════════════════════════════════════
-export default function FinanceModule({ students, settings, setSettings, finRecords, setFinRecords, setStudents, addActivity }) {
+export default function FinanceModule({ students, settings, setSettings, finRecords, setFinRecords, setStudents, addActivity, role = "admin" }) {
+  const isAssist = role === "assist";
   const safeStudents  = students   || [];
   const safeSettings  = settings   || {};
   const safeRecords   = finRecords || [];
@@ -285,8 +286,8 @@ export default function FinanceModule({ students, settings, setSettings, finReco
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{tableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>
+          <div className={`grid gap-2 ${isAssist ? "grid-cols-2" : "grid-cols-3"}`}>
+            {!isAssist && <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{tableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>}
             <div className="bg-emerald-900/20 border border-emerald-700/20 rounded-xl p-3 text-center"><div className="text-emerald-400 font-black text-lg">{paidCount}</div><div className="text-xs text-slate-500">دفعوا</div></div>
             <div className="bg-amber-900/20 border border-amber-700/20 rounded-xl p-3 text-center"><div className="text-amber-400 font-black text-sm">{fmtM(totalCollected)}</div><div className="text-xs text-slate-500">المحصّل</div></div>
           </div>

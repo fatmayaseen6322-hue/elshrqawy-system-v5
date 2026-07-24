@@ -404,7 +404,7 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
-export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, settings }) {
+export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, settings, role = "admin" }) {
   const students   = studentsProp   || [];
   const finRecords = finRecordsProp || [];
   const [period, setPeriod] = useState("today");
@@ -414,20 +414,23 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const dd = useMemo(() => buildDashboardData(students, finRecords), [students, finRecords]);
   const revVal = period === "today" ? dd.stats.revToday : period === "week" ? dd.stats.revWeek : dd.stats.revMonth;
 
+  // Assist: يشوف المحصّل + قائمة المتأخرين بالاسم + الغياب — بدون إجمالي عدد الطلاب أو إجمالي الديون
+  const isAssist = role === "assist";
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div><h1 className="text-lg font-bold text-white flex items-center gap-2">🗼 برج المراقبة{alerts.length > 0 && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">{alerts.length}</span>}</h1><p className="text-xs text-slate-500">Control Tower</p></div>
         <div className="flex gap-1 bg-slate-800 rounded-xl p-1">{Object.entries(periodLabels).map(([k, v]) => <button key={k} onClick={() => setPeriod(k)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === k ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}>{v}</button>)}</div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />
+      <div className={`grid gap-3 ${isAssist ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"}`}>
+        {!isAssist && <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />}
         <KPICard icon="💰" label={`المحصّل (${periodLabels[period]})`} value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
-        <KPICard icon="📉" label="إجمالي الديون" value={fmtM(students.reduce((a, s) => a + (s.totalFees - s.paid), 0))} sub="ج.م" color="#f87171" />
+        {!isAssist && <KPICard icon="📉" label="إجمالي الديون" value={fmtM(students.reduce((a, s) => a + (s.totalFees - s.paid), 0))} sub="ج.م" color="#f87171" />}
       </div>
       <ProblemSection data={dd.expensesSection} idRef={refs.expenses} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
-      <ProblemSection data={dd.examsSection}     idRef={refs.exams}    />
+      {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
       <MonthlyChart finRecords={finRecords} />
       <ReportButtons students={students} finRecords={finRecords} settings={settings} />
       <AsalAI sectionRefs={refs} students={students} finRecords={finRecords} />

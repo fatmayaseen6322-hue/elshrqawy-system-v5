@@ -168,6 +168,7 @@ export default function App() {
     students,    setStudents,
     settings,    setSettings,
     finRecords,  setFinRecords,
+    attRecords,  setAttRecords,
     webExams,    setWebExams,
     centerExams, setCenterExams,
     examQs,      setExamQs,
@@ -414,11 +415,11 @@ export default function App() {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl mx-auto">
-            {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} />}
+            {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} addActivity={addActivity} />}
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
-            {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} />}
+            {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}
-            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} settings={settings} />}
+            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} settings={settings} role={currentRole.role} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} />}
           </div>
         </main>

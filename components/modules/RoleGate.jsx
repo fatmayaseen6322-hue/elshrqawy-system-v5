@@ -9,15 +9,20 @@ import { checkPwd } from "../../utils";
 // ══════════════════════════════════════════════════════════════
 
 const ROLES = [
-  { key: "admin",   icon: "👑", label: "مدير النظام",  desc: "كل الصلاحيات",               color: "#6366f1", pwdKey: "password"        },
-  { key: "cashier", icon: "💰", label: "المحصّل",       desc: "المصاريف والتقارير المالية", color: "#f59e0b", pwdKey: "cashierPassword"  },
-  { key: "teacher", icon: "📚", label: "مدرّس",         desc: "الحضور والامتحانات",          color: "#10b981", pwdKey: "teacherPassword"  },
+  { key: "admin",  icon: "👑", label: "المستر",  desc: "كل الصلاحيات",                              color: "#6366f1", pwdKey: "password"        },
+  { key: "assist", icon: "💼", label: "Assist",  desc: "الحضور، المصاريف، برج المراقبة، متابعة أولياء الأمور", color: "#f59e0b", pwdKey: "cashierPassword"  },
 ];
 
 export const ROLE_PERMS = {
-  admin:   ["attendance","students","finance","exams","dashboard","whatsapp","settings"],
-  cashier: ["finance","dashboard"],
-  teacher: ["attendance","exams","dashboard"],
+  admin:  ["attendance","students","finance","exams","dashboard","whatsapp","settings","parentFollowup"],
+  assist: ["attendance","finance","dashboard","parentFollowup"],
+};
+
+// صلاحيات عرض مقيّدة داخل صفحة المصاريف لدور Assist:
+// - يشوف خانة "الطلاب المتأخرين في السداد" فقط
+// - ممنوع يشوف "عدد الطلاب الكلي" أو "إجمالي المصاريف المتأخرة" (الرقم الكلي)
+export const FINANCE_VIEW_RESTRICTIONS = {
+  assist: { hideTotalStudentsCount: true, hideTotalOverdueAmount: true, showOverdueStudentsList: true },
 };
 
 export default function RoleGate({ settings, onEnter }) {
@@ -26,11 +31,22 @@ export default function RoleGate({ settings, onEnter }) {
   const [err,     setErr]     = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ⚠️ TEMP: كلمة المرور معطّلة مؤقتًا — دخول مباشر بمجرد اختيار الدور.
-  // لإعادة التفعيل: رجّع الكود القديم اللي كان بيستخدم checkPwd هنا.
   const handleEnter = async () => {
-    if (!role) { setErr("اختر الدور أولاً"); return; }
-    onEnter({ role: role.key, label: role.label, icon: role.icon });
+    if (!role)    { setErr("اختر الدور أولاً"); return; }
+    if (!pw.trim()) { setErr("أدخل كلمة المرور"); return; }
+    setLoading(true);
+    setErr("");
+    try {
+      const stored = settings?.[role.pwdKey];
+      // لو كلمة المرور للدور ده مش محددة في الإعدادات → امنع الدخول
+      if (!stored) { setErr("كلمة المرور غير مُعيَّنة — راجع المدير"); setLoading(false); return; }
+      const ok = await checkPwd(pw, stored);
+      if (!ok) { setErr("كلمة المرور غير صحيحة"); setLoading(false); return; }
+      onEnter({ role: role.key, label: role.label, icon: role.icon });
+    } catch {
+      setErr("حصل خطأ، حاول تاني");
+      setLoading(false);
+    }
   };
 
   return (
