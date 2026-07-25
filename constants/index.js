@@ -21,8 +21,10 @@ export const MONTHS_AR = [
 export const SIDEBAR_NAV = [
   {key:"attendance", icon:"✅", label:"الحضور"},
   {key:"students",   icon:"👥", label:"الطلاب"},
+  {key:"addStudent", icon:"➕", label:"إضافة طالب"},
   {key:"finance",    icon:"💰", label:"المصاريف"},
   {key:"exams",      icon:"📝", label:"الامتحانات"},
   {key:"dashboard",  icon:"🗼", label:"المراقبة"},
   {key:"whatsapp",   icon:"💬", label:"الواتس"},
+  {key:"block",      icon:"🚫", label:"بلوك"},
 ];

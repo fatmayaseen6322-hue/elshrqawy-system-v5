@@ -38,8 +38,8 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, finRecords, jumpTo, onJumpDone, addActivity }) {
-  const [step, setStep] = useState("select");
+export default function StudentsModule({ students, setStudents, finRecords, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
+  const [step, setStep] = useState(startAdd ? "add" : "select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
   const [date, setDate] = useState(TODAY);
@@ -296,16 +296,17 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
           <button onClick={() => { const url = waLink(s.parentPhone); if (url) window.open(url, "_blank"); }}
             className="w-10 h-10 rounded-xl bg-green-700/30 border border-green-600/20 text-green-400 flex items-center justify-center text-lg">💬</button>
           <button onClick={() => setConfirmDel(s)}
-            className="w-10 h-10 rounded-xl bg-red-700/20 border border-red-600/20 text-red-400 flex items-center justify-center">🗑</button>
+            className="w-10 h-10 rounded-xl bg-red-700/20 border border-red-600/20 text-red-400 flex items-center justify-center">🚫</button>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
         {confirmDel && (
           <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5 w-full max-w-xs space-y-4">
-              <div className="text-white text-sm text-center">حذف {confirmDel.name}؟</div>
+              <div className="text-white text-sm text-center">نقل {confirmDel.name} لقائمة البلوك؟</div>
+              <div className="text-slate-500 text-xs text-center">هيتشال من القوائم النشطة، وتقدري تحذفيه نهائي أو ترجعيه من صفحة "بلوك"</div>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDel(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm">إلغاء</button>
-                <button onClick={() => { setStudents(p => p.filter(x => x.id !== confirmDel.id)); addActivity?.("حذف طالب", confirmDel.name); setConfirmDel(null); setStep("section"); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">حذف</button>
+                <button onClick={() => { setStudents(p => p.map(x => x.id === confirmDel.id ? { ...x, blocked: true } : x)); addActivity?.("نقل لبلوك", confirmDel.name); setConfirmDel(null); setStep("section"); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">نقل لبلوك</button>
               </div>
             </div>
           </div>
@@ -327,6 +328,7 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
         setToast={setToast}
         setStep={setStep}
         addActivity={addActivity}
+        onDoneAdd={startAdd ? onDone : null}
       />
     );
   }
@@ -352,7 +354,7 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
 // BUG FIX: removed local toast state — parent's setToast is used directly
 // so Toast renders in the parent scope and actually shows.
 // ══════════════════════════════════════════════════════════════
-function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, setStudents, setSel, setToast, setStep, addActivity }) {
+function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, setStudents, setSel, setToast, setStep, addActivity, onDoneAdd }) {
   const [name,   setName]   = useState(s.name        || "");
   const [sg,     setSg]     = useState(s.grade        || defaultGrade);
   const [sgp,    setSgp]    = useState(s.group        || defaultGroup);
@@ -363,6 +365,13 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
   const [status, setStatus] = useState(s.status       || "active");
   const [weak,   setWeak]   = useState((s.weak || []).join("،"));
   const [err,    setErr]    = useState({});
+
+  // لو الصفحة دي اتفتحت مباشرة من "إضافة طالب" في الشريط الجانبي، بعد
+  // الحفظ أو الإلغاء نرجع للمكان اللي جينا منه (onDoneAdd) بدل "section"
+  const finishStep = () => {
+    if (mode === "add" && onDoneAdd) { onDoneAdd(); return; }
+    setStep(mode === "edit" ? "profile" : "section");
+  };
 
   const save = useCallback(() => {
     const e = {};
@@ -390,14 +399,14 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
     // FIX: use parent's setToast directly — no local toast state needed
     setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name}` : `✓ تم تعديل ${st.name}`, type: "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
-    setStep(mode === "edit" ? "profile" : "section");
+    if (mode === "edit") setStep("profile"); else finishStep();
   }, [name, sg, sgp, phone, pName, pPhone, fees, status, weak, mode]);
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-white font-bold">{mode === "edit" ? "✏️ تعديل" : "👤 تسجيل طالب"}</h2>
-        <button onClick={() => setStep(mode === "edit" ? "profile" : "section")} className="text-slate-400 text-xl">✕</button>
+        <button onClick={finishStep} className="text-slate-400 text-xl">✕</button>
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
         <Field label="الاسم الرباعي *" error={err.name}><Inp value={name} onChange={e => setName(e.target.value)} err={!!err.name} /></Field>
@@ -433,7 +442,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
         </div>
       </div>
       <div className="flex gap-3">
-        <Btn variant="ghost" size="lg" className="flex-1" onClick={() => setStep(mode === "edit" ? "profile" : "section")}>إلغاء</Btn>
+        <Btn variant="ghost" size="lg" className="flex-1" onClick={finishStep}>إلغاء</Btn>
         <Btn variant="primary" size="lg" className="flex-1" onClick={save}>{mode === "edit" ? "💾 حفظ" : "✓ تسجيل"}</Btn>
       </div>
     </div>

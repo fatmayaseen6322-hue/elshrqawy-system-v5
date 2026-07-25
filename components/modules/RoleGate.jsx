@@ -14,7 +14,7 @@ const ROLES = [
 ];
 
 export const ROLE_PERMS = {
-  admin:  ["attendance","students","finance","exams","dashboard","whatsapp","settings","parentFollowup"],
+  admin:  ["attendance","students","addStudent","finance","exams","dashboard","whatsapp","block","settings","parentFollowup"],
   assist: ["attendance","finance","dashboard","parentFollowup"],
 };
 

@@ -12,6 +12,7 @@ import { EV_CHOOSE_PRINTER }          from "./utils/print/printRouter";
 // Modules
 import AttendanceModule from "./components/modules/AttendanceModule";
 import StudentsModule   from "./components/modules/StudentsModule";
+import BlockModule      from "./components/modules/BlockModule";
 import FinanceModule    from "./components/modules/FinanceModule";
 import ExamsModule      from "./components/modules/ExamsModule";
 import DashboardModule  from "./components/modules/DashboardModule";
@@ -417,10 +418,12 @@ export default function App() {
           <div className="max-w-2xl mx-auto">
             {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} addActivity={addActivity} />}
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
+            {safePage === "addStudent" && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} addActivity={addActivity} startAdd onDone={() => setPage("students")} />}
             {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}
             {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} />}
+            {safePage === "block"      && <BlockModule      students={students || []} setStudents={setStudents} addActivity={addActivity} />}
           </div>
         </main>
       </div>
