@@ -52,6 +52,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [toast,     setToast]     = useState(null);
   const [search,    setSearch]    = useState("");
   const [pendingGate, setPendingGate] = useState(false);
+  const [sessionOpened, setSessionOpened] = useState(false);
 
   const safeAttRecords = attRecords || [];
   const grpList     = GROUPS_MAP[grade] || ["A"];
@@ -90,11 +91,13 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     setGrade(g);
     setGroup(GROUPS_MAP[g]?.[0] || "A");
     setSession({});
+    setSessionOpened(false);
   };
 
   const handleGroupChange = (g) => {
     setGroup(g);
     setSession({});
+    setSessionOpened(false);
   };
 
   const handleDateChange = (d) => {
@@ -104,11 +107,16 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     }
     setDate(d);
     setSession({});
+    setSessionOpened(false);
   };
 
   // فتح مجموعة/يوم: نبدأ الـ session بالحالات المسجَّلة فعلاً (لو موجودة)
-  // عشان يظهروا جاهزين للتعديل
-  const openSession = () => setSession({ ...existingMap });
+  // عشان يظهروا جاهزين للتعديل. لازم نعلّم إنها "اتفتحت" صراحة، لأن لو
+  // مفيش بيانات قديمة existingMap بتكون {} وميبقاش فيه فرق نعتمد عليه.
+  const openSession = () => {
+    setSession({ ...existingMap });
+    setSessionOpened(true);
+  };
 
   // Toggle: same status → deselect (يسمح بالتصحيح)
   const mark = (id, st) => setSession(prev => {
@@ -249,14 +257,14 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             🔒 ده يوم قديم — أي تعديل هيطلب باسورد المستر
           </div>
         )}
-        {!hasExistingSession && Object.keys(session).length === 0 && (
+        {!hasExistingSession && !sessionOpened && (
           <button onClick={openSession} className="w-full py-2 rounded-xl text-xs font-bold bg-blue-600/20 border border-blue-600/30 text-blue-300">
             فتح تسجيل الغياب لهذا اليوم
           </button>
         )}
       </div>
 
-      {(hasExistingSession || Object.keys(session).length > 0) && <>
+      {(hasExistingSession || sessionOpened) && <>
       <div className="grid grid-cols-3 gap-2">
         {[{ k: "p", l: "حاضر", v: counts.p }, { k: "a", l: "غائب", v: counts.a }, { k: "l", l: "متأخر", v: counts.l }].map(x => (
           <div key={x.k} className={`rounded-xl py-3 text-center border ${stCfg[x.k].border}/30 ${stCfg[x.k].color}/10`}>
