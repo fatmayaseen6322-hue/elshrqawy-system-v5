@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { GRADES_LIST, GROUPS_MAP, TODAY } from "../../constants";
+import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
 import { pct, fmt, genSID, waLink } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
@@ -34,7 +34,7 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, jumpTo, onJumpDone, addActivity }) {
+export default function StudentsModule({ students, setStudents, finRecords, jumpTo, onJumpDone, addActivity }) {
   const [step, setStep] = useState("select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
@@ -182,6 +182,25 @@ export default function StudentsModule({ students, setStudents, jumpTo, onJumpDo
   if (step === "profile" && sel) {
     const s = sel;
     const due = s.totalFees - s.paid;
+
+    // حالة السداد الشهري الحقيقية (من finRecords — نفس نظام صفحة المصاريف)
+    const [curYearStr, curMonthStr] = TODAY.split("-");
+    const currentYearNum  = parseInt(curYearStr, 10);
+    const currentMonthNum = parseInt(curMonthStr, 10);
+    const [joinYearStr, joinMonthStr] = (s.joinDate || TODAY).split("-");
+    const joinYearNum  = parseInt(joinYearStr, 10);
+    const joinMonthNum = parseInt(joinMonthStr, 10);
+
+    const studentFinRecords = (finRecords || []).filter(r => r.studentId === s.id);
+    const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
+
+    const currentMonthPaid = isMonthPaid(currentMonthNum, currentYearNum);
+
+    const overdueMonths = [];
+    const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
+    for (let m = startMonth; m < currentMonthNum; m++) {
+      if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(m);
+    }
     return (
       <div className="space-y-4">
         <button onClick={() => { setStep("section"); setSel(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
@@ -220,25 +239,18 @@ export default function StudentsModule({ students, setStudents, jumpTo, onJumpDo
         </div>
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
           <div className="flex justify-between items-center">
-            <span className="text-white font-bold text-sm">💰 المصاريف</span>
-            {due > 0 && <Btn size="sm" variant="success" onClick={() => setStep("pay")}>+ دفعة</Btn>}
+            <span className="text-white font-bold text-sm">💰 المصاريف — حالة السداد الشهري</span>
           </div>
-          <Bar value={s.paid} max={s.totalFees} color={due === 0 ? "#10b981" : s.paid === 0 ? "#ef4444" : "#f59e0b"} h="h-2.5" />
-          <div className="flex justify-between text-xs">
-            <span>مدفوع: <span className="text-emerald-400 font-bold">{fmt(s.paid)}</span></span>
-            <span>متبقي: <span className={`font-bold ${due > 0 ? "text-red-400" : "text-slate-500"}`}>{fmt(due)}</span></span>
+          <div className={`text-center py-2.5 rounded-xl text-sm font-bold border ${currentMonthPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
+            {currentMonthPaid ? `✓ الشهر الحالي (${MONTHS_AR[currentMonthNum - 1]}) مدفوع` : `✗ الشهر الحالي (${MONTHS_AR[currentMonthNum - 1]}) غير مدفوع`}
           </div>
-          {due === 0 && <div className="text-emerald-400 text-xs text-center py-1">✓ تم السداد الكامل</div>}
-          {s.payments?.length > 0 && (
-            <div className="mt-2 space-y-1.5">
-              <div className="text-xs text-slate-500 font-medium">سجل الدفعات</div>
-              {[...s.payments].reverse().map(p => (
-                <div key={p.id} className="flex justify-between items-center text-xs bg-slate-900/50 rounded-lg px-3 py-2">
-                  <span className="text-slate-400">{p.date} · {p.method === "cash" ? "💵 كاش" : "🏦 تحويل"}{p.note ? ` · ${p.note}` : ""}</span>
-                  <span className="text-emerald-400 font-bold">{fmt(p.amount)}</span>
-                </div>
-              ))}
+          {overdueMonths.length > 0 ? (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5 text-center">
+              <div className="text-amber-400 text-xs font-bold mb-1">⚠️ شهور متأخرة</div>
+              <div className="text-amber-300 text-sm font-black">{overdueMonths.join("، ")}</div>
             </div>
+          ) : (
+            <div className="text-emerald-400 text-xs text-center py-1">✓ لا يوجد شهور متأخرة</div>
           )}
         </div>
         <div className="flex gap-2">

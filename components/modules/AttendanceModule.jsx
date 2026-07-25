@@ -64,6 +64,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [search,    setSearch]    = useState("");
   const [pendingGate, setPendingGate] = useState(false);
   const [editUnlocked, setEditUnlocked] = useState(false); // مفتوح للتعديل (يوم قديم بعد الباسورد)
+  const [reasonDrafts, setReasonDrafts] = useState({}); // نص السبب قبل ما يتحفظ بالزرار الصغير
 
   const safeAttRecords = attRecords || [];
   const grpList     = GROUPS_MAP[grade] || ["A"];
@@ -131,6 +132,14 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const setReasonFor = (id, text) => setSession(prev => ({
     ...prev, [id]: { ...(prev[id] || {}), reason: text }
   }));
+
+  const saveReason = (id) => {
+    const draft = reasonDrafts[id];
+    if (draft === undefined) return;
+    setReasonFor(id, draft);
+    setReasonDrafts(prev => { const n = { ...prev }; delete n[id]; return n; });
+    setToast({ msg: "✓ تم حفظ السبب", type: "success" });
+  };
 
   const markAll = st => setSession(prev => Object.fromEntries(
     grpStudents.map(s => [s.id, { status: st, reason: prev[s.id]?.reason || "" }])
@@ -231,7 +240,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-700/50 text-right">
                     <Av name={s.name} size="sm" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-white text-sm font-bold truncate">{s.name}</div>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-white text-sm font-bold truncate">{s.name}</span>
+                        {s.status === "inactive" && (
+                          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">موقوف</span>
+                        )}
+                      </div>
                       <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
                     </div>
                   </button>
@@ -344,11 +358,18 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                       <div className="text-white text-sm font-bold truncate">{s.name}</div>
                       <div className="text-slate-500 text-[11px]">حضور: {s.present || 0}/{s.total || 0} ({pct(s.present || 0, s.total || 0)}%)</div>
                       {(st === "a" || st === "l") && (
-                        <input
-                          value={reason}
-                          onChange={e => setReasonFor(s.id, e.target.value)}
-                          placeholder="السبب (اختياري)"
-                          className="mt-1.5 w-full bg-slate-900/50 border border-slate-700/40 rounded-lg px-2 py-1 text-[11px] text-slate-300 focus:outline-none" />
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <input
+                            value={reasonDrafts[s.id] ?? reason}
+                            onChange={e => setReasonDrafts(prev => ({ ...prev, [s.id]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === "Enter") saveReason(s.id); }}
+                            placeholder="السبب"
+                            className="flex-1 min-w-0 bg-slate-900/50 border border-slate-700/40 rounded-lg px-2 py-1 text-[11px] text-slate-300 focus:outline-none" />
+                          <button onClick={() => saveReason(s.id)}
+                            className="shrink-0 w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-600/30 text-blue-300 text-xs flex items-center justify-center">
+                            💾
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div className="flex gap-1 shrink-0">
