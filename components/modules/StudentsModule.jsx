@@ -358,12 +358,9 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
   const [name,   setName]   = useState(s.name        || "");
   const [sg,     setSg]     = useState(s.grade        || defaultGrade);
   const [sgp,    setSgp]    = useState(s.group        || defaultGroup);
-  const [phone,  setPhone]  = useState(s.phone        || "");
-  const [pName,  setPName]  = useState(s.parentName   || "");
   const [pPhone, setPPhone] = useState(s.parentPhone  || "");
   const [fees,   setFees]   = useState(s.totalFees    || 2400);
   const [status, setStatus] = useState(s.status       || "active");
-  const [weak,   setWeak]   = useState((s.weak || []).join("،"));
   const [err,    setErr]    = useState({});
 
   // لو الصفحة دي اتفتحت مباشرة من "إضافة طالب" في الشريط الجانبي، بعد
@@ -375,21 +372,20 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
 
   const save = useCallback(() => {
     const e = {};
-    if (!name.trim())                        e.name   = "مطلوب";
-    if (!phone.trim() || phone.length < 11)  e.phone  = "11 رقم";
-    if (!pPhone.trim())                      e.pPhone = "مطلوب";
+    if (!name.trim())    e.name   = "مطلوب";
+    if (!pPhone.trim())  e.pPhone = "مطلوب";
     setErr(e);
     if (Object.keys(e).length) return;
 
     const st = {
       id: s.id || genSID(),
-      name: name.trim(), grade: sg, group: sgp, phone,
-      parentName: pName, parentPhone: pPhone,
+      name: name.trim(), grade: sg, group: sgp,
+      phone: s.phone || "", parentName: s.parentName || "", parentPhone: pPhone,
       joinDate: s.joinDate || TODAY, status,
       paid: s.paid || 0, totalFees: parseInt(fees) || 2400,
       score: s.score || 0, present: s.present || 0,
       absent: s.absent || 0, late: s.late || 0, total: s.total || 0,
-      weak: weak ? weak.split(/[،,]/).map(x => x.trim()).filter(Boolean) : [],
+      weak: s.weak || [],
     };
 
     if (mode === "add") setStudents(p => [st, ...p]);
@@ -400,7 +396,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
     setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name}` : `✓ تم تعديل ${st.name}`, type: "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
     if (mode === "edit") setStep("profile"); else finishStep();
-  }, [name, sg, sgp, phone, pName, pPhone, fees, status, weak, mode]);
+  }, [name, sg, sgp, pPhone, fees, status, mode]);
 
   return (
     <div className="space-y-4">
@@ -409,24 +405,27 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
         <button onClick={finishStep} className="text-slate-400 text-xl">✕</button>
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <Field label="الاسم الرباعي *" error={err.name}><Inp value={name} onChange={e => setName(e.target.value)} err={!!err.name} /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="الصف">
-            <Sel value={sg} onChange={e => { setSg(e.target.value); setSgp(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
-              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-            </Sel>
-          </Field>
-          <Field label="المجموعة">
-            <Sel value={sgp} onChange={e => setSgp(e.target.value)}>
-              {(GROUPS_MAP[sg] || ["A"]).map(g => <option key={g}>{g}</option>)}
-            </Sel>
-          </Field>
+        <div className="flex gap-2">
+          <div className="flex-[2] min-w-0">
+            <Field label="الاسم الرباعي *" error={err.name}><Inp value={name} onChange={e => setName(e.target.value)} err={!!err.name} /></Field>
+          </div>
+          <div className="flex-1 min-w-0">
+            <Field label="الصف">
+              <Sel value={sg} onChange={e => { setSg(e.target.value); setSgp(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
+                {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+              </Sel>
+            </Field>
+          </div>
+          <div className="flex-1 min-w-0">
+            <Field label="المجموعة">
+              <Sel value={sgp} onChange={e => setSgp(e.target.value)}>
+                {(GROUPS_MAP[sg] || ["A"]).map(g => <option key={g}>{g}</option>)}
+              </Sel>
+            </Field>
+          </div>
         </div>
-        <Field label="هاتف الطالب *" error={err.phone}><Inp value={phone} onChange={e => setPhone(e.target.value)} err={!!err.phone} /></Field>
-        <Field label="نقاط الضعف"><Inp value={weak} onChange={e => setWeak(e.target.value)} placeholder="الجبر، الهندسة" /></Field>
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <Field label="اسم ولي الأمر"><Inp value={pName} onChange={e => setPName(e.target.value)} /></Field>
         <Field label="هاتف ولي الأمر *" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} /></Field>
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
