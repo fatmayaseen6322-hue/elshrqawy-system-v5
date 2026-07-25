@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { TODAY } from "../../constants";
 import { Av, Toast } from "../ui";
 
 // تطبيع الألف بأشكال الهمزة المختلفة — نفس آلية البحث في الحضور/الطلاب
@@ -33,8 +34,19 @@ export default function BlockModule({ students: studentsProp, setStudents, addAc
   }, [filtered]);
 
   const restore = s => {
-    setStudents(p => p.map(x => x.id === s.id ? { ...x, blocked: false, status: "active" } : x));
-    addActivity?.("استرجاع من بلوك", s.name);
+    const last = (s.blockHistory || [])[(s.blockHistory || []).length - 1];
+    setStudents(p => p.map(x => {
+      if (x.id !== s.id) return x;
+      const hist = [...(x.blockHistory || [])];
+      if (hist.length && !hist[hist.length - 1].unblockDate) {
+        hist[hist.length - 1] = { ...hist[hist.length - 1], unblockDate: TODAY };
+      }
+      return { ...x, blocked: false, status: "active", blockHistory: hist };
+    }));
+    const detail = last
+      ? `تم البلوك يوم ${last.blockDate}${last.reason ? " — سبب: " + last.reason : ""} — وتم العودة يوم ${TODAY}`
+      : `تم العودة يوم ${TODAY}`;
+    addActivity?.("استرجاع من بلوك", `${s.name} — ${detail}`);
     setToast({ msg: `✓ تم استرجاع ${s.name}`, type: "success" });
   };
 
@@ -67,19 +79,27 @@ export default function BlockModule({ students: studentsProp, setStudents, addAc
       {groups.map(([grade, list]) => (
         <div key={grade} className="space-y-2">
           <div className="text-slate-400 text-xs font-bold px-1">{grade} ({list.length})</div>
-          {list.map(s => (
+          {list.map(s => {
+            const lastBlock = (s.blockHistory || [])[(s.blockHistory || []).length - 1];
+            return (
             <div key={s.id} className="bg-slate-800/50 border border-slate-700/30 rounded-xl px-3 py-2.5 flex items-center gap-3">
               <Av name={s.name} size="sm" />
               <div className="flex-1 min-w-0 text-right">
                 <div className="text-white text-sm font-bold truncate">{s.name}</div>
                 <div className="text-slate-500 text-xs">مجموعة {s.group} · {s.id}</div>
+                {lastBlock && (
+                  <div className="text-amber-400/80 text-xs mt-0.5">
+                    🚫 بلوك يوم {lastBlock.blockDate}{lastBlock.reason ? ` — سبب: ${lastBlock.reason}` : ""}
+                  </div>
+                )}
               </div>
               <button onClick={() => restore(s)}
                 className="shrink-0 px-2.5 h-8 rounded-lg bg-emerald-700/20 border border-emerald-600/30 text-emerald-300 text-xs font-bold">↩ استرجاع</button>
               <button onClick={() => setConfirmDel(s)}
                 className="shrink-0 w-8 h-8 rounded-lg bg-red-700/25 border border-red-600/30 text-red-300 flex items-center justify-center font-bold">✗</button>
             </div>
-          ))}
+            );
+          })}
         </div>
       ))}
 

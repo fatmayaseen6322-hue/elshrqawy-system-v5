@@ -46,6 +46,7 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
   const [sel, setSel] = useState(null);
   const [toast, setToast] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [blockReason, setBlockReason] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -138,27 +139,10 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
   // ── SECTION step ───────────────────────────────────────────
   if (step === "section") {
     const grpStudents = students.filter(s => s.grade === grade && s.group === group);
-    const sections = [
-      { key: "errors",     icon: "🟥", label: "الأخطاء",    sub: "عرض وإدارة أخطاء الطلاب" },
-      { key: "correction", icon: "🟦", label: "التصحيح",    sub: "تصحيح الأوراق والمراجعة" },
-      { key: "exams",      icon: "📝", label: "الامتحانات", sub: "نتائج وإحصائيات الامتحانات" },
-      { key: "web",        icon: "🌐", label: "الويب",       sub: "اختبارات ونماذج إلكترونية" },
-    ];
     return (
       <div className="space-y-4">
         <button onClick={() => setStep("select")} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← تعديل الاختيار</button>
         <StatusBar grade={grade} group={group} date={date} />
-        <div className="text-white font-black text-sm mt-2">اختر القسم</div>
-        <div className="grid grid-cols-2 gap-3">
-          {sections.map(s => (
-            <button key={s.key} onClick={() => setStep(s.key)}
-              className="bg-slate-800/70 border border-slate-700/40 hover:border-blue-500/50 hover:bg-slate-800 rounded-2xl p-4 text-right transition-all group">
-              <div className="text-3xl mb-2">{s.icon}</div>
-              <div className="text-white font-bold text-sm group-hover:text-blue-300">{s.label}</div>
-              <div className="text-slate-500 text-xs mt-0.5">{s.sub}</div>
-            </button>
-          ))}
-        </div>
         <div className="border-t border-slate-800 pt-4">
           <div className="flex justify-between items-center mb-3">
             <span className="text-slate-400 text-xs font-medium">طلاب {grade} — مجموعة {group} ({grpStudents.length})</span>
@@ -168,7 +152,7 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
             </div>
           </div>
           <div className="space-y-2">
-            {grpStudents.slice(0, 5).map(s => {
+            {grpStudents.map(s => {
               const cfg = stCfg[s.status] || stCfg.active;
               return (
                 <button key={s.id} onClick={() => { setSel(s); setStep("profile"); }}
@@ -182,7 +166,7 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
                 </button>
               );
             })}
-            {grpStudents.length > 5 && <div className="text-center text-slate-600 text-xs py-1">+ {grpStudents.length - 5} آخرين</div>}
+            {grpStudents.length === 0 && <div className="text-center text-slate-600 text-xs py-4">مفيش طلاب في المجموعة دي</div>}
           </div>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
@@ -197,21 +181,6 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
             }}
           />
         )}
-      </div>
-    );
-  }
-
-  // ── Placeholder sub-sections ───────────────────────────────
-  if (["errors","correction","exams","web"].includes(step)) {
-    return (
-      <div className="space-y-4">
-        <button onClick={() => setStep("section")} className="text-slate-400 text-sm flex items-center gap-1">← رجوع</button>
-        <StatusBar grade={grade} group={group} date={date} />
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-8 text-center">
-          <div className="text-4xl mb-3">{step === "errors" ? "🟥" : step === "correction" ? "🟦" : step === "exams" ? "📝" : "🌐"}</div>
-          <div className="text-white font-bold">{step === "errors" ? "الأخطاء" : step === "correction" ? "التصحيح" : step === "exams" ? "الامتحانات" : "الويب"}</div>
-          <div className="text-slate-500 text-sm mt-1">قريباً</div>
-        </div>
       </div>
     );
   }
@@ -304,9 +273,22 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
             <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5 w-full max-w-xs space-y-4">
               <div className="text-white text-sm text-center">نقل {confirmDel.name} لقائمة البلوك؟</div>
               <div className="text-slate-500 text-xs text-center">هيتشال من القوائم النشطة، وتقدري تحذفيه نهائي أو ترجعيه من صفحة "بلوك"</div>
+              <Field label="سبب البلوك (اختياري)">
+                <input
+                  value={blockReason} onChange={e => setBlockReason(e.target.value)}
+                  placeholder="مثال: تأخر في السداد"
+                  className="w-full bg-slate-800/80 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
+              </Field>
               <div className="flex gap-2">
-                <button onClick={() => setConfirmDel(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm">إلغاء</button>
-                <button onClick={() => { setStudents(p => p.map(x => x.id === confirmDel.id ? { ...x, blocked: true } : x)); addActivity?.("نقل لبلوك", confirmDel.name); setConfirmDel(null); setStep("section"); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">نقل لبلوك</button>
+                <button onClick={() => { setConfirmDel(null); setBlockReason(""); }} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm">إلغاء</button>
+                <button onClick={() => {
+                  const reason = blockReason.trim();
+                  setStudents(p => p.map(x => x.id === confirmDel.id
+                    ? { ...x, blocked: true, blockHistory: [...(x.blockHistory || []), { blockDate: TODAY, reason }] }
+                    : x));
+                  addActivity?.("نقل لبلوك", `${confirmDel.name} — يوم ${TODAY}${reason ? " — سبب: " + reason : ""}`);
+                  setConfirmDel(null); setBlockReason(""); setStep("section");
+                }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">نقل لبلوك</button>
               </div>
             </div>
           </div>

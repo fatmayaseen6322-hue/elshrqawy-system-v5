@@ -1096,13 +1096,37 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
 const PANELS = [
-  { key: "questions",  icon: "📚", label: "بنك الأسئلة",            desc: "إدارة وإضافة وتعديل الأسئلة",         color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
-  { key: "quick",      icon: "⚡", label: "إنشاء امتحان سريع",      desc: "إنشاء وتشغيل امتحان فوري",           color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
-  { key: "upload",     icon: "📤", label: "رفع امتحان جاهز",        desc: "رفع ملف PDF أو DOCX",                color: "from-cyan-600 to-teal-700",     border: "border-cyan-500/25",    glow: "shadow-cyan-500/10"    },
-  { key: "alerts",     icon: "🔔", label: "نظام التنبيهات",         desc: "تنبيهات المستوى والغياب",            color: "from-amber-600 to-orange-700",  border: "border-amber-500/25",   glow: "shadow-amber-500/10"   },
-  { key: "curriculum", icon: "🔗", label: "ربط بالمحتوى التعليمي", desc: "ربط الامتحانات بالمناهج والدروس",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
-  { key: "dashboard",  icon: "🎛️", label: "لوحة تحكم الامتحانات", desc: "نظرة عامة وتصحيح الأوراق",          color: "from-rose-600 to-pink-700",     border: "border-rose-500/25",    glow: "shadow-rose-500/10"    },
+  { key: "errors",     icon: "🟥", label: "الأخطاء",    desc: "تنبيهات المستوى ونقاط الضعف",        color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
+  { key: "correction", icon: "🟦", label: "التصحيح",    desc: "نظرة عامة وتصحيح أوراق الامتحانات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
+  { key: "exams",      icon: "📝", label: "الامتحانات", desc: "بنك الأسئلة، إنشاء سريع، رفع ملف",   color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
+  { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
 ];
+
+// قسم "الامتحانات" بقى فيه 3 أدوات فرعية (بنك الأسئلة / امتحان سريع / رفع
+// ملف جاهز) بدل ما تبقى كل واحدة كارت منفصل في الشريط الجانبي.
+function ExamsSubTabs({ questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams, students }) {
+  const [tab, setTab] = useState("questions");
+  const tabs = [
+    { key: "questions", icon: "📚", label: "بنك الأسئلة" },
+    { key: "quick",     icon: "⚡", label: "امتحان سريع" },
+    { key: "upload",    icon: "📤", label: "رفع ملف" },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 bg-slate-800 rounded-xl p-1">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === t.key ? "bg-violet-600 text-white" : "text-slate-400 hover:text-white"}`}>
+            <span>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "questions" && <ExamPanelQuestionBank questions={questions} setQuestions={setQuestions} />}
+      {tab === "quick"     && <ExamPanelQuickCreate  questions={questions} webExams={webExams} setWebExams={setWebExams} students={students} />}
+      {tab === "upload"    && <ExamPanelUpload       centerExams={centerExams} setCenterExams={setCenterExams} />}
+    </div>
+  );
+}
 
 export default function ExamsModule({ students, questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams }) {
   const [activePanel, setActivePanel] = useState(null);
@@ -1120,12 +1144,10 @@ export default function ExamsModule({ students, questions, setQuestions, webExam
           </div>
         </div>
 
-        {activePanel === "questions"  && <ExamPanelQuestionBank  questions={questions} setQuestions={setQuestions} />}
-        {activePanel === "quick"      && <ExamPanelQuickCreate   questions={questions} webExams={webExams} setWebExams={setWebExams} students={students} />}
-        {activePanel === "upload"     && <ExamPanelUpload        centerExams={centerExams} setCenterExams={setCenterExams} />}
-        {activePanel === "alerts"     && <ExamPanelAlerts        students={students} />}
-        {activePanel === "curriculum" && <ExamPanelCurriculum    webExams={webExams} students={students} />}
-        {activePanel === "dashboard"  && <ExamPanelDashboard     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "errors"     && <ExamPanelAlerts        students={students} />}
+        {activePanel === "correction" && <ExamPanelDashboard     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "exams"      && <ExamsSubTabs           questions={questions} setQuestions={setQuestions} webExams={webExams} setWebExams={setWebExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
     );
   }
