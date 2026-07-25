@@ -286,28 +286,21 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         )}
       </div>
 
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="col-span-2">
-            <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
-              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-            </Sel>
-          </div>
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
+        <div className="grid grid-cols-4 gap-2 items-stretch">
+          <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
+            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+          </Sel>
           <Sel value={group} onChange={e => handleGroupChange(e.target.value)}>
             {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
           </Sel>
+          <DatePicker value={date} onChange={handleDateChange} max={TODAY} />
+          <div className={`rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 ${(!isOldDate || editUnlocked) ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}
+            title={(!isOldDate || editUnlocked) ? "سجل حضور اليوم مفتوح — عدّل عادي من غير باسورد" : "ده يوم قديم — عرض فقط. المستر بس يقدر يعدّل بعد إدخال الباسورد"}>
+            <span className="text-sm leading-none">{(!isOldDate || editUnlocked) ? "✓" : "🔒"}</span>
+            <span className={`text-[10px] font-bold leading-tight ${(!isOldDate || editUnlocked) ? "text-emerald-400" : "text-amber-400"}`}>عرض الحضور</span>
+          </div>
         </div>
-        <DatePicker value={date} onChange={handleDateChange} max={TODAY} />
-        {!isOldDate && (
-          <div className="text-emerald-400 text-xs text-center bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2">
-            ✓ سجل حضور اليوم مفتوح — عدّل عادي من غير باسورد
-          </div>
-        )}
-        {isOldDate && !editUnlocked && (
-          <div className="text-amber-400 text-xs text-center bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
-            🔒 ده يوم قديم — عرض فقط. المستر بس يقدر يعدّل بعد إدخال الباسورد
-          </div>
-        )}
       </div>
 
       {grpStudents.length === 0 && (
@@ -315,11 +308,11 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       )}
 
       {grpStudents.length > 0 && <>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-1.5">
           {[{ k: "p", l: "حاضر", v: counts.p }, { k: "a", l: "غائب", v: counts.a }, { k: "l", l: "متأخر", v: counts.l }].map(x => (
-            <div key={x.k} className={`rounded-xl py-3 text-center border ${stCfg[x.k].border}/30 ${stCfg[x.k].color}/10`}>
-              <div className={`text-2xl font-black ${stCfg[x.k].text}`}>{x.v}</div>
-              <div className="text-slate-500 text-xs">{x.l}</div>
+            <div key={x.k} className={`rounded-lg py-2 text-center border ${stCfg[x.k].border}/30 ${stCfg[x.k].color}/10`}>
+              <div className={`text-lg font-black ${stCfg[x.k].text}`}>{x.v}</div>
+              <div className="text-slate-500 text-[10px]">{x.l}</div>
             </div>
           ))}
         </div>

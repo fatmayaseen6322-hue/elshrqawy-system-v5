@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
 import { pct, fmt, genSID, waLink } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
+
+// تطبيع الألف بأشكال الهمزة المختلفة عشان البحث ما يفرقش بين
+// "احمد" و"أحمد" و"إحمد" و"آحمد" — نفس آلية البحث في صفحة الحضور
+const normalizeAr = (str = "") => str.replace(/[أإآء]/g, "ا");
 
 // ══════════════════════════════════════════════════════════════
 // MODULE 2: STUDENTS
@@ -43,6 +47,20 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
   const [toast, setToast] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [showImport, setShowImport] = useState(false);
+  const [search, setSearch] = useState("");
+
+  // بحث عن طالب بالاسم في كل المجاميع والصفوف — بيوديك على طول لملفه
+  const searchResults = useMemo(() => {
+    if (!search.trim()) return null;
+    const q = normalizeAr(search.trim());
+    return (students || []).filter(s => s && normalizeAr(s.name || "").includes(q));
+  }, [students, search]);
+
+  const goToStudentDirect = s => {
+    setSel(s);
+    setStep("profile");
+    setSearch("");
+  };
 
   useEffect(() => {
     if (jumpTo) {
@@ -72,27 +90,47 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
           <div className="text-white font-black text-base">اختر الصف والمجموعة والتاريخ</div>
           <div className="text-slate-500 text-xs">يجب اختيار الثلاثة لتفعيل الأقسام</div>
         </div>
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-4">
-          <Field label="الصف الدراسي">
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="🔍 دوّر على طالب بالاسم (في كل المجاميع)..."
+            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
+          {searchResults && (
+            searchResults.length === 0
+              ? <div className="text-center text-slate-500 text-xs py-3">مفيش طالب بهذا الاسم</div>
+              : <div className="max-h-56 overflow-y-auto space-y-1">
+                  {searchResults.map(s => (
+                    <button key={s.id} onClick={() => goToStudentDirect(s)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-700/50 text-right">
+                      <Av name={s.name} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-white text-sm font-bold truncate">{s.name}</span>
+                        </div>
+                        <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+          )}
+        </div>
+
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
+          <div className="grid grid-cols-4 gap-2 items-stretch">
             <Sel value={grade} onChange={e => { setGrade(e.target.value); setGroup(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
               {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
             </Sel>
-          </Field>
-          <Field label="المجموعة">
-            <div className="flex gap-2">
-              {grpList.map(g => (
-                <button key={g} onClick={() => setGroup(g)}
-                  className={`flex-1 py-3 rounded-xl font-bold text-sm border transition-all ${group === g ? "bg-blue-600 border-blue-500 text-white" : "bg-slate-900/50 border-slate-700/40 text-slate-400 hover:border-blue-500/40"}`}>
-                  مجموعة {g}
-                </button>
-              ))}
-            </div>
-          </Field>
-          <Field label="التاريخ"><DatePicker value={date} onChange={setDate} max={TODAY} /></Field>
+            <Sel value={group} onChange={e => setGroup(e.target.value)}>
+              {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
+            </Sel>
+            <DatePicker value={date} onChange={setDate} max={TODAY} />
+            <button onClick={() => ready && setStep("section")} disabled={!ready}
+              className={`rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 transition-all ${ready ? "border-blue-500/40 bg-blue-600/20 hover:bg-blue-600/30" : "border-slate-700/40 bg-slate-900/30 opacity-40 cursor-not-allowed"}`}>
+              <span className="text-sm leading-none">✓</span>
+              <span className={`text-[10px] font-bold leading-tight ${ready ? "text-blue-300" : "text-slate-500"}`}>متابعة اختيار القسم</span>
+            </button>
+          </div>
         </div>
-        <Btn variant="primary" size="lg" className="w-full" disabled={!ready} onClick={() => setStep("section")}>
-          {ready ? "✓ متابعة — اختيار القسم" : "اختر الصف والمجموعة والتاريخ أولاً"}
-        </Btn>
       </div>
     );
   }
