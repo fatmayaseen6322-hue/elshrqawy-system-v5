@@ -87,7 +87,25 @@ export function buildDashboardData(students, finRecords) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// KPI CARD
+// غياب اليوم (فوري) — مبني مباشرة من attRecords بدل عدّادات students
+// عشان يظهر أي غياب/تأخير النهارده لحظيًا من غير انتظار أي حد أدنى
+// ══════════════════════════════════════════════════════════════
+export function buildTodayAttendance(attRecords, students) {
+  attRecords = attRecords || [];
+  students   = students   || [];
+  const todayRecs = attRecords.filter(r => r.date === TODAY && (r.status === "a" || r.status === "l"));
+  const rows = todayRecs.map(r => {
+    const s = students.find(st => st.id === r.studentId);
+    return { name: s?.name || "—", statusLabel: r.status === "a" ? "غائب" : "متأخر", reason: r.reason || "—", grade: r.grade };
+  });
+  const groupByGrade = arr => {
+    const map = {};
+    arr.forEach(s => { if (!map[s.grade]) map[s.grade] = []; map[s.grade].push(s); });
+    return Object.entries(map).filter(([, v]) => v.length > 0).map(([grade, students]) => ({ grade, students }));
+  };
+  return { title: "غياب اليوم", icon: "📅", cols: ["اسم الطالب","الحالة","السبب"], grades: groupByGrade(rows) };
+}
+
 // ══════════════════════════════════════════════════════════════
 function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown }) {
   const [open, setOpen] = useState(false);
@@ -153,6 +171,7 @@ function renderProblemRow(title, s, extra) {
       <DueDateCell studentId={s.id} initialDate={s.dueDate} onSave={extra?.onSaveDueDate} />,
     ];
     case "الغياب": return [s.name, <span className="text-red-400 font-bold">{s.absentDays}</span>, s.lateCount, s.absentPct];
+    case "غياب اليوم": return [s.name, <span className={s.statusLabel === "غائب" ? "text-red-400 font-bold" : "text-amber-400 font-bold"}>{s.statusLabel}</span>, s.reason];
     case "الامتحانات": return [s.name, s.score, <span className="text-red-400 font-bold">{s.pct}</span>, s.lessons];
     default: return [];
   }
@@ -455,9 +474,10 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
-export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, settings, role = "admin", setStudents, addActivity }) {
+export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity }) {
   const students   = studentsProp   || [];
   const finRecords = finRecordsProp || [];
+  const attRecords = attRecordsProp || [];
   const [period, setPeriod] = useState("today");
 
   const handleSaveDueDate = (studentId, dateStr) => {
@@ -465,9 +485,10 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     addActivity?.("ميعاد تسديد", `تم تحديد ميعاد ${dateStr} لطالب`);
   };
   const periodLabels = { today: "اليوم", week: "الأسبوع", month: "الشهر" };
-  const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null) };
+  const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null), todayAtt: useRef(null) };
   const alerts = students.filter(s => s.score < 60 || s.absent > 8 || (s.totalFees - s.paid) > 1200);
   const dd = useMemo(() => buildDashboardData(students, finRecords), [students, finRecords]);
+  const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
   const revVal = period === "today" ? dd.stats.revToday : period === "week" ? dd.stats.revWeek : dd.stats.revMonth;
 
   // Assist: يشوف المحصّل + قائمة المتأخرين بالاسم + الغياب — بدون إجمالي عدد الطلاب أو إجمالي الديون
@@ -485,6 +506,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
         {!isAssist && <KPICard icon="📉" label="إجمالي الديون" value={fmtM(students.reduce((a, s) => a + (s.totalFees - s.paid), 0))} sub="ج.م" color="#f87171" />}
       </div>
       <ProblemSection data={dd.expensesSection} idRef={refs.expenses} extra={{ onSaveDueDate: handleSaveDueDate }} />
+      <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
       {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
       <MonthlyChart finRecords={finRecords} />
