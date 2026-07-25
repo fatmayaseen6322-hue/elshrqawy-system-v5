@@ -133,12 +133,44 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     ...prev, [id]: { ...(prev[id] || {}), reason: text }
   }));
 
+  // ملحوظة إصلاح: زرار حفظ السبب الصغير كان بيحفظ في السيشن المؤقت بس،
+  // فلو المستخدم خرج من الصفحة قبل ما يدوس "حفظ الحضور" الكبير كان السبب بيضيع.
+  // دلوقتي بيحفظ فورًا في attRecords (التخزين الدائم) — نفس منطق applyDiffAndSave
+  // بس لطالب واحد بس.
   const saveReason = (id) => {
     const draft = reasonDrafts[id];
     if (draft === undefined) return;
     setReasonFor(id, draft);
     setReasonDrafts(prev => { const n = { ...prev }; delete n[id]; return n; });
-    setToast({ msg: "✓ تم حفظ السبب", type: "success" });
+
+    const newStatus = session[id]?.status || null;
+    if (!newStatus) {
+      setToast({ msg: "لازم تحدد الحالة (غايب/متأخر) الأول", type: "error" });
+      return;
+    }
+    const oldStatus = existingMap[id]?.status || null;
+
+    setAttRecords(prev => {
+      let list = prev || [];
+      const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
+      const rec = { id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft };
+      return idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
+    });
+
+    if (newStatus !== oldStatus) {
+      setStudents(prev => (prev || []).map(s => {
+        if (s.id !== id) return s;
+        let present = s.present || 0, absent = s.absent || 0, late = s.late || 0, total = s.total || 0;
+        if (oldStatus === "p") present--; if (oldStatus === "a") absent--; if (oldStatus === "l") late--;
+        if (oldStatus && !newStatus) total--;
+        if (newStatus === "p") present++; if (newStatus === "a") absent++; if (newStatus === "l") late++;
+        if (!oldStatus && newStatus) total++;
+        return { ...s, present: Math.max(0, present), absent: Math.max(0, absent), late: Math.max(0, late), total: Math.max(0, total) };
+      }));
+    }
+
+    addActivity?.("سبب غياب/تأخير", `${grade} - مجموعة ${group} - ${date}`);
+    setToast({ msg: "✓ تم حفظ السبب بشكل نهائي", type: "success" });
   };
 
   const markAll = st => setSession(prev => Object.fromEntries(
