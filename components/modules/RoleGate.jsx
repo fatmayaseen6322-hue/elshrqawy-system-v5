@@ -31,22 +31,11 @@ export default function RoleGate({ settings, onEnter }) {
   const [err,     setErr]     = useState("");
   const [loading, setLoading] = useState(false);
 
+  // ⚠️ الباسورد معطّل مؤقتًا بناءً على طلب صريح — دخول مباشر باختيار
+  // الدور فقط. لازم تتفعّل تاني قبل الاستخدام الفعلي مع بيانات حقيقية.
   const handleEnter = async () => {
-    if (!role)    { setErr("اختر الدور أولاً"); return; }
-    if (!pw.trim()) { setErr("أدخل كلمة المرور"); return; }
-    setLoading(true);
-    setErr("");
-    try {
-      const stored = settings?.[role.pwdKey];
-      // لو كلمة المرور للدور ده مش محددة في الإعدادات → امنع الدخول
-      if (!stored) { setErr("كلمة المرور غير مُعيَّنة — راجع المدير"); setLoading(false); return; }
-      const ok = await checkPwd(pw, stored);
-      if (!ok) { setErr("كلمة المرور غير صحيحة"); setLoading(false); return; }
-      onEnter({ role: role.key, label: role.label, icon: role.icon });
-    } catch {
-      setErr("حصل خطأ، حاول تاني");
-      setLoading(false);
-    }
+    if (!role) { setErr("اختر الدور أولاً"); return; }
+    onEnter({ role: role.key, label: role.label, icon: role.icon });
   };
 
   return (
@@ -80,25 +69,8 @@ export default function RoleGate({ settings, onEnter }) {
           ))}
         </div>
 
-        {/* Password field — لكل الأدوار */}
-        {role && (
-          <div>
-            <input
-              type="password" value={pw} autoFocus
-              onChange={e => { setPw(e.target.value); setErr(""); }}
-              onKeyDown={e => e.key === "Enter" && !loading && handleEnter()}
-              placeholder={`كلمة مرور ${role.label}`}
-              disabled={loading}
-              className="w-full rounded-xl px-4 py-3 text-sm text-center tracking-widest focus:outline-none disabled:opacity-50"
-              style={{
-                background: "var(--card-bg, #1e293b)",
-                border: `1.5px solid ${err ? "#ef4444" : "var(--border, #334155)"}`,
-                color: "var(--text-primary, #f1f5f9)",
-              }}
-            />
-            {err && <p className="text-red-400 text-xs text-center mt-2">{err}</p>}
-          </div>
-        )}
+        {/* الباسورد معطّل مؤقتًا — الدخول باختيار الدور فقط */}
+        {err && <p className="text-red-400 text-xs text-center">{err}</p>}
 
         <button onClick={handleEnter} disabled={loading || !role}
           className="w-full py-3.5 rounded-2xl font-bold text-white text-sm transition-all disabled:opacity-40"
