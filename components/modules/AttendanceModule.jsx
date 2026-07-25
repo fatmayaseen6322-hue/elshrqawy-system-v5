@@ -55,7 +55,7 @@ const stCfg = {
 //  - يوم قديم: بتفتح تلقائي كـ"جدول عرض فقط" (اسم/حالة/سبب)، ومحدش
 //    يقدر يعدّل فيها غير المستر (role === "admin") وبعد ما يدخل الباسورد.
 // ══════════════════════════════════════════════════════════════
-export default function AttendanceModule({ students, setStudents, attRecords, setAttRecords, settings, role = "admin", addActivity }) {
+export default function AttendanceModule({ students, setStudents, attRecords, setAttRecords, settings, role = "admin", addActivity, jumpTo, onJumpDone }) {
   const [grade,     setGrade]     = useState(GRADES_LIST[2]);
   const [group,     setGroup]     = useState("A");
   const [date,      setDate]      = useState(TODAY);
@@ -65,6 +65,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [pendingGate, setPendingGate] = useState(false);
   const [editUnlocked, setEditUnlocked] = useState(false); // مفتوح للتعديل (يوم قديم بعد الباسورد)
   const [reasonDrafts, setReasonDrafts] = useState({}); // نص السبب قبل ما يتحفظ بالزرار الصغير
+  const [highlightId, setHighlightId] = useState(null); // تمييز الطالب لما نيجي من بحث التوبار
 
   const safeAttRecords = attRecords || [];
   const grpList     = GROUPS_MAP[grade] || ["A"];
@@ -86,6 +87,20 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     setDate(TODAY);
     setSearch("");
   };
+
+  // بحث التوبار العلوي: لما تدوّري على طالب وانتي واقفة في صفحة الحضور،
+  // ييجيلك مباشرة لمجموعته وصفه ويتحدد شوية عشان تلاقيه بسرعة.
+  useEffect(() => {
+    if (!jumpTo) return;
+    const target = (students || []).find(st => st.id === jumpTo);
+    if (target) {
+      goToStudent(target);
+      setHighlightId(target.id);
+      setTimeout(() => setHighlightId(null), 2500);
+    }
+    onJumpDone?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo]);
 
   // سجلات اليوم/المجموعة المختارة حاليًا من مصدر الحقيقة (attRecords)
   const recordsForSession = useMemo(
@@ -332,7 +347,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                 {grpStudents.map((s, i) => {
                   const rec = existingMap[s.id];
                   return (
-                    <tr key={s.id} className={i % 2 === 0 ? "bg-slate-900/20" : ""}>
+                    <tr key={s.id} className={`${i % 2 === 0 ? "bg-slate-900/20" : ""} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
                       <td className="px-3 py-2.5 text-white text-sm font-bold truncate max-w-[140px]">{s.name}</td>
                       <td className="px-3 py-2.5 text-center">
                         {rec?.status
@@ -375,7 +390,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
               const st = session[s.id]?.status;
               const reason = session[s.id]?.reason || "";
               return (
-                <div key={s.id} className={`rounded-2xl border transition-all duration-200 ${st ? "border-slate-600/50" : "border-slate-700/40"}`}>
+                <div key={s.id} className={`rounded-2xl border transition-all duration-200 ${st ? "border-slate-600/50" : "border-slate-700/40"} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
                   <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl ${st === "p" ? "bg-emerald-500/5" : st === "a" ? "bg-red-500/5" : st === "l" ? "bg-amber-500/5" : "bg-slate-800/60"}`}>
                     <div className="w-6 h-6 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">{i + 1}</div>
                     <Av name={s.name} size="sm" />

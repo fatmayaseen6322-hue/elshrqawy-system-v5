@@ -161,6 +161,12 @@ export default function App() {
   const [wasAutoDetected,   setWasAutoDetected]      = useState(false);
   const [storageWarnDismissed, setStorageWarnDismissed] = useState(false); // #1
   const [jumpStudent, setJumpStudent] = useState(null);
+  // بحث التوبار الموحّد: كل صفحة عندها "جمب" خاص بيها عشان لما تدوّري
+  // على طالب وانتي واقفة في صفحة معينة، ييجيلك في نفس الصفحة مش يوديكي
+  // لصفحة الطلاب دايمًا.
+  const [financeJump,    setFinanceJump]    = useState(null);
+  const [attendanceJump, setAttendanceJump] = useState(null);
+  const [dashboardJump,  setDashboardJump]  = useState(null);
   const [toast, setToast]             = useState(null); // #3 — global toast
   const showToast = (msg, type="success") => setToast({ msg, type });
 
@@ -188,7 +194,14 @@ export default function App() {
   // نمرر فقط الـ id بدل الكائن كامل — عشان StudentsModule يقرأ
   // أحدث نسخة من بيانات الطالب من `students` وقت التنقل، مش نسخة قديمة (snapshot)
   // محفوظة من وقت الضغط على نتيجة البحث (إصلاح #4).
-  const handleStudentSelect = s => { setJumpStudent(s.id); setPage("students"); };
+  const handleStudentSelect = s => {
+    if (safePage === "finance")     { setFinanceJump(s.id);    return; }
+    if (safePage === "attendance")  { setAttendanceJump(s.id); return; }
+    if (safePage === "dashboard")   { setDashboardJump(s.id);  return; }
+    // أي صفحة تانية (طلاب، امتحانات، واتساب، بلوك...) → نعرض بروفايل الطالب كامل
+    setJumpStudent(s.id);
+    setPage("students");
+  };
 
   // Printer Intelligence — يستمع لطلب اختيار الطابعة
   useEffect(() => {
@@ -342,20 +355,8 @@ export default function App() {
             <button onClick={() => setStorageWarnDismissed(true)} className="mr-3 underline">إخفاء</button>
           </div>
         )}
-        {/* #1 — Auto Backup Banner */}
-        {pendingBackup && (
-          <div className="px-4 py-2 text-xs text-center font-bold flex items-center justify-center gap-3"
-            style={{ background: "#1e3a5f", color: "#93c5fd", borderBottom: "1px solid #1d4ed8" }}>
-            <span>💾 حان موعد النسخة الاحتياطية الأسبوعية — {pendingBackup.filename}</span>
-            <button
-              onClick={() => { pendingBackup.trigger(); dismissPendingBackup(); addActivity("backup", "نسخة احتياطية تلقائية"); }}
-              className="px-3 py-1 rounded-lg font-black text-white"
-              style={{ background: "#2563eb" }}>
-              تحميل الآن
-            </button>
-            <button onClick={dismissPendingBackup} style={{ color: "#60a5fa" }}>تجاهل</button>
-          </div>
-        )}
+        {/* #1 — Auto Backup Banner — مخفي بالكامل بناءً على طلب صريح
+            (بيظل النسخ الاحتياطي شغال في الخلفية، بس من غير ما يبان أي بانر). */}
         {showTheme && (
           <div className="fixed inset-0 z-40" onClick={() => setShowTheme(false)}>
             <div className="absolute top-14 left-4 right-4 max-w-3xl mx-auto" onClick={e => e.stopPropagation()}>
@@ -416,12 +417,12 @@ export default function App() {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl mx-auto">
-            {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} addActivity={addActivity} />}
+            {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} addActivity={addActivity} jumpTo={attendanceJump} onJumpDone={() => setAttendanceJump(null)} />}
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
             {safePage === "addStudent" && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} addActivity={addActivity} startAdd onDone={() => setPage("students")} />}
-            {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} />}
+            {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} jumpTo={financeJump} onJumpDone={() => setFinanceJump(null)} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}
-            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} />}
+            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} jumpTo={dashboardJump} onJumpDone={() => setDashboardJump(null)} showToast={showToast} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} />}
             {safePage === "block"      && <BlockModule      students={students || []} setStudents={setStudents} addActivity={addActivity} />}
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
-import { pct, fmt, genSID, waLink } from "../../utils";
+import { pct, fmt, genSID, genStudentId, waLink } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
 
@@ -323,6 +323,7 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
         student={step === "edit" ? sel : {}}
         defaultGrade={grade}
         defaultGroup={group}
+        students={students}
         setStudents={setStudents}
         setSel={setSel}
         setToast={setToast}
@@ -354,13 +355,13 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
 // BUG FIX: removed local toast state — parent's setToast is used directly
 // so Toast renders in the parent scope and actually shows.
 // ══════════════════════════════════════════════════════════════
-function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, setStudents, setSel, setToast, setStep, addActivity, onDoneAdd }) {
+function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, students, setStudents, setSel, setToast, setStep, addActivity, onDoneAdd }) {
   const [name,   setName]   = useState(s.name        || "");
   const [sg,     setSg]     = useState(s.grade        || defaultGrade);
   const [sgp,    setSgp]    = useState(s.group        || defaultGroup);
   const [pPhone, setPPhone] = useState(s.parentPhone  || "");
+  const [sPhone, setSPhone] = useState(s.phone        || "");
   const [fees,   setFees]   = useState(s.totalFees    || 2400);
-  const [status, setStatus] = useState(s.status       || "active");
   const [err,    setErr]    = useState({});
 
   // لو الصفحة دي اتفتحت مباشرة من "إضافة طالب" في الشريط الجانبي، بعد
@@ -378,10 +379,10 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
     if (Object.keys(e).length) return;
 
     const st = {
-      id: s.id || genSID(),
+      id: s.id || genStudentId((students || []).map(x => x.id)),
       name: name.trim(), grade: sg, group: sgp,
-      phone: s.phone || "", parentName: s.parentName || "", parentPhone: pPhone,
-      joinDate: s.joinDate || TODAY, status,
+      phone: sPhone.trim(), parentName: s.parentName || "", parentPhone: pPhone,
+      joinDate: s.joinDate || TODAY, status: s.status || "active",
       paid: s.paid || 0, totalFees: parseInt(fees) || 2400,
       score: s.score || 0, present: s.present || 0,
       absent: s.absent || 0, late: s.late || 0, total: s.total || 0,
@@ -396,7 +397,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
     setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name}` : `✓ تم تعديل ${st.name}`, type: "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
     if (mode === "edit") setStep("profile"); else finishStep();
-  }, [name, sg, sgp, pPhone, fees, status, mode]);
+  }, [name, sg, sgp, pPhone, sPhone, fees, mode, students]);
 
   return (
     <div className="space-y-4">
@@ -423,21 +424,15 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, se
               </Sel>
             </Field>
           </div>
+          <div className="flex-1 min-w-0">
+            <Field label="الرسوم (ج)"><Inp type="number" value={fees} onChange={e => setFees(e.target.value)} /></Field>
+          </div>
         </div>
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <Field label="هاتف ولي الأمر *" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} /></Field>
-      </div>
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="الرسوم (ج)"><Inp type="number" value={fees} onChange={e => setFees(e.target.value)} /></Field>
-          <Field label="الحالة">
-            <Sel value={status} onChange={e => setStatus(e.target.value)}>
-              <option value="active">نشط</option>
-              <option value="temp">مؤقت</option>
-              <option value="inactive">موقوف</option>
-            </Sel>
-          </Field>
+          <Field label="هاتف ولي الأمر *" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} /></Field>
+          <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
         </div>
       </div>
       <div className="flex gap-3">

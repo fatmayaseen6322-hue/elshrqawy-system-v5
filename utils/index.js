@@ -83,6 +83,18 @@ function genId(prefix, randLen = 4) {
 }
 
 export const genSID    = () => genId("SHR", 3);
+
+// ── رقم كود الطالب: 11 رقم بالكامل، يبدأ دايمًا بـ 01 ──────────
+// بيتولّد رقم عشوائي 9 خانات ويتأكد إنه مش متكرر مع أكواد موجودة فعلاً.
+export function genStudentId(existingIds = []) {
+  const idsSet = new Set(existingIds || []);
+  let id;
+  do {
+    const rand = Math.floor(Math.random() * 1e9).toString().padStart(9, "0");
+    id = "01" + rand;
+  } while (idsSet.has(id));
+  return id;
+}
 export const genRID    = () => genId("R", 2);
 export const genFinId  = () => genId("FIN", 2);
 export const genExamId = () => genId("E", 2);

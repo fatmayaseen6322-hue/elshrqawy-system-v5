@@ -474,11 +474,28 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
-export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity }) {
+export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity, jumpTo, onJumpDone, showToast }) {
   const students   = studentsProp   || [];
   const finRecords = finRecordsProp || [];
   const attRecords = attRecordsProp || [];
   const [period, setPeriod] = useState("today");
+
+  // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
+  // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
+  // نودّيها لمكان تاني.
+  useEffect(() => {
+    if (!jumpTo) return;
+    const s = students.find(st => st.id === jumpTo);
+    if (s) {
+      const due = (s.totalFees || 0) - (s.paid || 0);
+      showToast?.(
+        `👤 ${s.name} — ${s.grade} · مجموعة ${s.group} — الأداء ${s.score || 0}% — غياب ${s.absent || 0} — متبقي ${due > 0 ? due + " ج" : "لا يوجد"}`,
+        due > 1200 || (s.score || 0) < 60 ? "error" : "success"
+      );
+    }
+    onJumpDone?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo]);
 
   const handleSaveDueDate = (studentId, dateStr) => {
     setStudents?.(prev => (prev || []).map(s => s.id === studentId ? { ...s, paymentDueDate: dateStr } : s));

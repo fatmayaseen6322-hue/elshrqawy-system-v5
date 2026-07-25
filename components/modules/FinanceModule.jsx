@@ -36,13 +36,18 @@ function FinancePasswordGate({ onUnlock, onCancel }) {
 // ══════════════════════════════════════════════════════════════
 // FINANCE ROW
 // ══════════════════════════════════════════════════════════════
-function FinRow({ student, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, centerName }) {
+function FinRow({ student, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, centerName, highlighted }) {
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
   const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
   const [saved,       setSaved]       = useState(!!record);
   const [editing,     setEditing]     = useState(false);
   const [showPw,      setShowPw]      = useState(false);
   const [localRecord, setLocalRecord] = useState(record || null);
+  const rowRef = useRef(null);
+
+  useEffect(() => {
+    if (highlighted) rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlighted]);
 
   useEffect(() => {
     if (!saved && globalReceiver) setReceiverId(globalReceiver.id);
@@ -84,7 +89,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
   return (
     <>
       {showPw && <FinancePasswordGate onUnlock={unlockEdit} onCancel={() => setShowPw(false)} />}
-      <tr className={`border-b transition-colors ${bgCls}`}>
+      <tr ref={rowRef} className={`border-b transition-colors ${bgCls} ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}>
         <td className="px-3 py-3">
           <div className="flex items-center gap-2 min-w-0">
             <Av name={student.name} size="sm" />
@@ -136,7 +141,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
 // MODULE 3: FINANCE
 // finRecords + setFinRecords come from App.jsx (single source of truth)
 // ══════════════════════════════════════════════════════════════
-export default function FinanceModule({ students, settings, setSettings, finRecords, setFinRecords, setStudents, addActivity, role = "admin" }) {
+export default function FinanceModule({ students, settings, setSettings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone }) {
   const isAssist = role === "assist";
   const safeStudents  = students   || [];
   const safeSettings  = settings   || {};
@@ -153,6 +158,23 @@ export default function FinanceModule({ students, settings, setSettings, finReco
   const [dayFilter,        setDayFilter]        = useState("");
   const [globalReceiverId, setGlobalReceiverId] = useState(null);
   const [toast,            setToast]            = useState(null);
+  const [highlightId,      setHighlightId]      = useState(null); // تمييز طالب جاي من بحث التوبار
+
+  // بحث التوبار العلوي: افتحلها صف وصفوف الطالب وافتح السجل تلقائي
+  useEffect(() => {
+    if (!jumpTo) return;
+    const target = safeStudents.find(st => st.id === jumpTo);
+    if (target) {
+      setSelGrade(target.grade);
+      setSelGroup(target.group);
+      setTableOpen(true);
+      setDayFilter("");
+      setHighlightId(target.id);
+      setTimeout(() => setHighlightId(null), 2500);
+    }
+    onJumpDone?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo]);
 
   const activeReceivers = (safeSettings.receivers || []).filter(r => r.active !== false);
 
@@ -313,6 +335,7 @@ export default function FinanceModule({ students, settings, setSettings, finReco
                           passwordEnabled={safeSettings.financePasswordEnabled}
                           financePassword={safeSettings.financePassword}
                           centerName={safeSettings.centerName || "مركز تعليمي"}
+                          highlighted={highlightId === s.id}
                         />
                       ))}
                     </tbody>
