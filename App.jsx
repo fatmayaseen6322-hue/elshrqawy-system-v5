@@ -419,7 +419,7 @@ export default function App() {
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
             {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}
-            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} settings={settings} role={currentRole.role} />}
+            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} />}
           </div>
         </main>
