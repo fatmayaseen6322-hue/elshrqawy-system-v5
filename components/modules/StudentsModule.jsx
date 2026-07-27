@@ -8,6 +8,26 @@ import ImportStudentsModal from "./ImportStudentsModal";
 // "احمد" و"أحمد" و"إحمد" و"آحمد" — نفس آلية البحث في صفحة الحضور
 const normalizeAr = (str = "") => str.replace(/[أإآء]/g, "ا");
 
+// المستوى الحقيقي للطالب: 100% ناقص نسبة النقط الغلط من إجمالي نقط
+// الامتحانات الحقيقية المرفوعة (مش رقم ثابت ولا عشوائي). لو معندوش أي
+// أخطاء مسجَّلة على امتحان حقيقي، بترجع null (مفيش بيانات كفاية لسه).
+function computeRealLevel(s, centerExams) {
+  const lessonKeys = [...new Set((s.examErrors || []).map(e => `${e.grade}__${e.unit}__${e.lesson}`))];
+  if (lessonKeys.length === 0) return null;
+  let totalPoints = 0, wrongPoints = 0;
+  lessonKeys.forEach(key => {
+    const [g, u, l] = key.split("__");
+    const exam = (centerExams || []).find(ex => ex.grade === g && String(ex.unit) === u && String(ex.lesson) === l);
+    const pts = exam ? (exam.numQuestions || 0) * (exam.pointsPerQuestion || 0) : 0;
+    if (!pts) return;
+    const wrong = (s.examErrors || []).filter(e => e.grade === g && e.unit === u && e.lesson === l).length;
+    totalPoints += pts;
+    wrongPoints += wrong;
+  });
+  if (totalPoints === 0) return null;
+  return Math.max(0, Math.round(100 - (wrongPoints / totalPoints) * 100));
+}
+
 // ══════════════════════════════════════════════════════════════
 // MODULE 2: STUDENTS
 // ══════════════════════════════════════════════════════════════
@@ -38,7 +58,7 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, finRecords, webExams, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
+export default function StudentsModule({ students, setStudents, finRecords, webExams, centerExams, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
   const [step, setStep] = useState(startAdd ? "add" : "select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
@@ -155,6 +175,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
           <div className="space-y-2">
             {grpStudents.map(s => {
               const cfg = stCfg[s.status] || stCfg.active;
+              const lvl = computeRealLevel(s, centerExams);
               return (
                 <button key={s.id} onClick={() => { setSel(s); setStep("profile"); }}
                   className="w-full bg-slate-800/50 border border-slate-700/30 rounded-xl px-3 py-2.5 flex items-center gap-3 hover:bg-slate-800 transition-colors">
@@ -163,7 +184,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
                     <div className="text-white text-xs font-bold truncate">{s.name}</div>
                     <div className="text-slate-500" style={{ fontSize: "10px" }}>{s.id}</div>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t} shrink-0`}>{s.score}%</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t} shrink-0`}>{lvl === null ? "—" : `${lvl}%`}</span>
                 </button>
               );
             })}
@@ -239,6 +260,10 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
       return Object.values(bucket).sort((a, b) => (a.unit - b.unit) || (a.lesson - b.lesson));
     })();
 
+    // ── المستوى الحقيقي: 100% ناقص نسبة النقط الغلط من إجمالي نقط الامتحانات
+    // الحقيقية المرفوعة (مش رقم ثابت ولا عشوائي) ──
+    const realLevel = computeRealLevel(s, centerExams);
+
     return (
       <div className="space-y-4">
         <button onClick={() => { setStep("section"); setSel(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
@@ -259,7 +284,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             </div>
             {[
               { l: "الحضور", v: `${pct(s.present, s.total)}%`, ok: pct(s.present, s.total) >= 80 },
-              { l: "المستوى", v: `${s.score}%`, ok: s.score >= 65 },
+              { l: "المستوى", v: realLevel === null ? "—" : `${realLevel}%`, ok: realLevel === null ? true : realLevel >= 65 },
               { l: "السداد", v: `${pct(s.paid, s.totalFees)}%`, ok: due === 0 }
             ].map(x => (
               <div key={x.l} className="bg-slate-900/50 rounded-xl p-2.5 text-center">
