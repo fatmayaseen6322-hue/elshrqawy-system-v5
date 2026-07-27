@@ -10,12 +10,12 @@ import { checkPwd } from "../../utils";
 
 const ROLES = [
   { key: "admin",  icon: "👑", label: "المستر",  desc: "كل الصلاحيات",                              color: "#6366f1", pwdKey: "password"        },
-  { key: "assist", icon: "💼", label: "Assist",  desc: "الحضور، المصاريف، برج المراقبة، متابعة أولياء الأمور", color: "#f59e0b", pwdKey: "cashierPassword"  },
+  { key: "assist", icon: "💼", label: "Assist",  desc: "الحضور، المصاريف، الامتحانات، برج المراقبة، متابعة أولياء الأمور", color: "#f59e0b", pwdKey: "cashierPassword"  },
 ];
 
 export const ROLE_PERMS = {
   admin:  ["attendance","students","addStudent","finance","exams","dashboard","whatsapp","block","settings","parentFollowup"],
-  assist: ["attendance","finance","dashboard","parentFollowup"],
+  assist: ["attendance","finance","exams","dashboard","parentFollowup"],
 };
 
 // صلاحيات عرض مقيّدة داخل صفحة المصاريف لدور Assist:
