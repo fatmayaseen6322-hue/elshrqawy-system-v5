@@ -428,7 +428,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl mx-auto">
             {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} addActivity={addActivity} jumpTo={attendanceJump} onJumpDone={() => setAttendanceJump(null)} />}
-            {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
+            {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} webExams={webExams || []} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
             {safePage === "addStudent" && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} addActivity={addActivity} startAdd onDone={() => setPage("students")} />}
             {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} jumpTo={financeJump} onJumpDone={() => setFinanceJump(null)} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}

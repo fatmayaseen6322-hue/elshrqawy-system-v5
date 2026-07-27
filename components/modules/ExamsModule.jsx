@@ -215,6 +215,7 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
   const [done, setDone]       = useState(false);
   const [score, setScore]     = useState(0);
   const [preview, setPreview] = useState(false);
+  const [takerId, setTakerId] = useState("");
   const [toast, setToast]     = useState(null);
 
   const topics = useMemo(() => [...new Set(questions.map(q => q.topic).filter(Boolean))], [questions]);
@@ -222,12 +223,17 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
     topicFilter ? questions.filter(q => q.topic === topicFilter) : questions,
     [questions, topicFilter]
   );
+  const grpStudents = useMemo(() => students.filter(s => s.grade === grade && s.group === group), [students, grade, group]);
 
-  const reset = () => { setStep(1); setName(""); setSelQ([]); setAnswers({}); setDone(false); setScore(0); setPreview(false); setTopicFilter(""); };
+  const reset = () => { setStep(1); setName(""); setSelQ([]); setAnswers({}); setDone(false); setScore(0); setPreview(false); setTopicFilter(""); setTakerId(""); };
 
-  const saveExam = useCallback((finalScore, examQs) => {
+  // بيسجّل نتيجة حقيقية (مش عشوائية) للطالب المحدد كـ "الممتحِن"، مربوطة
+  // بالوحدة/الدرس/اليوم بتوع الامتحان — وده مصدر بيانات "الأخطاء" في ملف
+  // الطالب. باقي طلاب المجموعة بتفضل درجاتهم تقديرية عشوائية زي الأول
+  // لحد ما يبقى فيه امتحان حقيقي لكل واحد فيهم.
+  const saveExam = useCallback((finalScore, examQs, finalAnswers) => {
     const totalMarks = examQs.reduce((a, q) => a + q.marks, 0);
-    const gradeStudents = students.filter(s => s.grade === grade && s.group === group);
+    const wrongTopics = examQs.filter(q => finalAnswers[q.id] !== q.correct).map(q => q.topic || "عام");
     const newExam = {
       id: genExamId(),
       name,
@@ -236,14 +242,18 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
       group,
       lesson: topicFilter || "متنوع",
       unit: "إنشاء سريع",
-      results: gradeStudents.map(s => ({ studentId: s.id, score: Math.floor(Math.random() * totalMarks), max: totalMarks })),
+      results: grpStudents.map(s =>
+        s.id === takerId
+          ? { studentId: s.id, score: finalScore, max: totalMarks, wrong: wrongTopics }
+          : { studentId: s.id, score: Math.floor(Math.random() * totalMarks), max: totalMarks }
+      ),
       cheating: [],
       _myScore: finalScore,
       _myMax: totalMarks,
     };
     setWebExams(p => [newExam, ...p]);
     setToast({ msg: "✓ تم حفظ نتائج الامتحان", type: "success" });
-  }, [name, date, grade, group, topicFilter, students, setWebExams]);
+  }, [name, date, grade, group, topicFilter, grpStudents, takerId, setWebExams]);
 
   // Step 1: الإعداد
   if (step === 1) {
@@ -276,6 +286,12 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
           </div>
           <Field label="التاريخ">
             <DatePicker value={date} onChange={d => setDate(d)} max={TODAY} />
+          </Field>
+          <Field label="الطالب (اختياري — لتسجيل نتيجته الحقيقية وربطها بملفه)">
+            <Sel value={takerId} onChange={e => setTakerId(e.target.value)}>
+              <option value="">بدون ربط (تقدير عام للمجموعة)</option>
+              {grpStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </Sel>
           </Field>
           <Field label={`عدد الأسئلة: ${numQ} (من ${maxQ} متاح)`}>
             <input
@@ -415,7 +431,7 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
             examQs.forEach(q => { if (answers[q.id] === q.correct) s += q.marks; });
             setScore(s);
             setDone(true);
-            saveExam(s, examQs);
+            saveExam(s, examQs, answers);
           }}
         >
           تسليم ({answeredCount}/{examQs.length})

@@ -38,7 +38,7 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, finRecords, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
+export default function StudentsModule({ students, setStudents, finRecords, webExams, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
   const [step, setStep] = useState(startAdd ? "add" : "select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
@@ -208,6 +208,25 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
     for (let m = startMonth; m < currentMonthNum; m++) {
       if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(m);
     }
+
+    // ── أخطاء حقيقية من الامتحانات (مربوطة بالوحدة/الدرس/اليوم) ──
+    // بتتجمّع من كل امتحان اتسجّل فيه هذا الطالب كـ "الممتحِن" فعليًا
+    // (results[].wrong)، مش تقديرات عشوائية لباقي المجموعة.
+    const examMistakes = (() => {
+      const bucket = {};
+      (webExams || []).forEach(e => {
+        const r = (e.results || []).find(x => x.studentId === s.id && x.wrong?.length);
+        if (!r) return;
+        r.wrong.forEach(topic => {
+          const key = `${topic}__${e.unit}__${e.lesson}`;
+          if (!bucket[key]) bucket[key] = { topic, unit: e.unit, lesson: e.lesson, count: 0, lastDate: e.date };
+          bucket[key].count++;
+          if (e.date > bucket[key].lastDate) bucket[key].lastDate = e.date;
+        });
+      });
+      return Object.values(bucket).sort((a, b) => b.count - a.count);
+    })();
+
     return (
       <div className="space-y-4">
         <button onClick={() => { setStep("section"); setSel(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
@@ -238,8 +257,23 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
             ))}
           </div>
           {s.weak?.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {s.weak.map(w => <span key={w} className="text-xs px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400">ضعيف في {w}</span>)}
+            <div className="mt-3 bg-slate-900/40 rounded-xl p-3">
+              <div className="text-slate-500 text-xs mb-1.5">📝 نقاط ضعف (مسجّلة يدويًا)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {s.weak.map(w => <span key={w} className="text-xs px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400">ضعيف في {w}</span>)}
+              </div>
+            </div>
+          )}
+          {examMistakes.length > 0 && (
+            <div className="mt-3 bg-slate-900/40 rounded-xl p-3">
+              <div className="text-slate-500 text-xs mb-1.5">📚 أخطاء من الامتحانات</div>
+              <div className="flex flex-wrap gap-1.5">
+                {examMistakes.map(m => (
+                  <span key={`${m.topic}__${m.unit}__${m.lesson}`} className="text-xs px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/20 text-amber-400">
+                    {m.topic} · {m.unit}/{m.lesson} · {m.count}× · آخرها {m.lastDate}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
           <ScoreHistoryChart student={s} />
