@@ -49,6 +49,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
   const [blockReason, setBlockReason] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [search, setSearch] = useState("");
+  const [openErrKey, setOpenErrKey] = useState(null);
 
   // بحث عن طالب بالاسم في كل المجاميع والصفوف — بيوديك على طول لملفه
   const searchResults = useMemo(() => {
@@ -227,6 +228,17 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
       return Object.values(bucket).sort((a, b) => b.count - a.count);
     })();
 
+    // ── أخطاء الأسئلة المسجّلة من قسم "الأخطاء" (وحدة/درس ← أرقام الأسئلة) ──
+    const errorsByLesson = (() => {
+      const bucket = {};
+      (s.examErrors || []).forEach(e => {
+        const key = `${e.unit}__${e.lesson}`;
+        if (!bucket[key]) bucket[key] = { unit: e.unit, lesson: e.lesson, items: [] };
+        bucket[key].items.push(e);
+      });
+      return Object.values(bucket).sort((a, b) => (a.unit - b.unit) || (a.lesson - b.lesson));
+    })();
+
     return (
       <div className="space-y-4">
         <button onClick={() => { setStep("section"); setSel(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
@@ -274,6 +286,42 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+          {errorsByLesson.length > 0 && (
+            <div className="mt-3 bg-slate-900/40 rounded-xl p-3">
+              <div className="text-slate-500 text-xs mb-1.5">🟥 أخطاء الأسئلة (وحدة / درس)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {errorsByLesson.map(g => {
+                  const key = `${g.unit}__${g.lesson}`;
+                  const isOpen = openErrKey === key;
+                  return (
+                    <button key={key} onClick={() => setOpenErrKey(isOpen ? null : key)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                        isOpen ? "bg-red-600 border-red-500 text-white" : "bg-red-500/15 border-red-500/20 text-red-400 hover:bg-red-500/25"}`}>
+                      وحدة {g.unit} - درس {g.lesson} ({g.items.length})
+                    </button>
+                  );
+                })}
+              </div>
+              {openErrKey && (() => {
+                const g = errorsByLesson.find(x => `${x.unit}__${x.lesson}` === openErrKey);
+                if (!g) return null;
+                const qs = [...new Set(g.items.map(e => e.q))].sort((a, b) => a - b);
+                return (
+                  <div className="mt-2.5 space-y-1.5">
+                    {qs.map(q => {
+                      const pts = g.items.filter(e => e.q === q).map(e => e.p).sort((a, b) => a - b);
+                      return (
+                        <div key={q} className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/40 rounded-lg px-3 py-1.5">
+                          <span className="text-white text-xs font-bold shrink-0">سؤال {q}</span>
+                          <span className="text-red-300 text-xs">نقطة {pts.join("، ")}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
           <ScoreHistoryChart student={s} />
