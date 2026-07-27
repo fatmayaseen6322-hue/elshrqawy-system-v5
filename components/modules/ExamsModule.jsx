@@ -227,10 +227,10 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
 
   const reset = () => { setStep(1); setName(""); setSelQ([]); setAnswers({}); setDone(false); setScore(0); setPreview(false); setTopicFilter(""); setTakerId(""); };
 
-  // بيسجّل نتيجة حقيقية (مش عشوائية) للطالب المحدد كـ "الممتحِن"، مربوطة
+  // بيسجّل نتيجة حقيقية فقط للطالب المحدد كـ "الممتحِن"، مربوطة
   // بالوحدة/الدرس/اليوم بتوع الامتحان — وده مصدر بيانات "الأخطاء" في ملف
-  // الطالب. باقي طلاب المجموعة بتفضل درجاتهم تقديرية عشوائية زي الأول
-  // لحد ما يبقى فيه امتحان حقيقي لكل واحد فيهم.
+  // الطالب. باقي طلاب المجموعة اللي معملوش الامتحان فعليًا مش بيتسجلّهم
+  // أي نتيجة خالص (مش رقم عشوائي زي الأول).
   const saveExam = useCallback((finalScore, examQs, finalAnswers) => {
     const totalMarks = examQs.reduce((a, q) => a + q.marks, 0);
     const wrongTopics = examQs.filter(q => finalAnswers[q.id] !== q.correct).map(q => q.topic || "عام");
@@ -242,18 +242,14 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
       group,
       lesson: topicFilter || "متنوع",
       unit: "إنشاء سريع",
-      results: grpStudents.map(s =>
-        s.id === takerId
-          ? { studentId: s.id, score: finalScore, max: totalMarks, wrong: wrongTopics }
-          : { studentId: s.id, score: Math.floor(Math.random() * totalMarks), max: totalMarks }
-      ),
+      results: [{ studentId: takerId, score: finalScore, max: totalMarks, wrong: wrongTopics }],
       cheating: [],
       _myScore: finalScore,
       _myMax: totalMarks,
     };
     setWebExams(p => [newExam, ...p]);
     setToast({ msg: "✓ تم حفظ نتائج الامتحان", type: "success" });
-  }, [name, date, grade, group, topicFilter, grpStudents, takerId, setWebExams]);
+  }, [name, date, grade, group, topicFilter, takerId, setWebExams]);
 
   // Step 1: الإعداد
   if (step === 1) {
