@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR } from "../../constants";
-import { fmtM, fmt, genFinId, nowStr, checkPwd } from "../../utils";
+import { fmtM, genFinId, nowStr, checkPwd } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn } from "../ui";
 
@@ -216,41 +216,15 @@ export default function FinanceModule({ students, settings, setSettings, finReco
   const [toast,            setToast]            = useState(null);
   const [highlightId,      setHighlightId]      = useState(null); // تمييز طالب جاي من بحث التوبار
 
-  // ── خانة "إدخال رسم الصف" (المستطيلين الجديدين تحت الفلاتر) ──
-  const [feeGrade,     setFeeGrade]     = useState("");
-  const [feeAmount,    setFeeAmount]    = useState("");
-  const [feeUnlocked,  setFeeUnlocked]  = useState(false);
-  const [showFeePw,    setShowFeePw]    = useState(false);
-  const feeAmountRef = useRef(null);
-
   // ── تتبّع تكرار اختيار مستلم بديل ليصبح هو المستلم الافتراضي تلقائيًا ──
   const [receiverStreak, setReceiverStreak] = useState({ id: null, count: 0 });
 
   const isCurrentMonth = selMonth === curMonth && selYear === curYear;
-  const feeLocked = (safeSettings.gradeFees?.[feeGrade] || 0) > 0 && !feeUnlocked;
 
   useEffect(() => {
     if (isCurrentMonth && dayFilter) setDayFilter("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCurrentMonth]);
-
-  const openFeeGrade = g => {
-    setFeeGrade(g);
-    setFeeUnlocked(false);
-    setFeeAmount(safeSettings.gradeFees?.[g] ? String(safeSettings.gradeFees[g]) : "");
-    setTimeout(() => feeAmountRef.current?.focus(), 50);
-  };
-
-  const requestFeeEdit = () => setShowFeePw(true);
-  const unlockFeeEdit = () => { setShowFeePw(false); setFeeUnlocked(true); };
-
-  const saveFee = () => {
-    if (!feeGrade || feeAmount === "") return;
-    setSettings(prev => ({ ...(prev || {}), gradeFees: { ...(prev?.gradeFees || {}), [feeGrade]: parseInt(feeAmount) || 0 } }));
-    addActivity?.("رسوم صف", `${feeGrade} — ${feeAmount} ج`);
-    setToast({ msg: `✓ تم حفظ رسم ${feeGrade}`, type: "success" });
-    setFeeUnlocked(false);
-  };
 
   // بحث التوبار العلوي: افتحلها صف وصفوف الطالب وافتح السجل تلقائي
   useEffect(() => {
@@ -349,17 +323,6 @@ export default function FinanceModule({ students, settings, setSettings, finReco
 
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 border border-amber-700/25 rounded-2xl p-4 flex items-center gap-3">
-        <span className="text-3xl">💰</span>
-        <div><div className="text-white font-black text-base">إدارة المصاريف</div><div className="text-slate-400 text-xs">سجّل وتابع دفعات الطلاب</div></div>
-        {paidCount > 0 && (
-          <div className="mr-auto text-right">
-            <div className="text-emerald-400 font-black text-lg">{fmt(totalCollected)}</div>
-            <div className="text-slate-500 text-xs">{paidCount} طالب دفع</div>
-          </div>
-        )}
-      </div>
-
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
         <div className="text-xs text-slate-400 font-bold mb-1">🔍 فلاتر البحث</div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -392,37 +355,6 @@ export default function FinanceModule({ students, settings, setSettings, finReco
           </Field>
         </div>
       </div>
-
-      {/* ── مستطيلا "رسم الصف": إدخال/اعتماد رسم الصف الشهري ── */}
-      <div className="bg-slate-800/50 border border-slate-700/30 rounded-2xl p-4 space-y-3">
-        <div className="text-xs text-slate-400 font-bold mb-1">💵 رسم الصف الشهري</div>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="الصف">
-            <select value={feeGrade} onChange={e => openFeeGrade(e.target.value)}
-              className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
-              <option value="">— اختر الصف —</option>
-              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-            </select>
-          </Field>
-          <Field label={feeLocked ? "الرسم (معتمد 🔒)" : "قيمة الرسم"}>
-            <div className="flex gap-2">
-              <input
-                ref={feeAmountRef} type="number" value={feeAmount} disabled={!feeGrade || feeLocked}
-                onChange={e => setFeeAmount(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !feeLocked) saveFee(); }}
-                placeholder="مثال: 500"
-                className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none disabled:opacity-50" />
-              {feeGrade && (feeLocked
-                ? <button onClick={requestFeeEdit} className="px-3 rounded-xl bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
-                : <button onClick={saveFee} disabled={feeAmount === ""} className="px-3 rounded-xl bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm disabled:opacity-30 hover:bg-emerald-700/50">💾</button>)}
-            </div>
-          </Field>
-        </div>
-        {feeLocked && <div className="text-slate-500 text-xs text-center">هذا الرسم معتمد من قبل — أي تعديل يتطلب باسورد المستر.</div>}
-      </div>
-      {showFeePw && (
-        <AdminPasswordGate title="🔑 تعديل رسم صف معتمد" adminHash={safeSettings.password} onUnlock={unlockFeeEdit} onCancel={() => setShowFeePw(false)} />
-      )}
 
       {tableOpen && selGrade && (
         <>
