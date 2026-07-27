@@ -593,7 +593,214 @@ function ExamPanelUpload({ centerExams, setCenterExams }) {
 }
 
 // ─── Panel: التنبيهات ────────────────────────────────────────
-function ExamPanelAlerts({ students }) {
+// ─── وحدات/دروس كل صف — كل الصفوف 4 وحدات × 6 دروس، ما عدا
+// "ثالثة ثانوي" حالة استثنائية: 8 وحدات × 6 دروس ────────────────
+const unitsCountFor = grade => grade === "ثالثة ثانوي" ? 8 : 4;
+const LESSONS_COUNT = 6;
+
+// ─── ورقة تسجيل خطأ سؤال لطالب معيّن ────────────────────────
+function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActivity, onClose }) {
+  const [numQ,    setNumQ]    = useState(20);
+  const [numPts,  setNumPts]  = useState(4);
+  const [activeQ, setActiveQ] = useState(null);
+  const [toast,   setToast]   = useState(null);
+
+  const tag = `و${unit} - د${lesson}`;
+  const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson);
+  const errQSet = new Set(errors.map(e => e.q));
+
+  const markPoint = (q, p) => {
+    const label = `${tag} - سؤال ${q} (نقطة ${p})`;
+    setStudents(prev => (prev || []).map(s => {
+      if (s.id !== student.id) return s;
+      const already = (s.examErrors || []).some(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.q === q && e.p === p);
+      const newErrors = already ? (s.examErrors || []) : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, ts: new Date().toISOString() }];
+      const newWeak = (s.weak || []).includes(label) ? (s.weak || []) : [...(s.weak || []), label];
+      return { ...s, examErrors: newErrors, weak: newWeak };
+    }));
+    addActivity?.("خطأ سؤال", `${student.name} — ${label}`);
+    setToast({ msg: `✓ اتسجّل: سؤال ${q} - نقطة ${p}`, type: "success" });
+  };
+
+  const removeError = e => {
+    setStudents(prev => (prev || []).map(s => {
+      if (s.id !== student.id) return s;
+      const label = `${tag} - سؤال ${e.q} (نقطة ${e.p})`;
+      return {
+        ...s,
+        examErrors: (s.examErrors || []).filter(x => x.id !== e.id),
+        weak: (s.weak || []).filter(w => w !== label),
+      };
+    }));
+  };
+
+  return (
+    <Modal title={`📝 ${student.name} — ${tag}`} onClose={onClose} maxW="max-w-lg">
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="عدد الأسئلة">
+            <input type="number" min={1} max={60} value={numQ} onChange={e => setNumQ(parseInt(e.target.value) || 1)}
+              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+          </Field>
+          <Field label="عدد النقاط بالسؤال">
+            <input type="number" min={1} max={10} value={numPts} onChange={e => setNumPts(parseInt(e.target.value) || 1)}
+              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+          </Field>
+        </div>
+
+        <div>
+          <div className="text-xs text-slate-400 font-bold mb-2">اختر رقم السؤال</div>
+          <div className="grid grid-cols-6 gap-1.5">
+            {Array.from({ length: numQ }, (_, i) => i + 1).map(q => (
+              <button key={q} onClick={() => setActiveQ(q)}
+                className={`aspect-square rounded-lg text-xs font-bold transition-colors ${
+                  activeQ === q ? "bg-blue-600 text-white" :
+                  errQSet.has(q) ? "bg-red-600/30 border border-red-500/40 text-red-300" :
+                  "bg-slate-800 border border-slate-700/50 text-slate-300 hover:bg-slate-700"}`}>
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeQ && (
+          <div>
+            <div className="text-xs text-slate-400 font-bold mb-2">اختر رقم النقطة الغلط في سؤال {activeQ}</div>
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: numPts }, (_, i) => i + 1).map(p => {
+                const isMarked = errors.some(e => e.q === activeQ && e.p === p);
+                return (
+                  <button key={p} onClick={() => markPoint(activeQ, p)}
+                    className={`py-3 rounded-lg text-sm font-bold transition-colors ${
+                      isMarked ? "bg-red-600 text-white" : "bg-slate-800 border border-slate-700/50 text-slate-300 hover:bg-red-700/40"}`}>
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {errors.length > 0 && (
+          <div>
+            <div className="text-xs text-red-400 font-bold mb-2">الأخطاء المسجَّلة في هذا الدرس ({errors.length})</div>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {errors.map(e => (
+                <div key={e.id} className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5">
+                  <span className="text-red-300 text-xs">سؤال {e.q} — نقطة {e.p}</span>
+                  <button onClick={() => removeError(e)} className="text-slate-500 hover:text-white text-xs px-2">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Btn variant="ghost" className="w-full" onClick={onClose}>إغلاق</Btn>
+        {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+      </div>
+    </Modal>
+  );
+}
+
+// ─── تسجيل أخطاء الأسئلة: صف ← وحدة ← درس ← جدول طلاب الصف ─────
+function ExamErrorEntry({ students, setStudents, addActivity }) {
+  const [grade,   setGrade]   = useState("");
+  const [unit,    setUnit]    = useState("");
+  const [lesson,  setLesson]  = useState("");
+  const [openStudent, setOpenStudent] = useState(null);
+
+  const maxUnits = grade ? unitsCountFor(grade) : 0;
+  const gradeStudents = useMemo(() => students.filter(s => s.grade === grade), [students, grade]);
+
+  const errCountFor = s => (s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="الصف">
+          <select value={grade} onChange={e => { setGrade(e.target.value); setUnit(""); setLesson(""); }}
+            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
+            <option value="">— اختر —</option>
+            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+          </select>
+        </Field>
+        <Field label="الوحدة">
+          <select value={unit} onChange={e => setUnit(e.target.value)} disabled={!grade}
+            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
+            <option value="">— اختر —</option>
+            {Array.from({ length: maxUnits }, (_, i) => i + 1).map(u => <option key={u} value={u}>وحدة {u}</option>)}
+          </select>
+        </Field>
+        <Field label="الدرس">
+          <select value={lesson} onChange={e => setLesson(e.target.value)} disabled={!unit}
+            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
+            <option value="">— اختر —</option>
+            {Array.from({ length: LESSONS_COUNT }, (_, i) => i + 1).map(l => <option key={l} value={l}>درس {l}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      {grade === "ثالثة ثانوي" && (
+        <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+      )}
+
+      {grade && unit && lesson && (
+        gradeStudents.length === 0
+          ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
+          : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
+              {gradeStudents.map(s => {
+                const n = errCountFor(s);
+                return (
+                  <button key={s.id} onClick={() => setOpenStudent(s)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
+                    <Av name={s.name} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-xs font-bold truncate">{s.name}</div>
+                      <div className="text-slate-500" style={{ fontSize: "10px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
+                    </div>
+                    {n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} خطأ</span>}
+                    <span className="text-slate-500 text-xs shrink-0">تسجيل ›</span>
+                  </button>
+                );
+              })}
+            </div>
+      )}
+      {(!grade || !unit || !lesson) && (
+        <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">📝</div><div className="text-sm">اختاري الصف ثم الوحدة ثم الدرس</div></div>
+      )}
+
+      {openStudent && (
+        <StudentErrorSheet
+          student={openStudent} grade={grade} unit={unit} lesson={lesson}
+          setStudents={setStudents} addActivity={addActivity}
+          onClose={() => setOpenStudent(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ExamPanelAlerts({ students, setStudents, addActivity }) {
+  const [tab, setTab] = useState("record"); // record = تسجيل الأخطاء (الافتراضي الجديد) | notif = التنبيهات القديمة
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 bg-slate-800 rounded-xl p-1">
+        <button onClick={() => setTab("record")}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "record" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
+          🎯 تسجيل أخطاء الأسئلة
+        </button>
+        <button onClick={() => setTab("notif")}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "notif" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
+          🔔 التنبيهات
+        </button>
+      </div>
+      {tab === "record" && <ExamErrorEntry students={students} setStudents={setStudents} addActivity={addActivity} />}
+      {tab === "notif"  && <ExamPanelAlertsOld students={students} />}
+    </div>
+  );
+}
+
+function ExamPanelAlertsOld({ students }) {
   const [toast, setToast] = useState(null);
   const [sentAll, setSentAll] = useState(false);
 
@@ -1112,7 +1319,7 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
 const PANELS = [
-  { key: "errors",     icon: "🟥", label: "الأخطاء",    desc: "تنبيهات المستوى ونقاط الضعف",        color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
+  { key: "errors",     icon: "🟥", label: "الأخطاء",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
   { key: "correction", icon: "🟦", label: "التصحيح",    desc: "نظرة عامة وتصحيح أوراق الامتحانات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
   { key: "exams",      icon: "📝", label: "الامتحانات", desc: "بنك الأسئلة، إنشاء سريع، رفع ملف",   color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
   { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
@@ -1144,7 +1351,7 @@ function ExamsSubTabs({ questions, setQuestions, webExams, setWebExams, centerEx
   );
 }
 
-export default function ExamsModule({ students, questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams }) {
+export default function ExamsModule({ students, setStudents, addActivity, questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams }) {
   const [activePanel, setActivePanel] = useState(null);
 
   if (activePanel) {
@@ -1160,7 +1367,7 @@ export default function ExamsModule({ students, questions, setQuestions, webExam
           </div>
         </div>
 
-        {activePanel === "errors"     && <ExamPanelAlerts        students={students} />}
+        {activePanel === "errors"     && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} />}
         {activePanel === "correction" && <ExamPanelDashboard     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
         {activePanel === "exams"      && <ExamsSubTabs           questions={questions} setQuestions={setQuestions} webExams={webExams} setWebExams={setWebExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
