@@ -1331,6 +1331,7 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
   const [toast, setToast]   = useState(null);
   const [numQuestions, setNumQuestions] = useState(20);
   const [pointsPerQuestion, setPointsPerQuestion] = useState(4);
+  const [analyzing, setAnalyzing] = useState(false);
   const ref = useRef(null);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
@@ -1338,21 +1339,99 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
 
   const existing = (centerExams || []).filter(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson));
 
-  const acceptFile = f => {
+  const fileToBase64 = f => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1]);
+    r.onerror = () => reject(new Error("تعذّرت قراءة الملف"));
+    r.readAsDataURL(f);
+  });
+
+  // بيقرأ الملف فعليًا (صورة أو PDF) عن طريق Claude Vision ويرجّع عدد
+  // الأسئلة وعدد النقط (الاختيارات) في كل سؤال، بدل ما تكتبيهم إنتي.
+  // بيستخدم نفس مفتاح API بتاع "asal.ai" (لازم يبقى متسجّل قبل كده).
+  const analyzeExamFile = async (f, ext) => {
+    let apiKey = "";
+    try { apiKey = localStorage.getItem("asal_api_key") || ""; } catch { /* ignore */ }
+    if (!apiKey) return { ok: false, reason: "no_key" };
+
+    const isImage = ["jpg", "jpeg", "png", "webp"].includes(ext);
+    const isPdf = ext === "pdf";
+    if (!isImage && !isPdf) return { ok: false, reason: "unsupported" };
+
+    try {
+      const b64 = await fileToBase64(f);
+      const mediaType = isPdf ? "application/pdf" : (ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg");
+      const contentBlock = isPdf
+        ? { type: "document", source: { type: "base64", media_type: mediaType, data: b64 } }
+        : { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } };
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 300,
+          messages: [{
+            role: "user",
+            content: [
+              contentBlock,
+              { type: "text", text: "دي ورقة امتحان. عدّي إجمالي عدد الأسئلة، وحددي عدد الاختيارات/النقط في كل سؤال (زي عدد اختيارات كل سؤال اختيار من متعدد؛ لو مش موحّد خدي الأكثر تكرارًا). ردّي بصيغة JSON فقط بدون أي كلام تاني، بالظبط بالشكل ده: {\"numQuestions\": رقم, \"pointsPerQuestion\": رقم}" }
+            ]
+          }]
+        })
+      });
+      if (res.status === 401) return { ok: false, reason: "bad_key" };
+      if (!res.ok) return { ok: false, reason: "http_error" };
+      const data = await res.json();
+      const text = (data.content || []).map(c => c.text || "").join("").trim();
+      const clean = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      const nq = parseInt(parsed.numQuestions);
+      const np = parseInt(parsed.pointsPerQuestion);
+      if (!nq || !np) return { ok: false, reason: "parse_error" };
+      return { ok: true, numQuestions: Math.max(1, nq), pointsPerQuestion: Math.max(1, np) };
+    } catch {
+      return { ok: false, reason: "error" };
+    }
+  };
+
+  const acceptFile = async f => {
     if (!f) return;
     const maxSize = 20 * 1024 * 1024;
     if (f.size > maxSize) { setToast({ msg: "الملف أكبر من 20MB", type: "error" }); return; }
     const ext = f.name.split(".").pop().toLowerCase();
     if (!EXAM_ACCEPT.includes(ext)) { setToast({ msg: "الصيغة غير مدعومة — Word أو PDF أو صورة فقط", type: "error" }); return; }
+
+    const examId = genExamId();
     const newExam = {
-      id: genExamId(), grade, unit, lesson,
+      id: examId, grade, unit, lesson,
       fileName: f.name, fileSize: f.size, fileType: ext,
       date: TODAY,
       numQuestions: numQuestions || 20,
       pointsPerQuestion: pointsPerQuestion || 4,
     };
     setCenterExams(p => [newExam, ...(p || [])]);
-    setToast({ msg: `✓ تم رفع ${f.name} وربطه بـ${grade} - وحدة ${unit} - درس ${lesson}`, type: "success" });
+    setToast({ msg: `✓ تم رفع ${f.name} — جاري قراءة عدد الأسئلة تلقائيًا...`, type: "success" });
+
+    setAnalyzing(true);
+    const result = await analyzeExamFile(f, ext);
+    setAnalyzing(false);
+
+    if (result.ok) {
+      setCenterExams(p => (p || []).map(e => e.id === examId ? { ...e, numQuestions: result.numQuestions, pointsPerQuestion: result.pointsPerQuestion } : e));
+      setToast({ msg: `✓ اتقرأ الامتحان: ${result.numQuestions} سؤال × ${result.pointsPerQuestion} نقط`, type: "success" });
+    } else if (result.reason === "no_key") {
+      setToast({ msg: "⚠️ محتاجة تسجّلي مفتاح API بتاع asal.ai الأول عشان القراءة التلقائية تشتغل — العدد اللي كتبتيه فوق اتحفظ عادي", type: "error" });
+    } else if (result.reason === "unsupported") {
+      setToast({ msg: "الصور والـ PDF بس قابلين للقراءة التلقائية — ملفات Word لازم تدخلي العدد يدويًا", type: "error" });
+    } else {
+      setToast({ msg: "⚠️ مقدرتش أقرأ عدد الأسئلة تلقائيًا من الملف ده — عدّلي العدد يدويًا تحت لو مختلف", type: "error" });
+    }
   };
 
   const removeExam = id => setCenterExams(p => (p || []).filter(e => e.id !== id));
@@ -1392,27 +1471,32 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
 
       {ready ? (
         <>
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 text-blue-300 text-xs text-center">
+            📷 لو الملف صورة أو PDF، هقرأ عدد الأسئلة والنقط تلقائيًا من جوه الامتحان بعد الرفع. الأرقام تحت دي بس قيمة مبدئية.
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="عدد أسئلة الامتحان">
+            <Field label="عدد أسئلة الامتحان (مبدئي)">
               <input type="number" min={1} max={100} value={numQuestions} onChange={e => setNumQuestions(parseInt(e.target.value) || 1)}
                 className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
             </Field>
-            <Field label="عدد النقط في كل سؤال">
+            <Field label="عدد النقط في كل سؤال (مبدئي)">
               <input type="number" min={1} max={20} value={pointsPerQuestion} onChange={e => setPointsPerQuestion(parseInt(e.target.value) || 1)}
                 className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
             </Field>
           </div>
           <div
-            onClick={() => ref.current?.click()}
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onClick={() => !analyzing && ref.current?.click()}
+            onDragOver={e => { e.preventDefault(); if (!analyzing) setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0]); }}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors group ${dragOver ? "border-blue-500 bg-blue-500/10" : "border-slate-600/60 hover:border-blue-500/50"}`}
+            onDrop={e => { e.preventDefault(); setDragOver(false); if (!analyzing) acceptFile(e.dataTransfer.files?.[0]); }}
+            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors group ${analyzing ? "opacity-60 cursor-wait" : "cursor-pointer"} ${dragOver ? "border-blue-500 bg-blue-500/10" : "border-slate-600/60 hover:border-blue-500/50"}`}
           >
-            <div className="text-5xl mb-3">📁</div>
-            <div className="text-slate-300 font-medium group-hover:text-white transition-colors">اسحبي الملف هنا أو اضغطي للفتح من اللابتوب</div>
+            <div className="text-5xl mb-3">{analyzing ? "🔎" : "📁"}</div>
+            <div className="text-slate-300 font-medium group-hover:text-white transition-colors">
+              {analyzing ? "بيقرأ الامتحان تلقائيًا دلوقتي... استني شوية" : "اسحبي الملف هنا أو اضغطي للفتح من اللابتوب"}
+            </div>
             <div className="text-slate-600 text-xs mt-1">Word · PDF · صورة — حد أقصى 20MB</div>
-            <div className="text-blue-400 text-xs mt-2">هيتربط بـ {grade} — وحدة {unit} — درس {lesson} — {numQuestions} سؤال × {pointsPerQuestion} نقط</div>
+            <div className="text-blue-400 text-xs mt-2">هيتربط بـ {grade} — وحدة {unit} — درس {lesson}</div>
           </div>
           <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden" onChange={e => { acceptFile(e.target.files?.[0]); e.target.value = ""; }} />
 
