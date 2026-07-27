@@ -600,13 +600,14 @@ const LESSONS_COUNT = 6;
 
 // ─── ورقة تسجيل خطأ سؤال لطالب معيّن ────────────────────────
 function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActivity, centerExams, onClose }) {
-  const [numQ,    setNumQ]    = useState(20);
-  const [numPts,  setNumPts]  = useState(4);
   const [activeQ, setActiveQ] = useState(null);
   const [toast,   setToast]   = useState(null);
 
   const tag = `و${unit} - د${lesson}`;
   const linkedExam = (centerExams || []).find(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson)) || null;
+  // عدد الأسئلة وعدد النقط بيجوا أوتوماتيك من الامتحان المرفوع لنفس الصف/الوحدة/الدرس
+  const numQ   = linkedExam?.numQuestions      || 20;
+  const numPts = linkedExam?.pointsPerQuestion || 4;
   const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson);
   const errQSet = new Set(errors.map(e => e.q));
 
@@ -639,18 +640,8 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
     <Modal title={`📝 ${student.name} — ${tag}`} onClose={onClose} maxW="max-w-lg">
       <div className="space-y-4">
         {linkedExam
-          ? <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-emerald-300 text-xs text-center">📎 مربوط بامتحان: {linkedExam.fileName}</div>
-          : <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">⚠️ لا يوجد امتحان مرفوع لهذه الوحدة/الدرس بعد</div>}
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="عدد الأسئلة">
-            <input type="number" min={1} max={60} value={numQ} onChange={e => setNumQ(parseInt(e.target.value) || 1)}
-              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
-          </Field>
-          <Field label="عدد النقاط بالسؤال">
-            <input type="number" min={1} max={10} value={numPts} onChange={e => setNumPts(parseInt(e.target.value) || 1)}
-              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
-          </Field>
-        </div>
+          ? <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-emerald-300 text-xs text-center">📎 مربوط بامتحان: {linkedExam.fileName} — {numQ} سؤال × {numPts} نقط</div>
+          : <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">⚠️ لا يوجد امتحان مرفوع لهذه الوحدة/الدرس — هيتم استخدام {numQ} سؤال × {numPts} نقط كقيمة افتراضية لحد ما ترفعي الامتحان من قسم "الامتحانات"</div>}
 
         <div>
           <div className="text-xs text-slate-400 font-bold mb-2">اختر رقم السؤال</div>
@@ -1347,6 +1338,8 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
   const [lesson, setLesson] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [toast, setToast]   = useState(null);
+  const [numQuestions, setNumQuestions] = useState(20);
+  const [pointsPerQuestion, setPointsPerQuestion] = useState(4);
   const ref = useRef(null);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
@@ -1364,12 +1357,18 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
       id: genExamId(), grade, unit, lesson,
       fileName: f.name, fileSize: f.size, fileType: ext,
       date: TODAY,
+      numQuestions: numQuestions || 20,
+      pointsPerQuestion: pointsPerQuestion || 4,
     };
     setCenterExams(p => [newExam, ...(p || [])]);
     setToast({ msg: `✓ تم رفع ${f.name} وربطه بـ${grade} - وحدة ${unit} - درس ${lesson}`, type: "success" });
   };
 
   const removeExam = id => setCenterExams(p => (p || []).filter(e => e.id !== id));
+
+  const updateExamCounts = (id, field, value) => {
+    setCenterExams(p => (p || []).map(e => e.id === id ? { ...e, [field]: Math.max(1, parseInt(value) || 1) } : e));
+  };
 
   return (
     <div className="space-y-4">
@@ -1402,6 +1401,16 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
 
       {ready ? (
         <>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="عدد أسئلة الامتحان">
+              <input type="number" min={1} max={100} value={numQuestions} onChange={e => setNumQuestions(parseInt(e.target.value) || 1)}
+                className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+            </Field>
+            <Field label="عدد النقط في كل سؤال">
+              <input type="number" min={1} max={20} value={pointsPerQuestion} onChange={e => setPointsPerQuestion(parseInt(e.target.value) || 1)}
+                className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+            </Field>
+          </div>
           <div
             onClick={() => ref.current?.click()}
             onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -1412,7 +1421,7 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
             <div className="text-5xl mb-3">📁</div>
             <div className="text-slate-300 font-medium group-hover:text-white transition-colors">اسحبي الملف هنا أو اضغطي للفتح من اللابتوب</div>
             <div className="text-slate-600 text-xs mt-1">Word · PDF · صورة — حد أقصى 20MB</div>
-            <div className="text-blue-400 text-xs mt-2">هيتربط بـ {grade} — وحدة {unit} — درس {lesson}</div>
+            <div className="text-blue-400 text-xs mt-2">هيتربط بـ {grade} — وحدة {unit} — درس {lesson} — {numQuestions} سؤال × {pointsPerQuestion} نقط</div>
           </div>
           <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden" onChange={e => { acceptFile(e.target.files?.[0]); e.target.value = ""; }} />
 
@@ -1420,11 +1429,22 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
             <div className="space-y-2">
               <div className="text-xs text-slate-400 font-bold px-1">الامتحانات المرفوعة لهذا الدرس ({existing.length})</div>
               {existing.map(ex => (
-                <div key={ex.id} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                <div key={ex.id} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3 flex-wrap">
                   <span className="text-2xl">{fileKindIcon(ex.fileName)}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-bold truncate">{ex.fileName}</div>
                     <div className="text-slate-500 text-xs">{(ex.fileSize / 1024).toFixed(1)} KB — {ex.date}</div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input type="number" min={1} max={100} value={ex.numQuestions || 20}
+                      onChange={e => updateExamCounts(ex.id, "numQuestions", e.target.value)}
+                      title="عدد الأسئلة"
+                      className="w-14 bg-slate-900 border border-slate-700/50 rounded-lg px-1 py-1 text-white text-xs text-center focus:outline-none" />
+                    <span className="text-slate-500 text-xs">×</span>
+                    <input type="number" min={1} max={20} value={ex.pointsPerQuestion || 4}
+                      onChange={e => updateExamCounts(ex.id, "pointsPerQuestion", e.target.value)}
+                      title="عدد النقط بكل سؤال"
+                      className="w-14 bg-slate-900 border border-slate-700/50 rounded-lg px-1 py-1 text-white text-xs text-center focus:outline-none" />
                   </div>
                   <button onClick={() => removeExam(ex.id)} className="text-red-400 text-lg hover:text-red-300">🗑</button>
                 </div>
