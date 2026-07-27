@@ -172,23 +172,43 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
               <Btn size="sm" variant="ghost" onClick={() => setStep("add")}>+ طالب</Btn>
             </div>
           </div>
-          <div className="space-y-2">
-            {grpStudents.map(s => {
-              const cfg = stCfg[s.status] || stCfg.active;
-              const lvl = computeRealLevel(s, centerExams);
-              return (
-                <button key={s.id} onClick={() => { setSel(s); setStep("profile"); }}
-                  className="w-full bg-slate-800/50 border border-slate-700/30 rounded-xl px-3 py-2.5 flex items-center gap-3 hover:bg-slate-800 transition-colors">
-                  <Av name={s.name} size="sm" />
-                  <div className="flex-1 text-right min-w-0">
-                    <div className="text-white text-xs font-bold truncate">{s.name}</div>
-                    <div className="text-slate-500" style={{ fontSize: "10px" }}>{s.id}</div>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t} shrink-0`}>{lvl === null ? "—" : `${lvl}%`}</span>
-                </button>
-              );
-            })}
-            {grpStudents.length === 0 && <div className="text-center text-slate-600 text-xs py-4">مفيش طلاب في المجموعة دي</div>}
+          <div>
+            {grpStudents.length === 0 ? (
+              <div className="text-center text-slate-600 text-xs py-4">مفيش طلاب في المجموعة دي</div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-700/30">
+                <table className="w-full text-right border-collapse">
+                  <thead>
+                    <tr className="bg-slate-800/70 text-slate-400 text-xs">
+                      <th className="px-3 py-2 font-medium">الطالب</th>
+                      <th className="px-3 py-2 font-medium">الكود</th>
+                      <th className="px-3 py-2 font-medium">المستوى</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grpStudents.map(s => {
+                      const cfg = stCfg[s.status] || stCfg.active;
+                      const lvl = computeRealLevel(s, centerExams);
+                      return (
+                        <tr key={s.id} onClick={() => { setSel(s); setStep("profile"); }}
+                          className="bg-slate-800/50 hover:bg-slate-800 border-t border-slate-700/30 cursor-pointer transition-colors">
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Av name={s.name} size="sm" />
+                              <span className="text-white text-xs font-bold truncate">{s.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-500" style={{ fontSize: "10px" }}>{s.id}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t}`}>{lvl === null ? "—" : `${lvl}%`}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
@@ -269,16 +289,14 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
         <button onClick={() => { setStep("section"); setSel(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
         <StatusBar grade={grade} group={group} date={date} />
         <div className="bg-slate-800/70 border border-slate-700/50 rounded-2xl p-5">
-          <div className="flex gap-4 items-center">
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
             <Av name={s.name} size="lg" />
-            <div className="flex-1">
-              <div className="text-white font-black text-base">{s.name}</div>
-              <div className="text-slate-400 text-xs mt-0.5">{s.grade} · مجموعة {s.group} · {s.id}</div>
-              <span className={`mt-1.5 inline-block text-xs px-2.5 py-0.5 rounded-full ${stCfg[s.status]?.bg} ${stCfg[s.status]?.t}`}>{stCfg[s.status]?.l}</span>
+            <div className="shrink-0 pl-1">
+              <div className="text-white font-black text-base whitespace-nowrap">{s.name}</div>
+              <div className="text-slate-400 text-xs mt-0.5 whitespace-nowrap">{s.grade} · مجموعة {s.group} · {s.id}</div>
+              <span className={`mt-1.5 inline-block text-xs px-2.5 py-0.5 rounded-full whitespace-nowrap ${stCfg[s.status]?.bg} ${stCfg[s.status]?.t}`}>{stCfg[s.status]?.l}</span>
             </div>
-          </div>
-          <div className="grid grid-cols-4 gap-2 mt-4">
-            <div className="bg-slate-900/50 rounded-xl p-2.5 text-center flex flex-col justify-center">
+            <div className="bg-slate-900/50 rounded-xl p-2.5 text-center shrink-0 min-w-[68px]">
               <div className="font-black text-sm text-white truncate">{s.phone || "—"}</div>
               <div className="text-xs text-slate-500">هاتف</div>
             </div>
@@ -287,11 +305,25 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
               { l: "المستوى", v: realLevel === null ? "—" : `${realLevel}%`, ok: realLevel === null ? true : realLevel >= 65 },
               { l: "السداد", v: `${pct(s.paid, s.totalFees)}%`, ok: due === 0 }
             ].map(x => (
-              <div key={x.l} className="bg-slate-900/50 rounded-xl p-2.5 text-center">
+              <div key={x.l} className="bg-slate-900/50 rounded-xl p-2.5 text-center shrink-0 min-w-[68px]">
                 <div className={`font-black text-lg ${x.ok ? "text-emerald-400" : "text-amber-400"}`}>{x.v}</div>
                 <div className="text-xs text-slate-500">{x.l}</div>
               </div>
             ))}
+          </div>
+
+          {/* المصاريف مدموجة هنا: الشهر الحالي + الشهور المتأخرة + تعديل في خط واحد */}
+          <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1">
+            <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${currentMonthPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
+              {currentMonthPaid ? `✓ ${MONTHS_AR[currentMonthNum - 1]} مدفوع` : `✗ ${MONTHS_AR[currentMonthNum - 1]} غير مدفوع`}
+            </div>
+            <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${overdueMonths.length > 0 ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"}`}>
+              {overdueMonths.length > 0 ? `⚠️ متأخر: ${overdueMonths.join("، ")}` : "✓ لا يوجد شهور متأخرة"}
+            </div>
+            <button onClick={() => setStep("edit")}
+              className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold bg-blue-600/20 border border-blue-500/30 text-blue-300 whitespace-nowrap">
+              ✏️ تعديل
+            </button>
           </div>
           {s.weak?.length > 0 && (
             <div className="mt-3 bg-slate-900/40 rounded-xl p-3">
@@ -351,28 +383,11 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
           )}
           <ScoreHistoryChart student={s} />
         </div>
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-white font-bold text-sm">💰 المصاريف — حالة السداد الشهري</span>
-          </div>
-          <div className={`text-center py-2.5 rounded-xl text-sm font-bold border ${currentMonthPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
-            {currentMonthPaid ? `✓ الشهر الحالي (${MONTHS_AR[currentMonthNum - 1]}) مدفوع` : `✗ الشهر الحالي (${MONTHS_AR[currentMonthNum - 1]}) غير مدفوع`}
-          </div>
-          {overdueMonths.length > 0 ? (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5 text-center">
-              <div className="text-amber-400 text-xs font-bold mb-1">⚠️ شهور متأخرة</div>
-              <div className="text-amber-300 text-sm font-black">{overdueMonths.join("، ")}</div>
-            </div>
-          ) : (
-            <div className="text-emerald-400 text-xs text-center py-1">✓ لا يوجد شهور متأخرة</div>
-          )}
-        </div>
         <div className="flex gap-2">
-          <Btn variant="ghost" className="flex-1" onClick={() => setStep("edit")}>✏️ تعديل</Btn>
           <button onClick={() => { const url = waLink(s.parentPhone); if (url) window.open(url, "_blank"); }}
-            className="w-10 h-10 rounded-xl bg-green-700/30 border border-green-600/20 text-green-400 flex items-center justify-center text-lg">💬</button>
+            className="flex-1 h-10 rounded-xl bg-green-700/30 border border-green-600/20 text-green-400 flex items-center justify-center gap-1.5 text-sm font-bold">💬 واتساب</button>
           <button onClick={() => setConfirmDel(s)}
-            className="w-10 h-10 rounded-xl bg-red-700/20 border border-red-600/20 text-red-400 flex items-center justify-center">🚫</button>
+            className="flex-1 h-10 rounded-xl bg-red-700/20 border border-red-600/20 text-red-400 flex items-center justify-center gap-1.5 text-sm font-bold">🚫 حظر</button>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
         {confirmDel && (
