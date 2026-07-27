@@ -1529,12 +1529,12 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 300,
+          max_tokens: 1500,
           messages: [{
             role: "user",
             content: [
               contentBlock,
-              { type: "text", text: "دي ورقة امتحان. عدّي إجمالي عدد الأسئلة، وحددي عدد الاختيارات/النقط في كل سؤال (زي عدد اختيارات كل سؤال اختيار من متعدد؛ لو مش موحّد خدي الأكثر تكرارًا). ردّي بصيغة JSON فقط بدون أي كلام تاني، بالظبط بالشكل ده: {\"numQuestions\": رقم, \"pointsPerQuestion\": رقم}" }
+              { type: "text", text: "دي ورقة امتحان. عدّي إجمالي عدد الأسئلة، وحددي عدد الاختيارات/النقط في كل سؤال (زي عدد اختيارات كل سؤال اختيار من متعدد؛ لو مش موحّد خدي الأكثر تكرارًا). كمان اكتبي لكل سؤال وصف قصير جدًا (٣-٨ كلمات بالعربي) يلخّص فكرة السؤال بدل رقمه: لو السؤال بيطلب تفسير أو سبب، ابدئي الوصف بـ'ليه...' أو 'فسّر ليه...'؛ لو بيطلب نتيجة أو نتائج، ابدئي بـ'نتائج...' أو 'ما نتيجة...'؛ لو سؤال صح وغلط، اكتبي نص العبارة نفسها (مختصرة)؛ غير كده اكتبي موضوع السؤال باختصار. متكتبيش كلمة 'سؤال رقم' في الوصف نفسه. ردّي بصيغة JSON فقط بدون أي كلام تاني، بالظبط بالشكل ده: {\"numQuestions\": رقم, \"pointsPerQuestion\": رقم, \"questions\": [{\"q\": رقم السؤال, \"desc\": \"الوصف القصير\"}, ...] }" }
             ]
           }]
         })
@@ -1548,7 +1548,15 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
       const nq = parseInt(parsed.numQuestions);
       const np = parseInt(parsed.pointsPerQuestion);
       if (!nq || !np) return { ok: false, reason: "parse_error" };
-      return { ok: true, numQuestions: Math.max(1, nq), pointsPerQuestion: Math.max(1, np) };
+      const questionMeta = {};
+      if (Array.isArray(parsed.questions)) {
+        parsed.questions.forEach(item => {
+          const qn = parseInt(item?.q);
+          const desc = String(item?.desc || "").trim();
+          if (qn && desc) questionMeta[qn] = desc;
+        });
+      }
+      return { ok: true, numQuestions: Math.max(1, nq), pointsPerQuestion: Math.max(1, np), questionMeta };
     } catch {
       return { ok: false, reason: "error" };
     }
@@ -1577,8 +1585,13 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
     setAnalyzing(false);
 
     if (result.ok) {
-      setCenterExams(p => (p || []).map(e => e.id === examId ? { ...e, numQuestions: result.numQuestions, pointsPerQuestion: result.pointsPerQuestion } : e));
-      setToast({ msg: `✓ اتقرأ الامتحان: ${result.numQuestions} سؤال × ${result.pointsPerQuestion} نقط`, type: "success" });
+      const hasDesc = result.questionMeta && Object.keys(result.questionMeta).length > 0;
+      setCenterExams(p => (p || []).map(e => e.id === examId
+        ? { ...e, numQuestions: result.numQuestions, pointsPerQuestion: result.pointsPerQuestion, questionMeta: { ...(e.questionMeta || {}), ...(result.questionMeta || {}) } }
+        : e));
+      setToast({ msg: hasDesc
+        ? `✓ اتقرأ الامتحان: ${result.numQuestions} سؤال × ${result.pointsPerQuestion} نقط + وصف كل سؤال`
+        : `✓ اتقرأ الامتحان: ${result.numQuestions} سؤال × ${result.pointsPerQuestion} نقط`, type: "success" });
     } else if (result.reason === "no_key") {
       setToast({ msg: "⚠️ محتاجة تسجّلي مفتاح API بتاع asal.ai الأول عشان القراءة التلقائية تشتغل — العدد اللي كتبتيه فوق اتحفظ عادي", type: "error" });
     } else if (result.reason === "unsupported") {
@@ -1688,7 +1701,7 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
                   {descOpenId === ex.id && (
                     <div className="w-full space-y-1.5 pt-2 border-t border-slate-700/40 mt-1">
                       <div className="text-slate-500 text-xs">
-                        اكتبي وصف مختصر لكل سؤال (اختياري) — ده اللي هيظهر بدل رقم السؤال في تقرير "الأخطاء". سيبيه فاضي لو عايزة يفضل بالرقم.
+                        وصف كل سؤال بيتقرأ تلقائيًا من الملف وقت الرفع (لو صورة/PDF) ويظهر بدل رقم السؤال في تقرير "الأخطاء" — تقدري تعدّلي أي وصف يدويًا هنا لو مش دقيق. سيبيه فاضي لو عايزة يفضل بالرقم.
                       </div>
                       {Array.from({ length: ex.numQuestions || 20 }, (_, i) => i + 1).map(q => (
                         <div key={q} className="flex items-center gap-2">
