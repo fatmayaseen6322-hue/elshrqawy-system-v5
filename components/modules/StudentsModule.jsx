@@ -221,11 +221,11 @@ export default function StudentsModule({ students, setStudents, finRecords, jump
               <span className={`mt-1.5 inline-block text-xs px-2.5 py-0.5 rounded-full ${stCfg[s.status]?.bg} ${stCfg[s.status]?.t}`}>{stCfg[s.status]?.l}</span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-4">
-            <div className="bg-slate-900/50 rounded-xl p-3"><div className="text-slate-400 text-xs">هاتف</div><div className="text-white text-sm">{s.phone}</div></div>
-            <div className="bg-slate-900/50 rounded-xl p-3"><div className="text-slate-400 text-xs">ولي الأمر</div><div className="text-white text-sm">{s.parentName}</div><div className="text-slate-500 text-xs">{s.parentPhone}</div></div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mt-3">
+          <div className="grid grid-cols-4 gap-2 mt-4">
+            <div className="bg-slate-900/50 rounded-xl p-2.5 text-center flex flex-col justify-center">
+              <div className="font-black text-sm text-white truncate">{s.phone || "—"}</div>
+              <div className="text-xs text-slate-500">هاتف</div>
+            </div>
             {[
               { l: "الحضور", v: `${pct(s.present, s.total)}%`, ok: pct(s.present, s.total) >= 80 },
               { l: "المستوى", v: `${s.score}%`, ok: s.score >= 65 },
