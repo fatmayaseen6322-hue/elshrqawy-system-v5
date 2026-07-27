@@ -600,7 +600,6 @@ const LESSONS_COUNT = 6;
 
 // ─── ورقة تسجيل خطأ سؤال لطالب معيّن ────────────────────────
 function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActivity, centerExams, onClose }) {
-  const [activeQ, setActiveQ] = useState(null);
   const [toast,   setToast]   = useState(null);
 
   const tag = `و${unit} - د${lesson}`;
@@ -609,7 +608,6 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
   const numQ   = linkedExam?.numQuestions      || 20;
   const numPts = linkedExam?.pointsPerQuestion || 4;
   const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson);
-  const errQSet = new Set(errors.map(e => e.q));
 
   const markPoint = (q, p) => {
     const label = `${tag} - سؤال ${q} (نقطة ${p})`;
@@ -644,37 +642,28 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
           : <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">⚠️ لا يوجد امتحان مرفوع لهذه الوحدة/الدرس — هيتم استخدام {numQ} سؤال × {numPts} نقط كقيمة افتراضية لحد ما ترفعي الامتحان من قسم "الامتحانات"</div>}
 
         <div>
-          <div className="text-xs text-slate-400 font-bold mb-2">اختر رقم السؤال</div>
-          <div className="grid grid-cols-6 gap-1.5">
+          <div className="text-xs text-slate-400 font-bold mb-2">دوسي على ✓ جنب رقم النقطة الغلط في كل سؤال</div>
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
             {Array.from({ length: numQ }, (_, i) => i + 1).map(q => (
-              <button key={q} onClick={() => setActiveQ(q)}
-                className={`aspect-square rounded-lg text-xs font-bold transition-colors ${
-                  activeQ === q ? "bg-blue-600 text-white" :
-                  errQSet.has(q) ? "bg-red-600/30 border border-red-500/40 text-red-300" :
-                  "bg-slate-800 border border-slate-700/50 text-slate-300 hover:bg-slate-700"}`}>
-                {q}
-              </button>
+              <div key={q} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2 flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black text-white shrink-0 w-14">سؤال {q}</span>
+                <div className="flex gap-1.5 flex-wrap flex-1">
+                  {Array.from({ length: numPts }, (_, j) => j + 1).map(p => {
+                    const isMarked = errors.some(e => e.q === q && e.p === p);
+                    return (
+                      <button key={p} onClick={() => markPoint(q, p)}
+                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                          isMarked ? "bg-red-600 text-white" : "bg-slate-900 border border-slate-700/50 text-slate-300 hover:bg-red-700/40"}`}>
+                        <span>{p}</span>
+                        <span className={isMarked ? "text-white" : "text-slate-500"}>✓</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         </div>
-
-        {activeQ && (
-          <div>
-            <div className="text-xs text-slate-400 font-bold mb-2">اختر رقم النقطة الغلط في سؤال {activeQ}</div>
-            <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: numPts }, (_, i) => i + 1).map(p => {
-                const isMarked = errors.some(e => e.q === activeQ && e.p === p);
-                return (
-                  <button key={p} onClick={() => markPoint(activeQ, p)}
-                    className={`py-3 rounded-lg text-sm font-bold transition-colors ${
-                      isMarked ? "bg-red-600 text-white" : "bg-slate-800 border border-slate-700/50 text-slate-300 hover:bg-red-700/40"}`}>
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {errors.length > 0 && (
           <div>
