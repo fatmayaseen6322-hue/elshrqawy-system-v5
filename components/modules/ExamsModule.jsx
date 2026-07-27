@@ -605,21 +605,25 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
   const tag = `و${unit} - د${lesson}`;
   const linkedExam = (centerExams || []).find(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson)) || null;
   // عدد الأسئلة وعدد النقط بيجوا أوتوماتيك من الامتحان المرفوع لنفس الصف/الوحدة/الدرس
-  const numQ   = linkedExam?.numQuestions      || 20;
-  const numPts = linkedExam?.pointsPerQuestion || 4;
+  const numQ   = linkedExam?.numQuestions      || 0;
+  const numPts = linkedExam?.pointsPerQuestion || 0;
   const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson);
 
   const markPoint = (q, p) => {
     const label = `${tag} - سؤال ${q} (نقطة ${p})`;
+    const already = errors.some(e => e.q === q && e.p === p);
     setStudents(prev => (prev || []).map(s => {
       if (s.id !== student.id) return s;
-      const already = (s.examErrors || []).some(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.q === q && e.p === p);
-      const newErrors = already ? (s.examErrors || []) : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: linkedExam?.id || null, ts: new Date().toISOString() }];
-      const newWeak = (s.weak || []).includes(label) ? (s.weak || []) : [...(s.weak || []), label];
+      const newErrors = already
+        ? (s.examErrors || []).filter(e => !(e.grade === grade && e.unit === unit && e.lesson === lesson && e.q === q && e.p === p))
+        : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: linkedExam?.id || null, ts: new Date().toISOString() }];
+      const newWeak = already
+        ? (s.weak || []).filter(w => w !== label)
+        : ((s.weak || []).includes(label) ? (s.weak || []) : [...(s.weak || []), label]);
       return { ...s, examErrors: newErrors, weak: newWeak };
     }));
-    addActivity?.("خطأ سؤال", `${student.name} — ${label}`);
-    setToast({ msg: `✓ اتسجّل: سؤال ${q} - نقطة ${p}`, type: "success" });
+    addActivity?.(already ? "إلغاء خطأ سؤال" : "خطأ سؤال", `${student.name} — ${label}`);
+    setToast({ msg: already ? `تم إلغاء: سؤال ${q} - نقطة ${p}` : `✓ اتسجّل: سؤال ${q} - نقطة ${p}`, type: already ? "info" : "success" });
   };
 
   const removeError = e => {
@@ -639,10 +643,11 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
       <div className="space-y-4">
         {linkedExam
           ? <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-emerald-300 text-xs text-center">📎 مربوط بامتحان: {linkedExam.fileName} — {numQ} سؤال × {numPts} نقط</div>
-          : <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">⚠️ لا يوجد امتحان مرفوع لهذه الوحدة/الدرس — هيتم استخدام {numQ} سؤال × {numPts} نقط كقيمة افتراضية لحد ما ترفعي الامتحان من قسم "الامتحانات"</div>}
+          : <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">⚠️ لا يوجد امتحان مرفوع لهذه الوحدة/الدرس بعد — ارفعي الامتحان أولًا من قسم "الامتحانات" وحددي عدد الأسئلة والنقط عشان تقدري تسجّلي الأخطاء هنا</div>}
 
+        {linkedExam && (
         <div>
-          <div className="text-xs text-slate-400 font-bold mb-2">دوسي على ✓ جنب رقم النقطة الغلط في كل سؤال</div>
+          <div className="text-xs text-slate-400 font-bold mb-2">دوسي على ✓ جنب رقم النقطة الغلط في كل سؤال — دوسي تاني عليها لو غلطتِ عشان تلغيها</div>
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
             {Array.from({ length: numQ }, (_, i) => i + 1).map(q => (
               <div key={q} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2 flex items-center gap-2 flex-wrap">
@@ -664,6 +669,7 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
             ))}
           </div>
         </div>
+        )}
 
         {errors.length > 0 && (
           <div>
