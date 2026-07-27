@@ -1301,12 +1301,166 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
   );
 }
 
+// ─── ألوان مميزة لكل صف في تقرير الأخطاء ──────────────────────
+const GRADE_COLORS = [
+  "from-blue-600 to-indigo-700",
+  "from-emerald-600 to-teal-700",
+  "from-amber-600 to-orange-700",
+  "from-rose-600 to-pink-700",
+  "from-violet-600 to-purple-700",
+  "from-cyan-600 to-blue-700",
+];
+
+// ─── تقرير الأخطاء: صف (6 مستطيلات) ← وحدة/درس ← جدول أخطاء
+// الطلاب، بوصف السؤال (لو متسجّل من قسم "الامتحانات") بدل رقمه ─────
+function ExamMistakesReport({ students, centerExams }) {
+  const [grade,  setGrade]  = useState("");
+  const [unit,   setUnit]   = useState("");
+  const [lesson, setLesson] = useState("");
+
+  const maxUnits = grade ? unitsCountFor(grade) : 0;
+
+  const linkedExam = (centerExams || []).find(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson)) || null;
+
+  const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade), [students, grade]);
+
+  // وصف السؤال: من questionMeta اللي اتسجّل وقت رفع الامتحان لو موجود، وإلا رقم السؤال زي ما هو
+  const descFor = q => {
+    const d = linkedExam?.questionMeta?.[q];
+    return d && d.trim() ? d.trim() : `سؤال ${q}`;
+  };
+
+  // كل طالب في الصف له أخطاء مسجَّلة (من قسم "التصحيح") في نفس الوحدة/الدرس ده
+  const rows = useMemo(() => {
+    if (!grade || !unit || !lesson) return [];
+    return gradeStudents
+      .map(s => {
+        const errs = (s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson);
+        const qs = [...new Set(errs.map(e => e.q))].sort((a, b) => a - b);
+        return { student: s, qs };
+      })
+      .filter(r => r.qs.length > 0);
+  }, [gradeStudents, grade, unit, lesson]);
+
+  const resetToGrades   = () => { setGrade(""); setUnit(""); setLesson(""); };
+  const resetUnitLesson = () => { setUnit(""); setLesson(""); };
+
+  // الشاشة 1: اختيار الصف — 6 مستطيلات (من أولى إعدادي لثالثة ثانوي)
+  if (!grade) return (
+    <div className="space-y-4">
+      <div className="text-white font-black text-sm">اختاري الصف</div>
+      <div className="grid grid-cols-2 gap-3">
+        {GRADES_LIST.map((g, i) => (
+          <button key={g} onClick={() => setGrade(g)}
+            className={`bg-gradient-to-br ${GRADE_COLORS[i % GRADE_COLORS.length]} rounded-2xl p-4 text-white text-right shadow-md active:scale-95 transition-transform`}>
+            <div className="text-2xl mb-1">🎓</div>
+            <div className="font-black text-sm leading-tight">{g}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // الشاشة 2: مستطيل اختيار الوحدة والدرس
+  if (!unit || !lesson) return (
+    <div className="space-y-4">
+      <button onClick={resetToGrades} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الصف</button>
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+        <div className="text-white font-black text-sm">{grade} — اختاري الوحدة والدرس</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="الوحدة">
+            <select value={unit} onChange={e => { setUnit(e.target.value); setLesson(""); }}
+              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
+              <option value="">— اختر —</option>
+              {Array.from({ length: maxUnits }, (_, i) => i + 1).map(u => <option key={u} value={u}>وحدة {u}</option>)}
+            </select>
+          </Field>
+          <Field label="الدرس">
+            <select value={lesson} onChange={e => setLesson(e.target.value)} disabled={!unit}
+              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
+              <option value="">— اختر —</option>
+              {Array.from({ length: LESSONS_COUNT }, (_, i) => i + 1).map(l => <option key={l} value={l}>درس {l}</option>)}
+            </select>
+          </Field>
+        </div>
+        {grade === "ثالثة ثانوي" && (
+          <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+        )}
+      </div>
+    </div>
+  );
+
+  // الشاشة 3: جدول أخطاء الطلاب — اسم الطالب + وصف كل سؤال أخطأ فيه (مش رقمه)
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={resetUnitLesson} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الوحدة/الدرس</button>
+        <button onClick={resetToGrades} className="text-slate-500 text-xs">تغيير الصف</button>
+      </div>
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-red-300 text-xs text-center">
+        {grade} — وحدة {unit} — درس {lesson}
+      </div>
+
+      {!linkedExam && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">
+          ⚠️ مفيش امتحان مربوط بهذه الوحدة/الدرس ولا وصف أسئلة متسجّل — هيظهر تحت رقم السؤال بس لحد ما تضيفي الوصف من قسم "الامتحانات"
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">✅</div><div className="text-sm">مفيش أخطاء مسجَّلة لأي طالب في هذه الوحدة/الدرس</div></div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(({ student: s, qs }) => (
+            <div key={s.id} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Av name={s.name} size="sm" />
+                <div className="text-white text-sm font-bold">{s.name}</div>
+                <span className="text-xs px-2 py-0.5 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0 mr-auto">{qs.length} خطأ</span>
+              </div>
+              <div className="space-y-1">
+                {qs.map(q => (
+                  <div key={q} className="text-xs text-slate-300 bg-slate-900/50 rounded-lg px-2.5 py-1.5">
+                    أخطأ في: <span className="text-red-300 font-medium">{descFor(q)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── حاوية قسم "الأخطاء": تقرير الأخطاء (الافتراضي الجديد) + لوحة
+// التحكم القديمة (إحصائيات + تصحيح أوراق الامتحانات) في تاب تاني ───
+function ExamPanelErrorsHub({ questions, webExams, centerExams, setCenterExams, students }) {
+  const [tab, setTab] = useState("report");
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 bg-slate-800 rounded-xl p-1">
+        <button onClick={() => setTab("report")}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "report" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
+          🧾 تقرير الأخطاء
+        </button>
+        <button onClick={() => setTab("dashboard")}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "dashboard" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
+          🎛️ لوحة التحكم
+        </button>
+      </div>
+      {tab === "report"    && <ExamMistakesReport students={students} centerExams={centerExams} />}
+      {tab === "dashboard" && <ExamPanelDashboard questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
 const PANELS = [
-  { key: "errors",     icon: "🟥", label: "التصحيح",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
-  { key: "correction", icon: "🟦", label: "الأخطاء",    desc: "نظرة عامة وتصحيح أوراق الامتحانات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
+  { key: "errors",     icon: "🟦", label: "التصحيح",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
+  { key: "correction", icon: "🟥", label: "الأخطاء",    desc: "تقرير أخطاء الطلاب حسب الصف والوحدة والدرس",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
   { key: "exams",      icon: "📝", label: "الامتحانات", desc: "رفع امتحان (Word/PDF/صورة) لكل صف ووحدة ودرس", color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
   { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
 ];
@@ -1435,9 +1589,16 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
   };
 
   const removeExam = id => setCenterExams(p => (p || []).filter(e => e.id !== id));
+  const [descOpenId, setDescOpenId] = useState(null); // أي امتحان مفتوح دلوقتي لتعديل وصف أسئلته
 
   const updateExamCounts = (id, field, value) => {
     setCenterExams(p => (p || []).map(e => e.id === id ? { ...e, [field]: Math.max(1, parseInt(value) || 1) } : e));
+  };
+
+  // وصف قصير اختياري لكل سؤال (زي "فسّر ليه..." أو "صح وغلط") — بيتحفظ
+  // في questionMeta عشان يظهر بدل رقم السؤال في تقرير "الأخطاء".
+  const updateQuestionDesc = (examId, q, text) => {
+    setCenterExams(p => (p || []).map(e => e.id === examId ? { ...e, questionMeta: { ...(e.questionMeta || {}), [q]: text } } : e));
   };
 
   return (
@@ -1521,7 +1682,27 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
                       title="عدد النقط بكل سؤال"
                       className="w-14 bg-slate-900 border border-slate-700/50 rounded-lg px-1 py-1 text-white text-xs text-center focus:outline-none" />
                   </div>
+                  <button onClick={() => setDescOpenId(descOpenId === ex.id ? null : ex.id)} className="text-blue-400 text-xs px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 shrink-0 whitespace-nowrap">📋 وصف الأسئلة</button>
                   <button onClick={() => removeExam(ex.id)} className="text-red-400 text-lg hover:text-red-300">🗑</button>
+
+                  {descOpenId === ex.id && (
+                    <div className="w-full space-y-1.5 pt-2 border-t border-slate-700/40 mt-1">
+                      <div className="text-slate-500 text-xs">
+                        اكتبي وصف مختصر لكل سؤال (اختياري) — ده اللي هيظهر بدل رقم السؤال في تقرير "الأخطاء". سيبيه فاضي لو عايزة يفضل بالرقم.
+                      </div>
+                      {Array.from({ length: ex.numQuestions || 20 }, (_, i) => i + 1).map(q => (
+                        <div key={q} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 w-14 shrink-0">سؤال {q}</span>
+                          <input
+                            value={ex.questionMeta?.[q] || ""}
+                            onChange={e => updateQuestionDesc(ex.id, q, e.target.value)}
+                            placeholder="مثال: فسّر لماذا... / ما نتائج... / صح وغلط"
+                            className="flex-1 bg-slate-900 border border-slate-700/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1552,7 +1733,7 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
         </div>
 
         {activePanel === "errors"     && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} />}
-        {activePanel === "correction" && <ExamPanelDashboard     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "correction" && <ExamPanelErrorsHub     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
         {activePanel === "exams"      && <ExamUploadLinked       students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
