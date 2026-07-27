@@ -167,6 +167,7 @@ export default function App() {
   const [financeJump,    setFinanceJump]    = useState(null);
   const [attendanceJump, setAttendanceJump] = useState(null);
   const [dashboardJump,  setDashboardJump]  = useState(null);
+  const [dashboardSectionJump, setDashboardSectionJump] = useState(null); // 🔔 زرار الإشعارات → قسم "حالة حرجة"
   const [toast, setToast]             = useState(null); // #3 — global toast
   const showToast = (msg, type="success") => setToast({ msg, type });
 
@@ -373,10 +374,19 @@ export default function App() {
               onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: "1px solid var(--border)" }}>
                 <span className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>🔔 التنبيهات ({alerts.length})</span>
-                <button onClick={() => setShowNotifs(false)} style={{ color: "var(--text-muted)" }}
-                  onMouseEnter={e => e.currentTarget.style.color = "var(--text-primary)"}
-                  onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
-                >✕</button>
+                <div className="flex items-center gap-3">
+                  {allowedPages.includes("dashboard") && (
+                    <button
+                      onClick={() => { setPage("dashboard"); setDashboardSectionJump(Date.now()); setShowNotifs(false); }}
+                      className="text-xs font-bold px-2 py-1 rounded-lg"
+                      style={{ background: "rgba(248,113,113,0.15)", color: "#f87171" }}
+                    >🔴 حالة حرجة</button>
+                  )}
+                  <button onClick={() => setShowNotifs(false)} style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--text-primary)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
+                  >✕</button>
+                </div>
               </div>
               <div className="max-h-60 overflow-y-auto">
                 {alerts.length === 0
@@ -422,7 +432,7 @@ export default function App() {
             {safePage === "addStudent" && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} addActivity={addActivity} startAdd onDone={() => setPage("students")} />}
             {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} jumpTo={financeJump} onJumpDone={() => setFinanceJump(null)} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}
-            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} jumpTo={dashboardJump} onJumpDone={() => setDashboardJump(null)} showToast={showToast} />}
+            {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} jumpTo={dashboardJump} onJumpDone={() => setDashboardJump(null)} showToast={showToast} sectionJump={dashboardSectionJump} onSectionJumpDone={() => setDashboardSectionJump(null)} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} />}
             {safePage === "block"      && <BlockModule      students={students || []} setStudents={setStudents} addActivity={addActivity} />}
           </div>

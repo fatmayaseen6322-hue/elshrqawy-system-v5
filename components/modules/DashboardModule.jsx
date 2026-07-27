@@ -474,7 +474,7 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
-export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity, jumpTo, onJumpDone, showToast }) {
+export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone }) {
   const students   = studentsProp   || [];
   const finRecords = finRecordsProp || [];
   const attRecords = attRecordsProp || [];
@@ -503,6 +503,21 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   };
   const periodLabels = { today: "اليوم", week: "الأسبوع", month: "الشهر" };
   const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null), todayAtt: useRef(null) };
+
+  // زرار الإشعارات في التوب بار → قسم "حالة حرجة" هنا. بيوصل لآخر مكان
+  // فيه بيانات فعلية (المصروفات المتأخرة أولاً، وإلا الغياب) بدل مكان تايه.
+  useEffect(() => {
+    if (!sectionJump) return;
+    const target = refs.expenses.current || refs.absence.current;
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.style.outline = "2px solid #f87171";
+      setTimeout(() => { if (target) target.style.outline = "none"; }, 1800);
+    }
+    onSectionJumpDone?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionJump]);
+
   const alerts = students.filter(s => s.score < 60 || s.absent > 8 || (s.totalFees - s.paid) > 1200);
   const dd = useMemo(() => buildDashboardData(students, finRecords), [students, finRecords]);
   const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
