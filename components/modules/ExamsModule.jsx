@@ -1305,8 +1305,8 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
 const PANELS = [
-  { key: "errors",     icon: "🟥", label: "الأخطاء",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
-  { key: "correction", icon: "🟦", label: "التصحيح",    desc: "نظرة عامة وتصحيح أوراق الامتحانات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
+  { key: "errors",     icon: "🟥", label: "التصحيح",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
+  { key: "correction", icon: "🟦", label: "الأخطاء",    desc: "نظرة عامة وتصحيح أوراق الامتحانات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
   { key: "exams",      icon: "📝", label: "الامتحانات", desc: "رفع امتحان (Word/PDF/صورة) لكل صف ووحدة ودرس", color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
   { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
 ];
