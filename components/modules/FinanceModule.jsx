@@ -1,11 +1,12 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR } from "../../constants";
-import { fmtM, fmt, genFinId, nowStr } from "../../utils";
+import { fmtM, fmt, genFinId, nowStr, checkPwd } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
-// FINANCE PASSWORD GATE
+// FINANCE PASSWORD GATE (كلمة مرور المصاريف العادية — تُستخدم فقط
+// إذا فُعِّل الخيار العام financePasswordEnabled من الإعدادات)
 // ══════════════════════════════════════════════════════════════
 function FinancePasswordGate({ onUnlock, onCancel }) {
   const [pw, setPw] = useState("");
@@ -34,9 +35,50 @@ function FinancePasswordGate({ onUnlock, onCancel }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// ADMIN PASSWORD GATE — كلمة مرور المستر (settings.password المشفّرة)
+// تُستخدم لـ: (1) تعديل رسم صف مُعتمَد من قبل، (2) تعديل سجل شهر منتهي
+// ══════════════════════════════════════════════════════════════
+function AdminPasswordGate({ title = "🔑 صلاحية المستر", adminHash, onUnlock, onCancel }) {
+  const [pw, setPw]     = useState("");
+  const [err, setErr]   = useState("");
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef(null);
+  useEffect(() => inputRef.current?.focus(), []);
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    const ok = await checkPwd(pw, adminHash);
+    setBusy(false);
+    if (ok) onUnlock();
+    else setErr("كلمة مرور المستر غير صحيحة");
+  };
+
+  return (
+    <Modal title={title} onClose={onCancel}>
+      <div className="space-y-4">
+        <div className="text-slate-400 text-sm text-center">هذا الإجراء يتطلب كلمة مرور المستر</div>
+        <Field label="كلمة مرور المستر" error={err}>
+          <input
+            ref={inputRef} type="password" value={pw}
+            onChange={e => { setPw(e.target.value); setErr(""); }}
+            onKeyDown={e => { if (e.key === "Enter") submit(); }}
+            className={`w-full bg-slate-800/80 border ${err ? "border-red-500" : "border-slate-700/50"} rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center tracking-widest text-lg`}
+            placeholder="••••" />
+        </Field>
+        <div className="flex gap-2">
+          <Btn variant="ghost" className="flex-1" onClick={onCancel}>إلغاء</Btn>
+          <Btn variant="primary" className="flex-1" onClick={submit} disabled={busy}>{busy ? "جارٍ التحقق…" : "✓ دخول"}</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // FINANCE ROW
 // ══════════════════════════════════════════════════════════════
-function FinRow({ student, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, centerName, highlighted }) {
+function FinRow({ student, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, adminPasswordHash, isCurrentMonth, isAssist, centerName, highlighted }) {
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
   const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
   const [saved,       setSaved]       = useState(!!record);
@@ -44,6 +86,10 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
   const [showPw,      setShowPw]      = useState(false);
   const [localRecord, setLocalRecord] = useState(record || null);
   const rowRef = useRef(null);
+
+  // بعد انتهاء الشهر: التعديل مقفول تمامًا على Assist، ومسموح للمستر بباسورده فقط.
+  // في الشهر الحالي: التعديل حر للطرفين (المستر و Assist) بدون باسورد.
+  const canEditAtAll = isCurrentMonth || !isAssist;
 
   useEffect(() => {
     if (highlighted) rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -73,6 +119,8 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
   };
 
   const requestEdit = () => {
+    if (!canEditAtAll) return; // Assist ممنوع تمامًا بعد انتهاء الشهر
+    if (!isCurrentMonth) { setShowPw(true); return; } // شهر منتهي → باسورد المستر إجباري
     if (passwordEnabled) setShowPw(true);
     else                 setEditing(true);
   };
@@ -80,6 +128,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
     if (pw === financePassword) { setShowPw(false); setEditing(true); }
     else setErr("كلمة المرور غير صحيحة");
   };
+  const unlockEditAdmin = () => { setShowPw(false); setEditing(true); };
 
   const canPrint = saved && localRecord !== null;
   const bgCls = saved
@@ -88,7 +137,12 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
 
   return (
     <>
-      {showPw && <FinancePasswordGate onUnlock={unlockEdit} onCancel={() => setShowPw(false)} />}
+      {showPw && !isCurrentMonth && (
+        <AdminPasswordGate title="🔑 تعديل سجل شهر منتهي" adminHash={adminPasswordHash} onUnlock={unlockEditAdmin} onCancel={() => setShowPw(false)} />
+      )}
+      {showPw && isCurrentMonth && (
+        <FinancePasswordGate onUnlock={unlockEdit} onCancel={() => setShowPw(false)} />
+      )}
       <tr ref={rowRef} className={`border-b transition-colors ${bgCls} ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}>
         <td className="px-3 py-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -119,7 +173,9 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
         </td>
         <td className="px-2 py-3 text-center">
           {saved && !editing
-            ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
+            ? (canEditAtAll
+                ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
+                : <span title="الشهر انتهى — التعديل للمستر فقط" className="w-9 h-8 inline-flex items-center justify-center rounded-lg bg-slate-700/20 border border-slate-600/20 text-slate-500 text-sm">🔒</span>)
             : <button onClick={doSave} disabled={!receiverId || !amount} className="w-9 h-8 rounded-lg bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm disabled:opacity-30 hover:bg-emerald-700/50">💾</button>
           }
         </td>
@@ -160,6 +216,42 @@ export default function FinanceModule({ students, settings, setSettings, finReco
   const [toast,            setToast]            = useState(null);
   const [highlightId,      setHighlightId]      = useState(null); // تمييز طالب جاي من بحث التوبار
 
+  // ── خانة "إدخال رسم الصف" (المستطيلين الجديدين تحت الفلاتر) ──
+  const [feeGrade,     setFeeGrade]     = useState("");
+  const [feeAmount,    setFeeAmount]    = useState("");
+  const [feeUnlocked,  setFeeUnlocked]  = useState(false);
+  const [showFeePw,    setShowFeePw]    = useState(false);
+  const feeAmountRef = useRef(null);
+
+  // ── تتبّع تكرار اختيار مستلم بديل ليصبح هو المستلم الافتراضي تلقائيًا ──
+  const [receiverStreak, setReceiverStreak] = useState({ id: null, count: 0 });
+
+  const isCurrentMonth = selMonth === curMonth && selYear === curYear;
+  const feeLocked = (safeSettings.gradeFees?.[feeGrade] || 0) > 0 && !feeUnlocked;
+
+  useEffect(() => {
+    if (isCurrentMonth && dayFilter) setDayFilter("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCurrentMonth]);
+
+  const openFeeGrade = g => {
+    setFeeGrade(g);
+    setFeeUnlocked(false);
+    setFeeAmount(safeSettings.gradeFees?.[g] ? String(safeSettings.gradeFees[g]) : "");
+    setTimeout(() => feeAmountRef.current?.focus(), 50);
+  };
+
+  const requestFeeEdit = () => setShowFeePw(true);
+  const unlockFeeEdit = () => { setShowFeePw(false); setFeeUnlocked(true); };
+
+  const saveFee = () => {
+    if (!feeGrade || feeAmount === "") return;
+    setSettings(prev => ({ ...(prev || {}), gradeFees: { ...(prev?.gradeFees || {}), [feeGrade]: parseInt(feeAmount) || 0 } }));
+    addActivity?.("رسوم صف", `${feeGrade} — ${feeAmount} ج`);
+    setToast({ msg: `✓ تم حفظ رسم ${feeGrade}`, type: "success" });
+    setFeeUnlocked(false);
+  };
+
   // بحث التوبار العلوي: افتحلها صف وصفوف الطالب وافتح السجل تلقائي
   useEffect(() => {
     if (!jumpTo) return;
@@ -182,7 +274,7 @@ export default function FinanceModule({ students, settings, setSettings, finReco
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
-    return list.map(s => ({ ...s, _defaultFee: safeSettings.gradeFees?.[s.grade] || 0, _month: selMonth, _year: selYear }));
+    return list.map(s => ({ ...s, _defaultFee: Math.max(0, (safeSettings.gradeFees?.[s.grade] || 0) - (s.discount || 0)), _month: selMonth, _year: selYear }));
   }, [safeStudents, selGrade, selGroup, selMonth, selYear, safeSettings.gradeFees]);
 
   const monthRecords = useMemo(() =>
@@ -227,11 +319,32 @@ export default function FinanceModule({ students, settings, setSettings, finReco
 
     addActivity?.("دفعة مالية", `${rec.studentName} — ${rec.amount} ج`);
     setToast({ msg: `✓ تم حفظ دفعة ${rec.studentName}`, type: "success" });
+
+    // ── منطق "المستلم الافتراضي التلقائي": ─────────────────────
+    // اختيار مستلم مختلف عن الافتراضي الحالي مرة واحدة لا يغيّر شيء.
+    // لو تكرر نفس المستلم البديل مرتين، يصبح هو الافتراضي تلقائيًا
+    // لباقي طلاب اليوم (بدون الحاجة لاختياره يدويًا من "المستلم للكل").
+    if (rec.receiverId && rec.receiverId !== globalReceiverId) {
+      setReceiverStreak(prev => {
+        if (prev.id === rec.receiverId) {
+          const nextCount = prev.count + 1;
+          if (nextCount >= 2) {
+            setGlobalReceiverId(rec.receiverId);
+            return { id: null, count: 0 };
+          }
+          return { id: rec.receiverId, count: nextCount };
+        }
+        return { id: rec.receiverId, count: 1 };
+      });
+    } else if (rec.receiverId === globalReceiverId) {
+      setReceiverStreak({ id: null, count: 0 });
+    }
   };
 
   const globalReceiver = activeReceivers.find(r => r.id === globalReceiverId) || null;
   const paidCount      = monthRecords.length;
   const totalCollected = monthRecords.reduce((a, r) => a + (r.amount || 0), 0);
+  const lateCount      = Math.max(0, tableStudents.length - paidCount); // طلاب لم يدفعوا هذا الشهر
   const grpList        = selGrade ? (GROUPS_MAP[selGrade] || ["A"]) : [];
 
   return (
@@ -249,7 +362,7 @@ export default function FinanceModule({ students, settings, setSettings, finReco
 
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
         <div className="text-xs text-slate-400 font-bold mb-1">🔍 فلاتر البحث</div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <Field label="الصف">
             <select value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(""); setTableOpen(false); }}
               className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
@@ -280,38 +393,73 @@ export default function FinanceModule({ students, settings, setSettings, finReco
         </div>
       </div>
 
+      {/* ── مستطيلا "رسم الصف": إدخال/اعتماد رسم الصف الشهري ── */}
+      <div className="bg-slate-800/50 border border-slate-700/30 rounded-2xl p-4 space-y-3">
+        <div className="text-xs text-slate-400 font-bold mb-1">💵 رسم الصف الشهري</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="الصف">
+            <select value={feeGrade} onChange={e => openFeeGrade(e.target.value)}
+              className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+              <option value="">— اختر الصف —</option>
+              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+            </select>
+          </Field>
+          <Field label={feeLocked ? "الرسم (معتمد 🔒)" : "قيمة الرسم"}>
+            <div className="flex gap-2">
+              <input
+                ref={feeAmountRef} type="number" value={feeAmount} disabled={!feeGrade || feeLocked}
+                onChange={e => setFeeAmount(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !feeLocked) saveFee(); }}
+                placeholder="مثال: 500"
+                className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none disabled:opacity-50" />
+              {feeGrade && (feeLocked
+                ? <button onClick={requestFeeEdit} className="px-3 rounded-xl bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
+                : <button onClick={saveFee} disabled={feeAmount === ""} className="px-3 rounded-xl bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm disabled:opacity-30 hover:bg-emerald-700/50">💾</button>)}
+            </div>
+          </Field>
+        </div>
+        {feeLocked && <div className="text-slate-500 text-xs text-center">هذا الرسم معتمد من قبل — أي تعديل يتطلب باسورد المستر.</div>}
+      </div>
+      {showFeePw && (
+        <AdminPasswordGate title="🔑 تعديل رسم صف معتمد" adminHash={safeSettings.password} onUnlock={unlockFeeEdit} onCancel={() => setShowFeePw(false)} />
+      )}
+
       {tableOpen && selGrade && (
         <>
-          <div className="bg-slate-800/50 border border-slate-700/30 rounded-2xl p-3 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="فلترة بيوم محدد">
-                <div className="flex gap-2">
-                  <input type="number" min={1} max={31} value={dayFilter}
-                    onChange={e => setDayFilter(e.target.value ? parseInt(e.target.value) : "")}
-                    placeholder="أي يوم"
-                    className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none text-center" />
-                  {dayFilter && <button onClick={() => setDayFilter("")} className="text-xs text-slate-500 hover:text-white px-2">✕</button>}
-                </div>
-              </Field>
-              <Field label="المستلم (للكل)">
-                <select value={globalReceiverId || ""} onChange={e => setGlobalReceiverId(e.target.value ? parseInt(e.target.value) : null)}
-                  className="w-full bg-slate-900/60 border border-amber-500/30 rounded-xl px-3 py-2 text-white text-sm focus:outline-none">
-                  <option value="">— اختر —</option>
-                  {activeReceivers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </Field>
-            </div>
-            {dayFilter && (
-              <div className="text-amber-400 text-xs text-center">
-                📅 يعرض فقط من دفعوا يوم {dayFilter} {MONTHS_AR[selMonth - 1]} ({displayStudents.length} طالب)
+          {!isCurrentMonth && (
+            <div className="bg-slate-800/50 border border-slate-700/30 rounded-2xl p-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="فلترة بيوم محدد">
+                  <div className="flex gap-2">
+                    <input type="number" min={1} max={31} value={dayFilter}
+                      onChange={e => setDayFilter(e.target.value ? parseInt(e.target.value) : "")}
+                      placeholder="أي يوم"
+                      className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none text-center" />
+                    {dayFilter && <button onClick={() => setDayFilter("")} className="text-xs text-slate-500 hover:text-white px-2">✕</button>}
+                  </div>
+                </Field>
+                <Field label="المستلم (للكل)">
+                  <select value={globalReceiverId || ""} onChange={e => setGlobalReceiverId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="w-full bg-slate-900/60 border border-amber-500/30 rounded-xl px-3 py-2 text-white text-sm focus:outline-none">
+                    <option value="">— اختر —</option>
+                    {activeReceivers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                </Field>
               </div>
-            )}
-          </div>
+              {dayFilter && (
+                <div className="text-amber-400 text-xs text-center">
+                  📅 يعرض فقط من دفعوا يوم {dayFilter} {MONTHS_AR[selMonth - 1]} ({displayStudents.length} طالب)
+                </div>
+              )}
+            </div>
+          )}
 
           <div className={`grid gap-2 ${isAssist ? "grid-cols-2" : "grid-cols-3"}`}>
             {!isAssist && <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{tableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>}
             <div className="bg-emerald-900/20 border border-emerald-700/20 rounded-xl p-3 text-center"><div className="text-emerald-400 font-black text-lg">{paidCount}</div><div className="text-xs text-slate-500">دفعوا</div></div>
-            <div className="bg-amber-900/20 border border-amber-700/20 rounded-xl p-3 text-center"><div className="text-amber-400 font-black text-sm">{fmtM(totalCollected)}</div><div className="text-xs text-slate-500">المحصّل</div></div>
+            {isCurrentMonth
+              ? <div className="bg-red-900/20 border border-red-700/20 rounded-xl p-3 text-center"><div className="text-red-400 font-black text-lg">{lateCount}</div><div className="text-xs text-slate-500">متأخر</div></div>
+              : <div className="bg-amber-900/20 border border-amber-700/20 rounded-xl p-3 text-center"><div className="text-amber-400 font-black text-sm">{fmtM(totalCollected)}</div><div className="text-xs text-slate-500">المحصّل</div></div>}
           </div>
 
           {displayStudents.length === 0
@@ -334,6 +482,9 @@ export default function FinanceModule({ students, settings, setSettings, finReco
                           onSave={handleSave}
                           passwordEnabled={safeSettings.financePasswordEnabled}
                           financePassword={safeSettings.financePassword}
+                          adminPasswordHash={safeSettings.password}
+                          isCurrentMonth={isCurrentMonth}
+                          isAssist={isAssist}
                           centerName={safeSettings.centerName || "مركز تعليمي"}
                           highlighted={highlightId === s.id}
                         />
