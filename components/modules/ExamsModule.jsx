@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY } from "../../constants";
 import { pct, scC, scL, genExamId } from "../../utils";
-import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker } from "../ui";
+import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, Modal } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
 // MODULE 4: EXAMS  —  v2 (إصلاح شامل)
