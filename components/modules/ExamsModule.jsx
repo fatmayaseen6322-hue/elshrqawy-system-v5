@@ -599,13 +599,14 @@ const unitsCountFor = grade => grade === "ثالثة ثانوي" ? 8 : 4;
 const LESSONS_COUNT = 6;
 
 // ─── ورقة تسجيل خطأ سؤال لطالب معيّن ────────────────────────
-function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActivity, onClose }) {
+function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActivity, centerExams, onClose }) {
   const [numQ,    setNumQ]    = useState(20);
   const [numPts,  setNumPts]  = useState(4);
   const [activeQ, setActiveQ] = useState(null);
   const [toast,   setToast]   = useState(null);
 
   const tag = `و${unit} - د${lesson}`;
+  const linkedExam = (centerExams || []).find(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson)) || null;
   const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson);
   const errQSet = new Set(errors.map(e => e.q));
 
@@ -614,7 +615,7 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
     setStudents(prev => (prev || []).map(s => {
       if (s.id !== student.id) return s;
       const already = (s.examErrors || []).some(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.q === q && e.p === p);
-      const newErrors = already ? (s.examErrors || []) : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, ts: new Date().toISOString() }];
+      const newErrors = already ? (s.examErrors || []) : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: linkedExam?.id || null, ts: new Date().toISOString() }];
       const newWeak = (s.weak || []).includes(label) ? (s.weak || []) : [...(s.weak || []), label];
       return { ...s, examErrors: newErrors, weak: newWeak };
     }));
@@ -637,6 +638,9 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
   return (
     <Modal title={`📝 ${student.name} — ${tag}`} onClose={onClose} maxW="max-w-lg">
       <div className="space-y-4">
+        {linkedExam
+          ? <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-emerald-300 text-xs text-center">📎 مربوط بامتحان: {linkedExam.fileName}</div>
+          : <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">⚠️ لا يوجد امتحان مرفوع لهذه الوحدة/الدرس بعد</div>}
         <div className="grid grid-cols-2 gap-2">
           <Field label="عدد الأسئلة">
             <input type="number" min={1} max={60} value={numQ} onChange={e => setNumQ(parseInt(e.target.value) || 1)}
@@ -703,7 +707,7 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
 }
 
 // ─── تسجيل أخطاء الأسئلة: صف ← وحدة ← درس ← جدول طلاب الصف ─────
-function ExamErrorEntry({ students, setStudents, addActivity }) {
+function ExamErrorEntry({ students, setStudents, addActivity, centerExams }) {
   const [grade,   setGrade]   = useState("");
   const [unit,    setUnit]    = useState("");
   const [lesson,  setLesson]  = useState("");
@@ -772,7 +776,7 @@ function ExamErrorEntry({ students, setStudents, addActivity }) {
       {openStudent && (
         <StudentErrorSheet
           student={openStudent} grade={grade} unit={unit} lesson={lesson}
-          setStudents={setStudents} addActivity={addActivity}
+          setStudents={setStudents} addActivity={addActivity} centerExams={centerExams}
           onClose={() => setOpenStudent(null)}
         />
       )}
@@ -780,7 +784,7 @@ function ExamErrorEntry({ students, setStudents, addActivity }) {
   );
 }
 
-function ExamPanelAlerts({ students, setStudents, addActivity }) {
+function ExamPanelAlerts({ students, setStudents, addActivity, centerExams }) {
   const [tab, setTab] = useState("record"); // record = تسجيل الأخطاء (الافتراضي الجديد) | notif = التنبيهات القديمة
   return (
     <div className="space-y-4">
@@ -794,7 +798,7 @@ function ExamPanelAlerts({ students, setStudents, addActivity }) {
           🔔 التنبيهات
         </button>
       </div>
-      {tab === "record" && <ExamErrorEntry students={students} setStudents={setStudents} addActivity={addActivity} />}
+      {tab === "record" && <ExamErrorEntry students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} />}
       {tab === "notif"  && <ExamPanelAlertsOld students={students} />}
     </div>
   );
@@ -1321,32 +1325,117 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
 const PANELS = [
   { key: "errors",     icon: "🟥", label: "الأخطاء",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
   { key: "correction", icon: "🟦", label: "التصحيح",    desc: "نظرة عامة وتصحيح أوراق الامتحانات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
-  { key: "exams",      icon: "📝", label: "الامتحانات", desc: "بنك الأسئلة، إنشاء سريع، رفع ملف",   color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
+  { key: "exams",      icon: "📝", label: "الامتحانات", desc: "رفع امتحان (Word/PDF/صورة) لكل صف ووحدة ودرس", color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
   { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
 ];
 
-// قسم "الامتحانات" بقى فيه 3 أدوات فرعية (بنك الأسئلة / امتحان سريع / رفع
-// ملف جاهز) بدل ما تبقى كل واحدة كارت منفصل في الشريط الجانبي.
-function ExamsSubTabs({ questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams, students }) {
-  const [tab, setTab] = useState("questions");
-  const tabs = [
-    { key: "questions", icon: "📚", label: "بنك الأسئلة" },
-    { key: "quick",     icon: "⚡", label: "امتحان سريع" },
-    { key: "upload",    icon: "📤", label: "رفع ملف" },
-  ];
+// قسم "الامتحانات": بقى بس رفع ملف الامتحان (Word / PDF / صورة) مربوط
+// بصف + وحدة + درس (بنفس طريقة قسم "الأخطاء")، عشان لما تتسجّل أخطاء
+// طالب على نفس الوحدة/الدرس تبقى مربوطة تلقائيًا بهذا الامتحان المرفوع.
+const EXAM_ACCEPT = ".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp";
+function fileKindIcon(name = "") {
+  const ext = name.split(".").pop().toLowerCase();
+  if (["jpg","jpeg","png","webp"].includes(ext)) return "🖼️";
+  if (ext === "pdf") return "📕";
+  if (["doc","docx"].includes(ext)) return "📄";
+  return "📎";
+}
+
+function ExamUploadLinked({ students, centerExams, setCenterExams }) {
+  const [grade,  setGrade]  = useState("");
+  const [unit,   setUnit]   = useState("");
+  const [lesson, setLesson] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [toast, setToast]   = useState(null);
+  const ref = useRef(null);
+
+  const maxUnits = grade ? unitsCountFor(grade) : 0;
+  const ready = grade && unit && lesson;
+
+  const existing = (centerExams || []).filter(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson));
+
+  const acceptFile = f => {
+    if (!f) return;
+    const maxSize = 20 * 1024 * 1024;
+    if (f.size > maxSize) { setToast({ msg: "الملف أكبر من 20MB", type: "error" }); return; }
+    const ext = f.name.split(".").pop().toLowerCase();
+    if (!EXAM_ACCEPT.includes(ext)) { setToast({ msg: "الصيغة غير مدعومة — Word أو PDF أو صورة فقط", type: "error" }); return; }
+    const newExam = {
+      id: genExamId(), grade, unit, lesson,
+      fileName: f.name, fileSize: f.size, fileType: ext,
+      date: TODAY,
+    };
+    setCenterExams(p => [newExam, ...(p || [])]);
+    setToast({ msg: `✓ تم رفع ${f.name} وربطه بـ${grade} - وحدة ${unit} - درس ${lesson}`, type: "success" });
+  };
+
+  const removeExam = id => setCenterExams(p => (p || []).filter(e => e.id !== id));
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 bg-slate-800 rounded-xl p-1">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === t.key ? "bg-violet-600 text-white" : "text-slate-400 hover:text-white"}`}>
-            <span>{t.icon}</span>{t.label}
-          </button>
-        ))}
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="الصف">
+          <select value={grade} onChange={e => { setGrade(e.target.value); setUnit(""); setLesson(""); }}
+            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
+            <option value="">— اختر —</option>
+            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+          </select>
+        </Field>
+        <Field label="الوحدة">
+          <select value={unit} onChange={e => setUnit(e.target.value)} disabled={!grade}
+            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
+            <option value="">— اختر —</option>
+            {Array.from({ length: maxUnits }, (_, i) => i + 1).map(u => <option key={u} value={u}>وحدة {u}</option>)}
+          </select>
+        </Field>
+        <Field label="الدرس">
+          <select value={lesson} onChange={e => setLesson(e.target.value)} disabled={!unit}
+            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
+            <option value="">— اختر —</option>
+            {Array.from({ length: LESSONS_COUNT }, (_, i) => i + 1).map(l => <option key={l} value={l}>درس {l}</option>)}
+          </select>
+        </Field>
       </div>
-      {tab === "questions" && <ExamPanelQuestionBank questions={questions} setQuestions={setQuestions} />}
-      {tab === "quick"     && <ExamPanelQuickCreate  questions={questions} webExams={webExams} setWebExams={setWebExams} students={students} />}
-      {tab === "upload"    && <ExamPanelUpload       centerExams={centerExams} setCenterExams={setCenterExams} />}
+      {grade === "ثالثة ثانوي" && (
+        <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+      )}
+
+      {ready ? (
+        <>
+          <div
+            onClick={() => ref.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0]); }}
+            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors group ${dragOver ? "border-blue-500 bg-blue-500/10" : "border-slate-600/60 hover:border-blue-500/50"}`}
+          >
+            <div className="text-5xl mb-3">📁</div>
+            <div className="text-slate-300 font-medium group-hover:text-white transition-colors">اسحبي الملف هنا أو اضغطي للفتح من اللابتوب</div>
+            <div className="text-slate-600 text-xs mt-1">Word · PDF · صورة — حد أقصى 20MB</div>
+            <div className="text-blue-400 text-xs mt-2">هيتربط بـ {grade} — وحدة {unit} — درس {lesson}</div>
+          </div>
+          <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden" onChange={e => { acceptFile(e.target.files?.[0]); e.target.value = ""; }} />
+
+          {existing.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-slate-400 font-bold px-1">الامتحانات المرفوعة لهذا الدرس ({existing.length})</div>
+              {existing.map(ex => (
+                <div key={ex.id} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3">
+                  <span className="text-2xl">{fileKindIcon(ex.fileName)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-sm font-bold truncate">{ex.fileName}</div>
+                    <div className="text-slate-500 text-xs">{(ex.fileSize / 1024).toFixed(1)} KB — {ex.date}</div>
+                  </div>
+                  <button onClick={() => removeExam(ex.id)} className="text-red-400 text-lg hover:text-red-300">🗑</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">📤</div><div className="text-sm">اختاري الصف ثم الوحدة ثم الدرس عشان تقدري ترفعي الامتحان</div></div>
+      )}
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }
@@ -1367,9 +1456,9 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
           </div>
         </div>
 
-        {activePanel === "errors"     && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} />}
+        {activePanel === "errors"     && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} />}
         {activePanel === "correction" && <ExamPanelDashboard     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
-        {activePanel === "exams"      && <ExamsSubTabs           questions={questions} setQuestions={setQuestions} webExams={webExams} setWebExams={setWebExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "exams"      && <ExamUploadLinked       students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
     );
