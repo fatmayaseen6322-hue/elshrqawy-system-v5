@@ -251,6 +251,16 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
       if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(m);
     }
 
+    // نسبة السداد الحقيقية: مبنية على نفس بيانات finRecords اللي بتحسب
+    // الشهور المتأخرة فوق (مش على s.paid/s.totalFees الثابتين) — عشان
+    // الرقم يبقى متطابق مع تنبيه "متأخر" جنبه، بدل ما يظهر رقمين متناقضين.
+    const monthsBeforeCurrent = currentMonthNum - startMonth;
+    const paidBeforeCurrent = monthsBeforeCurrent - overdueMonths.length;
+    const totalMonthsSoFar = monthsBeforeCurrent + 1; // شامل الشهر الحالي
+    const paidMonthsSoFar = paidBeforeCurrent + (currentMonthPaid ? 1 : 0);
+    const paymentPct = totalMonthsSoFar > 0 ? Math.round((paidMonthsSoFar / totalMonthsSoFar) * 100) : 100;
+    const contactPhone = s.phone || s.parentPhone || "";
+
     // ── أخطاء حقيقية من الامتحانات (مربوطة بالوحدة/الدرس/اليوم) ──
     // بتتجمّع من كل امتحان اتسجّل فيه هذا الطالب كـ "الممتحِن" فعليًا
     // (results[].wrong)، مش تقديرات عشوائية لباقي المجموعة.
@@ -293,17 +303,24 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             <Av name={s.name} size="lg" />
             <div className="shrink-0 pl-1">
               <div className="text-white font-black text-base whitespace-nowrap">{s.name}</div>
-              <div className="text-slate-400 text-xs mt-0.5 whitespace-nowrap">{s.grade} · مجموعة {s.group} · {s.id}</div>
               <span className={`mt-1.5 inline-block text-xs px-2.5 py-0.5 rounded-full whitespace-nowrap ${stCfg[s.status]?.bg} ${stCfg[s.status]?.t}`}>{stCfg[s.status]?.l}</span>
             </div>
             <div className="bg-slate-900/50 rounded-xl p-2.5 text-center shrink-0 min-w-[68px]">
               <div className="font-black text-sm text-white truncate">{s.phone || "—"}</div>
               <div className="text-xs text-slate-500">هاتف</div>
             </div>
+            {contactPhone && (
+              <div className="flex flex-col gap-1 shrink-0">
+                <a href={`tel:${contactPhone}`}
+                  className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-300 flex items-center justify-center text-sm">📞</a>
+                <a href={waLink(contactPhone) || "#"} target="_blank" rel="noreferrer"
+                  className="w-8 h-8 rounded-lg bg-green-700/30 border border-green-600/20 text-green-400 flex items-center justify-center text-sm">💬</a>
+              </div>
+            )}
             {[
               { l: "الحضور", v: `${pct(s.present, s.total)}%`, ok: pct(s.present, s.total) >= 80 },
               { l: "المستوى", v: realLevel === null ? "—" : `${realLevel}%`, ok: realLevel === null ? true : realLevel >= 65 },
-              { l: "السداد", v: `${pct(s.paid, s.totalFees)}%`, ok: due === 0 }
+              { l: "السداد", v: `${paymentPct}%`, ok: overdueMonths.length === 0 && currentMonthPaid }
             ].map(x => (
               <div key={x.l} className="bg-slate-900/50 rounded-xl p-2.5 text-center shrink-0 min-w-[68px]">
                 <div className={`font-black text-lg ${x.ok ? "text-emerald-400" : "text-amber-400"}`}>{x.v}</div>
@@ -320,10 +337,16 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${overdueMonths.length > 0 ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"}`}>
               {overdueMonths.length > 0 ? `⚠️ متأخر: ${overdueMonths.join("، ")}` : "✓ لا يوجد شهور متأخرة"}
             </div>
-            <button onClick={() => setStep("edit")}
-              className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold bg-blue-600/20 border border-blue-500/30 text-blue-300 whitespace-nowrap">
-              ✏️ تعديل
-            </button>
+            <div className="shrink-0 flex rounded-xl border border-slate-700/40 overflow-hidden">
+              <button onClick={() => setStep("edit")}
+                className="px-3 py-2 text-xs font-bold bg-blue-600/20 border-l border-slate-700/40 text-blue-300 whitespace-nowrap">
+                ✏️ تعديل
+              </button>
+              <button onClick={() => setConfirmDel(s)}
+                className="px-3 py-2 text-xs font-bold bg-red-700/20 text-red-400 whitespace-nowrap">
+                🚫 حظر
+              </button>
+            </div>
           </div>
           {s.weak?.length > 0 && (
             <div className="mt-3 bg-slate-900/40 rounded-xl p-3">
@@ -382,12 +405,6 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             </div>
           )}
           <ScoreHistoryChart student={s} />
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => { const url = waLink(s.parentPhone); if (url) window.open(url, "_blank"); }}
-            className="flex-1 h-10 rounded-xl bg-green-700/30 border border-green-600/20 text-green-400 flex items-center justify-center gap-1.5 text-sm font-bold">💬 واتساب</button>
-          <button onClick={() => setConfirmDel(s)}
-            className="flex-1 h-10 rounded-xl bg-red-700/20 border border-red-600/20 text-red-400 flex items-center justify-center gap-1.5 text-sm font-bold">🚫 حظر</button>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
         {confirmDel && (
