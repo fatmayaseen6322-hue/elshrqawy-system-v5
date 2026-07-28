@@ -1477,6 +1477,137 @@ function fileKindIcon(name = "") {
   return "📎";
 }
 
+// ══════════════════════════════════════════════════════════════
+// قراءة ملف الامتحان مجانًا بالكامل — بدون أي API مدفوع
+// ══════════════════════════════════════════════════════════════
+// Word (.docx)  → mammoth: بيقرا النص الحقيقي المكتوب جوه الملف (أدق حاجة).
+// صورة (jpg/png/webp) → Tesseract.js: OCR مجاني شغال جوه المتصفح (عربي + إنجليزي).
+// PDF → أول حاجة بيجرّب pdf.js يطلّع النص المباشر (لو الملف مكتوب أصلاً مش صورة).
+//       لو النص طلع فاضي/قليل جدًا (يعني الملف صورة ممسوحة ضوئيًا)، بيحوّل كل
+//       صفحة لصورة (canvas) ويبعتها على Tesseract.js زي أي صورة عادية.
+const examOcrWorkerState = { worker: null, loading: null };
+async function getOcrWorker() {
+  if (examOcrWorkerState.worker) return examOcrWorkerState.worker;
+  if (!examOcrWorkerState.loading) {
+    examOcrWorkerState.loading = (async () => {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("ara+eng");
+      examOcrWorkerState.worker = worker;
+      return worker;
+    })();
+  }
+  return examOcrWorkerState.loading;
+}
+
+// بيقرأ نص من صورة (File أو canvas) عن طريق Tesseract.js
+async function ocrRecognize(source) {
+  const worker = await getOcrWorker();
+  const { data } = await worker.recognize(source);
+  return data?.text || "";
+}
+
+// استخراج النص الحقيقي من ملف Word (.docx) عن طريق mammoth
+async function extractTextFromDocx(f) {
+  const mammoth = await import("mammoth");
+  const arrayBuffer = await f.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result?.value || "";
+}
+
+let pdfjsLibPromise = null;
+async function getPdfjsLib() {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = (async () => {
+      const pdfjsLib = await import("pdfjs-dist");
+      const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+      return pdfjsLib;
+    })();
+  }
+  return pdfjsLibPromise;
+}
+
+// استخراج النص من ملف PDF: نص مباشر أولاً، وOCR لو الملف صورة ممسوحة
+async function extractTextFromPdf(f) {
+  const pdfjsLib = await getPdfjsLib();
+  const arrayBuffer = await f.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  let directText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    directText += content.items.map(it => it.str).join(" ") + "\n";
+  }
+
+  const avgCharsPerPage = directText.trim().length / pdf.numPages;
+  if (avgCharsPerPage >= 15) return directText; // النص المباشر كفاية — الملف مش صورة ممسوحة
+
+  // الملف صورة ممسوحة ضوئيًا: حوّلي كل صفحة لصورة وابعتيها على OCR
+  let ocrText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2 });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d");
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    ocrText += (await ocrRecognize(canvas)) + "\n";
+  }
+  return ocrText;
+}
+
+// تطبيع الأرقام العربية (٠-٩) للأرقام الإنجليزية عشان الـ regex يلاقيها
+function normalizeDigits(s) {
+  const arabicDigits = "٠١٢٣٤٥٦٧٨٩";
+  return String(s || "").replace(/[٠-٩]/g, d => String(arabicDigits.indexOf(d)));
+}
+
+// تقسيم النص الخام لأسئلة (heuristic): بيدوّر على "سؤال ١" أو "س1" أو
+// رقم في أول السطر متبوع بنقطة/قوس، وبيطلّع وصف قصير لكل سؤال + عدد النقط
+// المتكرر لو لقاه (زي "٥ درجات" أو "10 points").
+function parseQuestionsFromText(rawText) {
+  const text = normalizeDigits(String(rawText || "").replace(/\r/g, ""));
+  if (!text.trim()) return { numQuestions: 0, questionMeta: {}, pointsPerQuestion: 0 };
+
+  const pattern = /(?:^|\n)\s*(?:(?:سؤال|السؤال|س)\s*[:\-\.]?\s*(\d{1,3})|(\d{1,3})\s*[\.\)\-])/g;
+  const matches = [...text.matchAll(pattern)];
+
+  const questionMeta = {};
+  if (matches.length >= 2) {
+    for (let i = 0; i < matches.length; i++) {
+      const m = matches[i];
+      const qn = parseInt(m[1] || m[2], 10);
+      if (!qn || questionMeta[qn]) continue;
+      const start = m.index + m[0].length;
+      const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
+      const segment = text.slice(start, end);
+      const firstLine = segment.split("\n").map(l => l.trim()).find(l => l.length > 0) || "";
+      const desc = firstLine.replace(/\s+/g, " ").trim().slice(0, 60);
+      if (desc) questionMeta[qn] = desc;
+    }
+  }
+
+  const qNumbers = Object.keys(questionMeta).map(Number);
+  const numQuestions = qNumbers.length > 0 ? Math.max(...qNumbers) : 0;
+
+  // محاولة اكتشاف عدد النقط المتكرر لكل سؤال (زي "5 درجات" أو "2 نقطة")
+  const pointsMatches = [...text.matchAll(/(\d{1,3})\s*(?:نقطة|نقاط|درجة|درجات|Marks?|Points?)/gi)];
+  let pointsPerQuestion = 0;
+  if (pointsMatches.length > 0) {
+    const counts = {};
+    pointsMatches.forEach(m => {
+      const v = parseInt(m[1], 10);
+      if (v) counts[v] = (counts[v] || 0) + 1;
+    });
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (best) pointsPerQuestion = parseInt(best[0], 10);
+  }
+
+  return { numQuestions, questionMeta, pointsPerQuestion };
+}
+
 function ExamUploadLinked({ students, centerExams, setCenterExams }) {
   const [grade,  setGrade]  = useState("");
   const [unit,   setUnit]   = useState("");
@@ -1493,70 +1624,33 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
 
   const existing = (centerExams || []).filter(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson));
 
-  const fileToBase64 = f => new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1]);
-    r.onerror = () => reject(new Error("تعذّرت قراءة الملف"));
-    r.readAsDataURL(f);
-  });
-
-  // بيقرأ الملف فعليًا (صورة أو PDF) عن طريق Claude Vision ويرجّع عدد
-  // الأسئلة وعدد النقط (الاختيارات) في كل سؤال، بدل ما تكتبيهم إنتي.
-  // بيستخدم نفس مفتاح API بتاع "asal.ai" (لازم يبقى متسجّل قبل كده).
+  // بيقرأ الملف فعليًا (Word / PDF / صورة) مجانًا بالكامل جوه المتصفح —
+  // من غير أي API مدفوع أو مفتاح — ويرجّع عدد الأسئلة ووصف قصير لكل سؤال.
+  // docx → mammoth (نص حقيقي) | صورة → Tesseract OCR | pdf → نص مباشر
+  // أو OCR لو الملف صورة ممسوحة ضوئيًا (شوفي extractTextFromPdf فوق).
   const analyzeExamFile = async (f, ext) => {
-    let apiKey = "";
-    try { apiKey = localStorage.getItem("asal_api_key") || ""; } catch { /* ignore */ }
-    if (!apiKey) return { ok: false, reason: "no_key" };
-
     const isImage = ["jpg", "jpeg", "png", "webp"].includes(ext);
     const isPdf = ext === "pdf";
-    if (!isImage && !isPdf) return { ok: false, reason: "unsupported" };
+    const isDocx = ext === "docx";
+    if (!isImage && !isPdf && !isDocx) return { ok: false, reason: "unsupported" };
 
     try {
-      const b64 = await fileToBase64(f);
-      const mediaType = isPdf ? "application/pdf" : (ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg");
-      const contentBlock = isPdf
-        ? { type: "document", source: { type: "base64", media_type: mediaType, data: b64 } }
-        : { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } };
+      let rawText = "";
+      if (isDocx) rawText = await extractTextFromDocx(f);
+      else if (isImage) rawText = await ocrRecognize(f);
+      else if (isPdf) rawText = await extractTextFromPdf(f);
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1500,
-          messages: [{
-            role: "user",
-            content: [
-              contentBlock,
-              { type: "text", text: "دي ورقة امتحان. عدّي إجمالي عدد الأسئلة، وحددي عدد الاختيارات/النقط في كل سؤال (زي عدد اختيارات كل سؤال اختيار من متعدد؛ لو مش موحّد خدي الأكثر تكرارًا). كمان اكتبي لكل سؤال وصف قصير جدًا (٣-٨ كلمات بالعربي) يلخّص فكرة السؤال بدل رقمه: لو السؤال بيطلب تفسير أو سبب، ابدئي الوصف بـ'ليه...' أو 'فسّر ليه...'؛ لو بيطلب نتيجة أو نتائج، ابدئي بـ'نتائج...' أو 'ما نتيجة...'؛ لو سؤال صح وغلط، اكتبي نص العبارة نفسها (مختصرة)؛ غير كده اكتبي موضوع السؤال باختصار. متكتبيش كلمة 'سؤال رقم' في الوصف نفسه. ردّي بصيغة JSON فقط بدون أي كلام تاني، بالظبط بالشكل ده: {\"numQuestions\": رقم, \"pointsPerQuestion\": رقم, \"questions\": [{\"q\": رقم السؤال, \"desc\": \"الوصف القصير\"}, ...] }" }
-            ]
-          }]
-        })
-      });
-      if (res.status === 401) return { ok: false, reason: "bad_key" };
-      if (!res.ok) return { ok: false, reason: "http_error" };
-      const data = await res.json();
-      const text = (data.content || []).map(c => c.text || "").join("").trim();
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      const nq = parseInt(parsed.numQuestions);
-      const np = parseInt(parsed.pointsPerQuestion);
-      if (!nq || !np) return { ok: false, reason: "parse_error" };
-      const questionMeta = {};
-      if (Array.isArray(parsed.questions)) {
-        parsed.questions.forEach(item => {
-          const qn = parseInt(item?.q);
-          const desc = String(item?.desc || "").trim();
-          if (qn && desc) questionMeta[qn] = desc;
-        });
-      }
-      return { ok: true, numQuestions: Math.max(1, nq), pointsPerQuestion: Math.max(1, np), questionMeta };
+      if (!rawText || !rawText.trim()) return { ok: false, reason: "empty_text" };
+
+      const { numQuestions, questionMeta, pointsPerQuestion } = parseQuestionsFromText(rawText);
+      if (!numQuestions) return { ok: false, reason: "parse_error" };
+
+      return {
+        ok: true,
+        numQuestions: Math.max(1, numQuestions),
+        pointsPerQuestion: Math.max(1, pointsPerQuestion || 4),
+        questionMeta,
+      };
     } catch {
       return { ok: false, reason: "error" };
     }
@@ -1578,7 +1672,7 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
       pointsPerQuestion: pointsPerQuestion || 4,
     };
     setCenterExams(p => [newExam, ...(p || [])]);
-    setToast({ msg: `✓ تم رفع ${f.name} — جاري قراءة عدد الأسئلة تلقائيًا...`, type: "success" });
+    setToast({ msg: `✓ تم رفع ${f.name} — جاري قراءة عدد الأسئلة تلقائيًا (مجانًا)...`, type: "success" });
 
     setAnalyzing(true);
     const result = await analyzeExamFile(f, ext);
@@ -1592,10 +1686,10 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
       setToast({ msg: hasDesc
         ? `✓ اتقرأ الامتحان: ${result.numQuestions} سؤال × ${result.pointsPerQuestion} نقط + وصف كل سؤال`
         : `✓ اتقرأ الامتحان: ${result.numQuestions} سؤال × ${result.pointsPerQuestion} نقط`, type: "success" });
-    } else if (result.reason === "no_key") {
-      setToast({ msg: "⚠️ محتاجة تسجّلي مفتاح API بتاع asal.ai الأول عشان القراءة التلقائية تشتغل — العدد اللي كتبتيه فوق اتحفظ عادي", type: "error" });
     } else if (result.reason === "unsupported") {
-      setToast({ msg: "الصور والـ PDF بس قابلين للقراءة التلقائية — ملفات Word لازم تدخلي العدد يدويًا", type: "error" });
+      setToast({ msg: "الصيغة دي (Word قديم .doc) مش قابلة للقراءة التلقائية — عدّلي العدد يدويًا تحت، أو حوّلي الملف لـ .docx", type: "error" });
+    } else if (result.reason === "empty_text") {
+      setToast({ msg: "⚠️ الملف طلع فاضي من نص واضح (جودة صورة ضعيفة؟) — عدّلي العدد يدويًا تحت", type: "error" });
     } else {
       setToast({ msg: "⚠️ مقدرتش أقرأ عدد الأسئلة تلقائيًا من الملف ده — عدّلي العدد يدويًا تحت لو مختلف", type: "error" });
     }
