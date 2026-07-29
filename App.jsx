@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { SIDEBAR_NAV } from "./constants";
-import { fmt, waLink } from "./utils";
+import { SIDEBAR_NAV, TODAY } from "./constants";
+import { fmt, waLink, lsGet, lsSet } from "./utils";
 import useAppData from "./hooks/useAppData";
 
 // UI
@@ -148,6 +148,56 @@ function ThemePanel({ current, onChange, onClose }) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// NOTIFICATIONS PANEL — 3 أقسام (غياب / مصروفات / امتحانات)
+// كل قسم بيحمل رقمه الخاص جوه الجرس، ولما تفتحيه (تضغطي عليه) رقمه
+// بيختفي من إجمالي الجرس لنفس اليوم (حتى لو قفلتي القائمة وفتحتيها تاني).
+// ══════════════════════════════════════════════════════════════
+function NotifSection({ icon, title, count, expanded, onToggle, children }) {
+  return (
+    <div>
+      <button onClick={onToggle} className="w-full px-4 py-3 flex items-center justify-between text-right"
+        style={{ background: expanded ? "var(--card-bg)" : "transparent" }}>
+        <span className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          <span>{icon}</span>{title}
+        </span>
+        <span className="flex items-center gap-2">
+          {count > 0 && (
+            <span className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white">{count}</span>
+          )}
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>{expanded ? "▲" : "▼"}</span>
+        </span>
+      </button>
+      {expanded && <div className="pb-2" style={{ borderBottom: "1px solid var(--border)" }}>{children}</div>}
+    </div>
+  );
+}
+
+function NotifEmpty({ msg = "لا يوجد" }) {
+  return <div className="py-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>{msg}</div>;
+}
+
+function AbsentNotifRow({ a, onToggleContacted }) {
+  return (
+    <div className="px-4 py-2 flex items-center gap-2">
+      <Av name={a.name} size="sm" />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{a.name}</div>
+        <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>{a.grade} · مجموعة {a.group}</div>
+      </div>
+      {a.contacted ? (
+        <button onClick={() => onToggleContacted(a.recId, false)}
+          className="text-[11px] px-2 py-1 rounded-lg shrink-0"
+          style={{ background: "rgba(22,163,74,0.15)", color: "#4ade80" }}>✓ تم التواصل</button>
+      ) : (
+        <button onClick={() => onToggleContacted(a.recId, true, a.phone)}
+          className="text-[11px] px-2 py-1 rounded-lg shrink-0"
+          style={{ background: "rgba(22,163,74,0.2)", color: "#86efac" }}>💬 تواصل</button>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [theme, setTheme]             = useTheme();
   const [showTheme, setShowTheme]     = useState(false);
@@ -191,6 +241,73 @@ export default function App() {
   const alerts = (students || []).filter(s =>
     s && (s.score < 60 || s.absent > 8 || ((s.totalFees || 0) - (s.paid || 0)) > 1200)
   );
+
+  // ══════════════════════════════════════════════════════════════
+  // 🔔 التنبيهات الجديدة — 3 أقسام: غياب اليوم / مصروفات اليوم / امتحانات الأسبوع
+  // "مقروء" بيتحفظ في localStorage بتاريخ اليوم — يوم جديد = تصفير تلقائي.
+  // ══════════════════════════════════════════════════════════════
+  const NOTIF_READ_KEY = "app_notif_read";
+  const [notifRead, setNotifReadRaw] = useState(() => {
+    const saved = lsGet(NOTIF_READ_KEY, null);
+    return (saved && saved.date === TODAY) ? saved.read : { absence: false, finance: false, exams: false };
+  });
+  const [expandedNotif, setExpandedNotif] = useState(null);
+  const markNotifRead = (key) => {
+    setNotifReadRaw(prev => {
+      const next = { ...prev, [key]: true };
+      lsSet(NOTIF_READ_KEY, { date: TODAY, read: next });
+      return next;
+    });
+  };
+  const toggleNotifSection = (key) => {
+    setExpandedNotif(v => v === key ? null : key);
+    markNotifRead(key);
+  };
+  const handleToggleContacted = (recId, contacted, phone) => {
+    setAttRecords(prev => (prev || []).map(r => r.id === recId ? { ...r, contacted } : r));
+    if (contacted && phone) { const url = waLink(phone); if (url) window.open(url, "_blank"); }
+  };
+
+  // 1) غياب اليوم — مين اتواصلوا معاه ومين لسه
+  const absentToday = (attRecords || [])
+    .filter(r => r.date === TODAY && r.status === "a")
+    .map(r => {
+      const st = (students || []).find(s => s.id === r.studentId);
+      return { recId: r.id, name: st?.name || r.studentId, phone: st?.parentPhone, grade: r.grade, group: r.group, contacted: !!r.contacted };
+    });
+  const absentNotContacted = absentToday.filter(a => !a.contacted);
+  const absentContacted    = absentToday.filter(a => a.contacted);
+
+  // 2) مصروفات اليوم — عدد الطلاب اللي دفعوا واجمالي كل صف واجمالي عام
+  const dateOfFin = r => (r.timestamp || "").slice(0, 10);
+  const finToday = (finRecords || []).filter(r => dateOfFin(r) === TODAY);
+  const finByGrade = {};
+  finToday.forEach(r => {
+    const g = r.grade || "غير محدد";
+    if (!finByGrade[g]) finByGrade[g] = { ids: new Set(), total: 0 };
+    finByGrade[g].ids.add(r.studentId);
+    finByGrade[g].total += (r.amount || 0);
+  });
+  const finGradesList = Object.entries(finByGrade).map(([grade, v]) => ({ grade, count: v.ids.size, total: v.total }));
+  const finGrandTotal = finGradesList.reduce((a, g) => a + g.total, 0);
+  const finGrandCount = new Set(finToday.map(r => r.studentId)).size;
+
+  // 3) طلاب من غير امتحان خلال آخر ٧ أيام (حسب امتحانات الموقع webExams، اللي بتسجل نتيجة كل طالب بالاسم)
+  const weekAgoDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const examTakenIds = new Set();
+  (webExams || []).forEach(e => { if (e.date >= weekAgoDate) (e.results || []).forEach(r => examTakenIds.add(r.studentId)); });
+  const examsMissing = (students || []).filter(s => s && !examTakenIds.has(s.id));
+  const examsMissingByGrade = Object.entries(
+    examsMissing.reduce((acc, s) => { const g = s.grade || "غير محدد"; (acc[g] ||= []).push(s); return acc; }, {})
+  );
+
+  const absenceCount = absentToday.length;
+  const financeCount = finGrandCount;
+  const examsCount   = examsMissing.length;
+  const notifBadgeTotal =
+    (notifRead.absence ? 0 : absenceCount) +
+    (notifRead.finance ? 0 : financeCount) +
+    (notifRead.exams   ? 0 : examsCount);
 
   // نمرر فقط الـ id بدل الكائن كامل — عشان StudentsModule يقرأ
   // أحدث نسخة من بيانات الطالب من `students` وقت التنقل، مش نسخة قديمة (snapshot)
@@ -334,7 +451,7 @@ export default function App() {
             onMouseLeave={e => e.currentTarget.style.background = "var(--card-bg)"}
           >
             🔔
-            {alerts.length > 0 && <span className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse">{alerts.length}</span>}
+            {notifBadgeTotal > 0 && <span className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse">{notifBadgeTotal}</span>}
           </button>
           {/* #7 — زر تسجيل الخروج */}
           <button title={`خروج (${currentRole.label})`}
@@ -373,7 +490,7 @@ export default function App() {
               style={{ background: "var(--sidebar-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-md)" }}
               onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: "1px solid var(--border)" }}>
-                <span className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>🔔 التنبيهات ({alerts.length})</span>
+                <span className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>🔔 التنبيهات{notifBadgeTotal > 0 ? ` (${notifBadgeTotal})` : ""}</span>
                 <div className="flex items-center gap-3">
                   {allowedPages.includes("dashboard") && (
                     <button
@@ -388,29 +505,59 @@ export default function App() {
                   >✕</button>
                 </div>
               </div>
-              <div className="max-h-60 overflow-y-auto">
-                {alerts.length === 0
-                  ? <div className="py-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>لا توجد تنبيهات</div>
-                  : alerts.map(s => {
-                      const rs = [];
-                      if (s.score < 60) rs.push(`${s.score}%`);
-                      if (s.absent > 8) rs.push(`${s.absent} غياب`);
-                      if ((s.totalFees - s.paid) > 1200) rs.push(fmt(s.totalFees - s.paid));
-                      return (
-                        <div key={s.id} className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: "1px solid var(--border)" }}>
-                          <Av name={s.name} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{s.name}</div>
-                            <div className="text-red-400 text-xs">{rs.join(" · ")}</div>
-                          </div>
-                          <button onClick={() => { const url = waLink(s.parentPhone); if (url) window.open(url, "_blank"); }}
-                            className="text-xs px-2 py-1"
-                            style={{ borderRadius: "var(--radius-md)", background: "rgba(22,163,74,0.2)", color: "#86efac" }}
-                          >💬</button>
+              <div className="max-h-96 overflow-y-auto divide-y" style={{ borderColor: "var(--border)" }}>
+                {/* 1) غياب اليوم */}
+                <NotifSection icon="🚫" title="غياب اليوم" count={notifRead.absence ? 0 : absenceCount}
+                  expanded={expandedNotif === "absence"} onToggle={() => toggleNotifSection("absence")}>
+                  {absentToday.length === 0 ? <NotifEmpty msg="مفيش غياب اليوم 🎉" /> : (
+                    <>
+                      {absentNotContacted.length > 0 && (
+                        <div className="text-[11px] font-bold px-4 pt-1 pb-1" style={{ color: "#f87171" }}>لم يتم التواصل ({absentNotContacted.length})</div>
+                      )}
+                      {absentNotContacted.map(a => <AbsentNotifRow key={a.recId} a={a} onToggleContacted={handleToggleContacted} />)}
+                      {absentContacted.length > 0 && (
+                        <div className="text-[11px] font-bold px-4 pt-2 pb-1" style={{ color: "#4ade80" }}>تم التواصل ({absentContacted.length})</div>
+                      )}
+                      {absentContacted.map(a => <AbsentNotifRow key={a.recId} a={a} onToggleContacted={handleToggleContacted} />)}
+                    </>
+                  )}
+                </NotifSection>
+
+                {/* 2) مصروفات اليوم */}
+                <NotifSection icon="💰" title="مصروفات اليوم" count={notifRead.finance ? 0 : financeCount}
+                  expanded={expandedNotif === "finance"} onToggle={() => toggleNotifSection("finance")}>
+                  {finGradesList.length === 0 ? <NotifEmpty msg="لسه محدش دفع النهاردة" /> : (
+                    <>
+                      {finGradesList.map(g => (
+                        <div key={g.grade} className="px-4 py-2 flex justify-between items-center text-xs">
+                          <span style={{ color: "var(--text-primary)" }}>{g.grade}</span>
+                          <span style={{ color: "var(--text-muted)" }}>{g.count} طالب · {fmt(g.total)}</span>
                         </div>
-                      );
-                    })
-                }
+                      ))}
+                      <div className="px-4 py-2 flex justify-between items-center text-xs font-bold" style={{ borderTop: "1px solid var(--border)" }}>
+                        <span style={{ color: "var(--text-primary)" }}>الإجمالي</span>
+                        <span style={{ color: "#fbbf24" }}>{finGrandCount} طالب · {fmt(finGrandTotal)}</span>
+                      </div>
+                    </>
+                  )}
+                </NotifSection>
+
+                {/* 3) طلاب من غير امتحان خلال الأسبوع */}
+                <NotifSection icon="📝" title="بدون امتحان (٧ أيام)" count={notifRead.exams ? 0 : examsCount}
+                  expanded={expandedNotif === "exams"} onToggle={() => toggleNotifSection("exams")}>
+                  {examsMissing.length === 0 ? <NotifEmpty msg="كل الطلاب عملوا امتحان الأسبوع ده ✓" /> : (
+                    examsMissingByGrade.map(([grade, list]) => (
+                      <div key={grade} className="px-4 py-2">
+                        <div className="text-[11px] font-bold mb-1" style={{ color: "var(--text-muted)" }}>{grade} ({list.length})</div>
+                        <div className="flex flex-wrap gap-1">
+                          {list.map(s => (
+                            <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: "var(--card-bg)", color: "var(--text-primary)" }}>{s.name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </NotifSection>
               </div>
               {/* #4 — Activity Log زر */}
               <div style={{ borderTop: "1px solid var(--border)" }} className="px-4 py-2">

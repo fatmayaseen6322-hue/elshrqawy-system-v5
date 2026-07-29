@@ -168,7 +168,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     setAttRecords(prev => {
       let list = prev || [];
       const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
-      const rec = { id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft };
+      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft };
       return idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
     });
 
@@ -216,7 +216,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         const newReason = session[id]?.reason || "";
         const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
         if (newStatus) {
-          const rec = { id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason };
+          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason };
           list = idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
         } else if (idx >= 0) {
           list = list.filter((_, i) => i !== idx);
