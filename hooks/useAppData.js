@@ -24,6 +24,7 @@ const KEYS = {
   activityLog: "app_activity_log",    // #4
   lastBackup:  "app_last_backup_ts",  // #1
   session:     "app_session",         // #7
+  cloudSync:   "app_cloud_sync_state", // #Cloud (تراكمي)
 };
 
 function loadStudents()    { return lsGet(KEYS.students, INIT_STUDENTS); }
@@ -155,58 +156,129 @@ export default function useAppData() {
     }
   }, []);
 
-  // ── #Cloud: نسخة احتياطية يدوية على Firebase (بالزرار بس) ──
-  // التخزين الأساسي محلي (localStorage) زي ما هو. الوظيفة دي بترفع
-  // "لقطة" (snapshot) من كل البيانات لمستند واحد في Firestore وقت ما
-  // المستخدم يدوس الزرار بنفسه، ومفيش أي رفع تلقائي أو مستمر.
+  // ── #Cloud: نسخة احتياطية تراكمية تلقائية يومية على Firebase ──
+  // التخزين الأساسي يفضل محلي (localStorage) زي ما هو دايمًا.
+  // الفرق عن الإصدار القديم:
+  //   1) بتشتغل أوتوماتيك أول ما الموقع يتفتح في يوم جديد — مفيش زرار مطلوب.
+  //   2) كل يوم بيتحط مستند جديد في Collection (مش مستند واحد بيتغطى)،
+  //      وبيحتوي بس على السجلات "الجديدة" اللي اتضافت من آخر نسخة (Diff)،
+  //      مش كل البيانات القديمة تاني — عشان الكوتة تفضل عملية كتابة واحدة/يوم.
+  //   3) نطاق البيانات المرفوعة اتقلّص لبس: المصاريف (finRecords)،
+  //      الغياب (attRecords)، ودرجات/أخطاء الامتحانات — بيانات الطلاب
+  //      الأساسية (اسم/موبايل/ولي أمر) والإعدادات (settings) فضلوا محليين بس.
   const [cloudBackupState, setCloudBackupState] = useState({ status: "idle", message: "" });
   // status: "idle" | "uploading" | "success" | "error" | "downloading"
 
-  const backupToCloud = useCallback(async () => {
+  const runIncrementalCloudBackup = useCallback(async (force = false) => {
+    const today = new Date().toISOString().split("T")[0];
+    const sync = lsGet(KEYS.cloudSync, {
+      lastDate: null, syncedFinIds: [], syncedAttIds: [], syncedExamIds: [], examSnapshot: {},
+    });
+    if (!force && sync.lastDate === today) return; // اتعمل نسخة النهارده بالفعل
+
     setCloudBackupState({ status: "uploading", message: "" });
     try {
-      const { doc, setDoc } = await import("firebase/firestore");
-      const { db } = await import("../src/firebase");
-      const snapshot = {
-        students:    lsGet(KEYS.students,    []),
-        settings:    lsGet(KEYS.settings,    {}),
-        finRecords:  lsGet(KEYS.finRecords,  []),
-        attRecords:  lsGet(KEYS.attRecords,  []),
-        webExams:    lsGet(KEYS.webExams,    []),
-        centerExams: lsGet(KEYS.centerExams, []),
-        examQs:      lsGet(KEYS.examQs,      []),
-        savedAt:     new Date().toISOString(),
-      };
-      await setDoc(doc(db, "elshrqawy_backups", "latest"), snapshot);
-      setCloudBackupState({ status: "success", message: "تم رفع نسخة احتياطية على السحابة ✓" });
+      const curFin         = lsGet(KEYS.finRecords,  []);
+      const curAtt          = lsGet(KEYS.attRecords,  []);
+      const curStudents     = lsGet(KEYS.students,    []);
+      const curCenterExams  = lsGet(KEYS.centerExams, []);
+
+      // الجديد فقط منذ آخر نسخة (بالـ id، مش بالتاريخ، عشان يتحمل أي تعديل رجعي)
+      const newFin = curFin.filter(r => !sync.syncedFinIds.includes(r.id));
+      const newAtt = curAtt.filter(r => !sync.syncedAttIds.includes(r.id));
+
+      // درجات/أخطاء الطلاب: بس اللي اتغيّر (score أو weak) عن آخر نسخة محفوظة
+      const examChanges = [];
+      curStudents.forEach(s => {
+        const prev = sync.examSnapshot[s.id];
+        const weakNow = s.weak || [];
+        if (!prev || prev.score !== s.score || JSON.stringify(prev.weak || []) !== JSON.stringify(weakNow)) {
+          examChanges.push({ studentId: s.id, score: s.score, weak: weakNow });
+        }
+      });
+
+      // نتائج تصحيح الامتحانات (centerExams) الجديدة اللي لسه ما اترفعتش
+      const newCenterExamResults = curCenterExams
+        .filter(e => e.status === "needs_review" && e._score != null && !sync.syncedExamIds.includes(e.id))
+        .map(e => ({ id: e.id, name: e.name, score: e._score, max: e._max, correctionDate: e.correctionDate }));
+
+      const hasAnything = newFin.length || newAtt.length || examChanges.length || newCenterExamResults.length;
+
+      if (hasAnything) {
+        const { doc, setDoc } = await import("firebase/firestore");
+        const { db } = await import("../src/firebase");
+        await setDoc(doc(db, "elshrqawy_daily_backups", today), {
+          finRecords:        newFin,
+          attRecords:        newAtt,
+          examChanges,
+          centerExamResults: newCenterExamResults,
+          savedAt:           new Date().toISOString(),
+        });
+      }
+
+      lsSet(KEYS.cloudSync, {
+        lastDate: today,
+        syncedFinIds:  [...sync.syncedFinIds,  ...newFin.map(r => r.id)],
+        syncedAttIds:  [...sync.syncedAttIds,  ...newAtt.map(r => r.id)],
+        syncedExamIds: [...sync.syncedExamIds, ...newCenterExamResults.map(r => r.id)],
+        examSnapshot:  { ...sync.examSnapshot, ...Object.fromEntries(examChanges.map(c => [c.studentId, { score: c.score, weak: c.weak }])) },
+      });
+
+      setCloudBackupState(hasAnything
+        ? { status: "success", message: `تم رفع نسخة تراكمية تلقائية ليوم ${today} ✓` }
+        : { status: "success", message: `لا يوجد جديد للرفع اليوم — كل شيء متزامن ✓` });
     } catch (e) {
-      setCloudBackupState({ status: "error", message: "فشل الرفع — تأكد من إعداد Firebase في .env" });
+      setCloudBackupState({ status: "error", message: "فشل النسخ الاحتياطي — تأكد من إعداد Firebase في .env" });
     }
   }, []);
+
+  // نسخة "يدوية" للاستخدام من زرار الإعدادات — نفس المنطق التراكمي، لكن force=true
+  // (بترفع أي جديد فورًا من غير ما تستنى بداية يوم جديد)
+  const backupToCloud = useCallback(() => runIncrementalCloudBackup(true), [runIncrementalCloudBackup]);
 
   const restoreFromCloud = useCallback(async () => {
     setCloudBackupState({ status: "downloading", message: "" });
     try {
-      const { doc, getDoc } = await import("firebase/firestore");
+      const { collection, getDocs, query, orderBy } = await import("firebase/firestore");
       const { db } = await import("../src/firebase");
-      const snap = await getDoc(doc(db, "elshrqawy_backups", "latest"));
-      if (!snap.exists()) {
-        setCloudBackupState({ status: "error", message: "مفيش نسخة احتياطية محفوظة على السحابة" });
+      const snaps = await getDocs(query(collection(db, "elshrqawy_daily_backups"), orderBy("savedAt", "asc")));
+      if (snaps.empty) {
+        setCloudBackupState({ status: "error", message: "مفيش نسخ احتياطية محفوظة على السحابة" });
         return;
       }
-      const data = snap.data();
-      if (data.students)    setStudents(data.students);
-      if (data.settings)    setSettings(data.settings);
-      if (data.finRecords)  setFinRecords(data.finRecords);
-      if (data.attRecords)  setAttRecords(data.attRecords);
-      if (data.webExams)    setWebExams(data.webExams);
-      if (data.centerExams) setCenterExams(data.centerExams);
-      if (data.examQs)      setExamQs(data.examQs);
-      setCloudBackupState({ status: "success", message: `تم الاسترجاع من نسخة ${data.savedAt?.split("T")[0] || ""} ✓` });
+
+      const finMap = {}, attMap = {}, examSnap = {}, examResultsMap = {};
+      let lastDate = "";
+      snaps.forEach(d => {
+        const data = d.data();
+        lastDate = data.savedAt?.split("T")[0] || d.id;
+        (data.finRecords || []).forEach(r => { finMap[r.id] = r; });
+        (data.attRecords || []).forEach(r => { attMap[r.id] = r; });
+        (data.examChanges || []).forEach(c => { examSnap[c.studentId] = c; });
+        (data.centerExamResults || []).forEach(c => { examResultsMap[c.id] = c; });
+      });
+
+      // دمج مع الموجود محليًا (مش استبدال كامل) — لأن رفع السحابة نفسه تراكمي
+      setFinRecords(prev => Object.values({ ...Object.fromEntries((prev || []).map(r => [r.id, r])), ...finMap }));
+      setAttRecords(prev => Object.values({ ...Object.fromEntries((prev || []).map(r => [r.id, r])), ...attMap }));
+      setStudents(prev => (prev || []).map(s => examSnap[s.id] ? { ...s, score: examSnap[s.id].score, weak: examSnap[s.id].weak } : s));
+      setCenterExams(prev => (prev || []).map(e => examResultsMap[e.id]
+        ? { ...e, _score: examResultsMap[e.id].score, _max: examResultsMap[e.id].max, correctionDate: examResultsMap[e.id].correctionDate, status: "needs_review" }
+        : e));
+
+      setCloudBackupState({ status: "success", message: `تم الاسترجاع ودمج كل النسخ اليومية (آخرها ${lastDate}) ✓` });
     } catch (e) {
       setCloudBackupState({ status: "error", message: "فشل الاسترجاع — تأكد من إعداد Firebase في .env" });
     }
   }, []);
+
+  // ── تشغيل النسخة التراكمية أوتوماتيك أول ما الموقع يتفتح في يوم جديد ──
+  const cloudAutoRan = useRef(false);
+  useEffect(() => {
+    if (cloudAutoRan.current) return;
+    cloudAutoRan.current = true;
+    runIncrementalCloudBackup(false);
+  }, [runIncrementalCloudBackup]);
 
   return {
     students,    setStudents,
