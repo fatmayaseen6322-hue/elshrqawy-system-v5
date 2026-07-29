@@ -179,7 +179,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
               <div className="overflow-x-auto rounded-xl border border-slate-700/30">
                 <table className="w-full text-right border-collapse">
                   <thead>
-                    <tr className="bg-slate-800/70 text-slate-400 text-xs">
+                    <tr className="led-thead bg-slate-800/70 text-slate-400 text-xs">
                       <th className="px-3 py-2 font-medium">الطالب</th>
                       <th className="px-3 py-2 font-medium">الكود</th>
                       <th className="px-3 py-2 font-medium">المستوى</th>

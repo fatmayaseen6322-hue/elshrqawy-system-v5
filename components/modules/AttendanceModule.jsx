@@ -325,7 +325,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             <div className="border border-slate-700/40 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-900/60 text-slate-400 text-xs">
+                  <tr className="led-thead bg-slate-900/60 text-slate-400 text-xs">
                     <th className="text-right px-3 py-2">الطالب</th>
                     <th className="text-right px-3 py-2">السبب</th>
                     <th className="text-center px-3 py-2 w-16">تواصل</th>
@@ -429,7 +429,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-slate-400 text-xs border-b border-slate-700/40">
+                <tr className="led-thead text-slate-400 text-xs border-b border-slate-700/40">
                   <th className="text-right px-3 py-2.5">الطالب</th>
                   <th className="text-center px-3 py-2.5">الحالة</th>
                   <th className="text-right px-3 py-2.5">السبب</th>

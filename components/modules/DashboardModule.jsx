@@ -199,7 +199,7 @@ function ProblemSection({ data, idRef, extra }) {
               {open && (
                 <div className="border-t border-red-500/15 p-2 overflow-x-auto">
                   <table className="w-full text-xs min-w-max">
-                    <thead><tr className="text-slate-400">{data.cols.map((c, ci) => <th key={ci} className="px-2 py-1.5 text-right font-medium whitespace-nowrap">{c}</th>)}</tr></thead>
+                    <thead><tr className="led-thead text-slate-400">{data.cols.map((c, ci) => <th key={ci} className="px-2 py-1.5 text-right font-medium whitespace-nowrap">{c}</th>)}</tr></thead>
                     <tbody>{g.students.map((s, si) => <tr key={si} className="border-t border-slate-700/30">{renderProblemRow(data.title, s, extra).map((cell, ci) => <td key={ci} className="px-2 py-2 text-slate-300 whitespace-nowrap">{cell}</td>)}</tr>)}</tbody>
                   </table>
                 </div>

@@ -579,3 +579,28 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ════════════════════════════════════════════════════════
+   LED TABLE HEADER — تمييز رأس كل جدول بإضاءة متوهجة نابضة
+   يتلوّن تلقائيًا حسب لون الثيم النشط (var(--accent))
+   ════════════════════════════════════════════════════════ */
+.led-thead {
+  position: relative;
+  background: rgba(15, 23, 42, 0.92);
+  background: color-mix(in srgb, var(--accent) 18%, var(--header-bg));
+  border-bottom-width: 2px !important;
+  border-bottom-style: solid !important;
+  border-bottom-color: var(--accent) !important;
+  box-shadow: 0 2px 10px var(--accent-shadow), inset 0 -1px 0 var(--accent);
+  animation: led-thead-pulse 2.2s ease-in-out infinite;
+}
+.led-thead th {
+  color: var(--accent) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 6px var(--accent-shadow), 0 0 14px var(--accent-shadow);
+}
+@keyframes led-thead-pulse {
+  0%, 100% { box-shadow: 0 2px 10px var(--accent-shadow), inset 0 -1px 0 var(--accent); }
+  50%      { box-shadow: 0 2px 22px var(--accent-shadow), 0 0 26px var(--accent-shadow), inset 0 -1px 0 var(--accent); }
+}

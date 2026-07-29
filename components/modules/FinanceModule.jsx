@@ -424,7 +424,7 @@ export default function FinanceModule({ students, settings, setSettings, finReco
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
                       <thead>
-                        <tr className="bg-slate-900/80 border-b border-slate-700/60">
+                        <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
                           {["اسم الطالب","الصف / المجموعة","المبلغ (ج)","المستلم","وقت التسجيل"].map(h => (
                             <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
                           ))}
@@ -503,7 +503,7 @@ export default function FinanceModule({ students, settings, setSettings, finReco
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
                     <thead>
-                      <tr className="bg-slate-900/80 border-b border-slate-700/60">
+                      <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
                         {["اسم الطالب","المبلغ (ج)","المستلم","وقت التسجيل","تعديل","طباعة"].map(h => (
                           <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
                         ))}
