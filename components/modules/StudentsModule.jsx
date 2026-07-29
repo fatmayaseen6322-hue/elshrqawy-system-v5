@@ -485,6 +485,15 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
   const [fees,   setFees]   = useState(s.totalFees    || 2400);
   const [err,    setErr]    = useState({});
 
+  // ── تسجيل بتاريخ الحضور الفعلي + حساب المطلوب حسب الحصص المتبقية (بس عند الإضافة) ──
+  // الفكرة: الرسوم دي رسوم شهرية مقسّمة على عدد حصص الشهر، ولو الطالب
+  // منضم في نص الشهر بيدفع بس تمن الحصص الباقية مش الشهر كامل.
+  const [joinDate,   setJoinDate]   = useState(s.joinDate || TODAY);
+  const [sessionsPerMonth, setSessionsPerMonth] = useState(s.sessionsPerMonth || 12);
+  const [remainingSessions, setRemainingSessions] = useState(s.remainingSessions ?? (s.sessionsPerMonth || 12));
+  const perSession = sessionsPerMonth > 0 ? (parseInt(fees) || 0) / sessionsPerMonth : 0;
+  const owedAmount = Math.round(perSession * (parseInt(remainingSessions) || 0));
+
   // لو الصفحة دي اتفتحت مباشرة من "إضافة طالب" في الشريط الجانبي، بعد
   // الحفظ أو الإلغاء نرجع للمكان اللي جينا منه (onDoneAdd) بدل "section"
   const finishStep = () => {
@@ -503,8 +512,11 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
       id: s.id || genStudentId((students || []).map(x => x.id)),
       name: name.trim(), grade: sg, group: sgp,
       phone: sPhone.trim(), parentName: s.parentName || "", parentPhone: pPhone,
-      joinDate: s.joinDate || TODAY, status: s.status || "active",
-      paid: s.paid || 0, totalFees: parseInt(fees) || 2400,
+      joinDate: mode === "add" ? joinDate : (s.joinDate || TODAY), status: s.status || "active",
+      paid: s.paid || 0,
+      totalFees: mode === "add" ? owedAmount : (parseInt(fees) || 2400),
+      sessionsPerMonth: parseInt(sessionsPerMonth) || 12,
+      remainingSessions: mode === "add" ? (parseInt(remainingSessions) || 0) : (s.remainingSessions ?? (parseInt(sessionsPerMonth) || 12)),
       score: s.score || 0, present: s.present || 0,
       absent: s.absent || 0, late: s.late || 0, total: s.total || 0,
       weak: s.weak || [],
@@ -515,10 +527,10 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
     if (mode === "edit") setSel(st);
 
     // FIX: use parent's setToast directly — no local toast state needed
-    setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name}` : `✓ تم تعديل ${st.name}`, type: "success" });
+    setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name} — عليه ${fmt(owedAmount)} (${remainingSessions} حصة من ${sessionsPerMonth})` : `✓ تم تعديل ${st.name}`, type: "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
     if (mode === "edit") setStep("profile"); else finishStep();
-  }, [name, sg, sgp, pPhone, sPhone, fees, mode, students]);
+  }, [name, sg, sgp, pPhone, sPhone, fees, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
 
   return (
     <div className="space-y-4">
@@ -546,7 +558,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
             </Field>
           </div>
           <div className="flex-1 min-w-0">
-            <Field label="الرسوم (ج)"><Inp type="number" value={fees} onChange={e => setFees(e.target.value)} /></Field>
+            <Field label="الرسوم الشهرية (ج)"><Inp type="number" value={fees} onChange={e => setFees(e.target.value)} /></Field>
           </div>
         </div>
       </div>
@@ -556,6 +568,26 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
           <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
         </div>
       </div>
+      {mode === "add" && (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+          <div className="text-slate-400 text-xs font-bold">📅 تاريخ الانضمام وحساب المطلوب</div>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="تاريخ أول حضور">
+              <DatePicker value={joinDate} onChange={setJoinDate} max={TODAY} />
+            </Field>
+            <Field label="حصص الشهر">
+              <Inp type="number" value={sessionsPerMonth} onChange={e => setSessionsPerMonth(e.target.value)} />
+            </Field>
+            <Field label="الحصص المتبقية">
+              <Inp type="number" value={remainingSessions} onChange={e => setRemainingSessions(e.target.value)} />
+            </Field>
+          </div>
+          <div className="flex items-center justify-between bg-slate-900/50 rounded-xl px-3 py-2.5">
+            <span className="text-slate-400 text-xs">المطلوب دفعه (بعد خصم حصص ما قبل الانضمام)</span>
+            <span className="text-emerald-400 font-black text-base">{fmt(owedAmount)}</span>
+          </div>
+        </div>
+      )}
       <div className="flex gap-3">
         <Btn variant="ghost" size="lg" className="flex-1" onClick={finishStep}>إلغاء</Btn>
         <Btn variant="primary" size="lg" className="flex-1" onClick={save}>{mode === "edit" ? "💾 حفظ" : "✓ تسجيل"}</Btn>
