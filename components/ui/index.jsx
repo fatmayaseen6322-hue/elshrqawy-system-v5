@@ -258,7 +258,7 @@ export function DatePicker({ value, onChange, max }) {
         className="w-full px-3 py-2.5 text-sm flex items-center justify-between gap-2 transition-colors"
         style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", color: "var(--text-primary)" }}
       >
-        <span style={{ fontSize: "11px" }}>{d} {MONTHS_AR[m]} {y}</span>
+        <span style={{ fontSize: "13px" }}>{d} {MONTHS_AR[m]} {y}</span>
         <span style={{ color: "var(--text-muted)" }}>📅</span>
       </button>
       {open && (
@@ -286,7 +286,7 @@ export function DatePicker({ value, onChange, max }) {
           </div>
           <div className="grid grid-cols-7 mb-1">
             {DAYS_AR.map(dy => (
-              <div key={dy} className="text-center font-medium py-1" style={{ color: "var(--text-muted)", fontSize: "9px" }}>{dy.slice(0, 2)}</div>
+              <div key={dy} className="text-center font-medium py-1" style={{ color: "var(--text-muted)", fontSize: "11px" }}>{dy.slice(0, 2)}</div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-0.5">

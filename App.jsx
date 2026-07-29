@@ -100,7 +100,7 @@ function ThemePanel({ current, onChange, onClose }) {
           const group = THEMES.filter(t => t.category === cat);
           return (
             <div key={cat} className="mb-3">
-              <div className="text-xs font-semibold mb-1.5 px-1 uppercase tracking-wider" style={{ color: "var(--text-muted)", fontSize: "10px" }}>
+              <div className="text-xs font-semibold mb-1.5 px-1 uppercase tracking-wider" style={{ color: "var(--text-muted)", fontSize: "12px" }}>
                 {CATEGORY_LABELS[cat]}
               </div>
               <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
@@ -129,7 +129,7 @@ function ThemePanel({ current, onChange, onClose }) {
                         }}
                       >
                         {isActive && (
-                          <span className="absolute -top-1 -left-1 w-4 h-4 flex items-center justify-center rounded-full text-[10px] font-bold"
+                          <span className="absolute -top-1 -left-1 w-4 h-4 flex items-center justify-center rounded-full text-[12px] font-bold"
                             style={{ background: t.accent, color: "#fff" }}>✓</span>
                         )}
                       </span>
@@ -163,7 +163,7 @@ function NotifSection({ icon, title, count, expanded, onToggle, children }) {
         </span>
         <span className="flex items-center gap-2">
           {count > 0 && (
-            <span className="w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white">{count}</span>
+            <span className="w-5 h-5 flex items-center justify-center text-[12px] font-bold rounded-full bg-red-500 text-white">{count}</span>
           )}
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>{expanded ? "▲" : "▼"}</span>
         </span>
@@ -183,15 +183,15 @@ function AbsentNotifRow({ a, onToggleContacted }) {
       <Av name={a.name} size="sm" />
       <div className="flex-1 min-w-0">
         <div className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{a.name}</div>
-        <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>{a.grade} · مجموعة {a.group}</div>
+        <div className="text-[12px]" style={{ color: "var(--text-muted)" }}>{a.grade} · مجموعة {a.group}</div>
       </div>
       {a.contacted ? (
         <button onClick={() => onToggleContacted(a.recId, false)}
-          className="text-[11px] px-2 py-1 rounded-lg shrink-0"
+          className="text-[13px] px-2 py-1 rounded-lg shrink-0"
           style={{ background: "rgba(22,163,74,0.15)", color: "#4ade80" }}>✓ تم التواصل</button>
       ) : (
         <button onClick={() => onToggleContacted(a.recId, true, a.phone)}
-          className="text-[11px] px-2 py-1 rounded-lg shrink-0"
+          className="text-[13px] px-2 py-1 rounded-lg shrink-0"
           style={{ background: "rgba(22,163,74,0.2)", color: "#86efac" }}>💬 تواصل</button>
       )}
     </div>
@@ -370,7 +370,7 @@ export default function App() {
             : <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-violet-600 to-indigo-700 flex items-center justify-center text-xl shadow-lg" style={{ borderRadius: "var(--radius-md)" }}>🏫</div>
           }
           <div className="text-center leading-tight px-1">
-            <div className="font-black" style={{ fontSize: "10px", lineHeight: "1.3", color: "var(--text-primary)", whiteSpace: "pre-line" }} title={centerName}>{centerName.split(" ").slice(0, 2).join("\n")}</div>
+            <div className="font-black" style={{ fontSize: "12px", lineHeight: "1.3", color: "var(--text-primary)", whiteSpace: "pre-line" }} title={centerName}>{centerName.split(" ").slice(0, 2).join("\n")}</div>
           </div>
           <button onClick={() => setShowSettings(true)}
             className="w-8 h-8 flex items-center justify-center transition-colors"
@@ -402,10 +402,10 @@ export default function App() {
                 onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}}
               >
                 {n.key === "dashboard" && alerts.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center font-black z-10 animate-pulse" style={{ fontSize: "9px" }}>{alerts.length}</span>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center font-black z-10 animate-pulse" style={{ fontSize: "11px" }}>{alerts.length}</span>
                 )}
                 <span className="text-xl leading-none">{n.icon}</span>
-                <span className="font-medium leading-none" style={{ fontSize: "9px" }}>{n.label}</span>
+                <span className="font-medium leading-none" style={{ fontSize: "11px" }}>{n.label}</span>
               </button>
             );
           })}
@@ -512,11 +512,11 @@ export default function App() {
                   {absentToday.length === 0 ? <NotifEmpty msg="مفيش غياب اليوم 🎉" /> : (
                     <>
                       {absentNotContacted.length > 0 && (
-                        <div className="text-[11px] font-bold px-4 pt-1 pb-1" style={{ color: "#f87171" }}>لم يتم التواصل ({absentNotContacted.length})</div>
+                        <div className="text-[13px] font-bold px-4 pt-1 pb-1" style={{ color: "#f87171" }}>لم يتم التواصل ({absentNotContacted.length})</div>
                       )}
                       {absentNotContacted.map(a => <AbsentNotifRow key={a.recId} a={a} onToggleContacted={handleToggleContacted} />)}
                       {absentContacted.length > 0 && (
-                        <div className="text-[11px] font-bold px-4 pt-2 pb-1" style={{ color: "#4ade80" }}>تم التواصل ({absentContacted.length})</div>
+                        <div className="text-[13px] font-bold px-4 pt-2 pb-1" style={{ color: "#4ade80" }}>تم التواصل ({absentContacted.length})</div>
                       )}
                       {absentContacted.map(a => <AbsentNotifRow key={a.recId} a={a} onToggleContacted={handleToggleContacted} />)}
                     </>
@@ -548,10 +548,10 @@ export default function App() {
                   {examsMissing.length === 0 ? <NotifEmpty msg="كل الطلاب عملوا امتحان الأسبوع ده ✓" /> : (
                     examsMissingByGrade.map(([grade, list]) => (
                       <div key={grade} className="px-4 py-2">
-                        <div className="text-[11px] font-bold mb-1" style={{ color: "var(--text-muted)" }}>{grade} ({list.length})</div>
+                        <div className="text-[13px] font-bold mb-1" style={{ color: "var(--text-muted)" }}>{grade} ({list.length})</div>
                         <div className="flex flex-wrap gap-1">
                           {list.map(s => (
-                            <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg" style={{ background: "var(--card-bg)", color: "var(--text-primary)" }}>{s.name}</span>
+                            <span key={s.id} className="text-[12px] px-2 py-0.5 rounded-lg" style={{ background: "var(--card-bg)", color: "var(--text-primary)" }}>{s.name}</span>
                           ))}
                         </div>
                       </div>

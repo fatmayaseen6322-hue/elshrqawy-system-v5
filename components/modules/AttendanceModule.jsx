@@ -338,7 +338,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     <tr key={r.recId} className="border-t border-slate-700/30">
                       <td className="px-3 py-2">
                         <div className="text-white text-sm font-medium">{r.name}</div>
-                        <div className="text-slate-500 text-[10px]">مجموعة {r.group}</div>
+                        <div className="text-slate-500 text-[12px]">مجموعة {r.group}</div>
                       </td>
                       <td className="px-3 py-2 text-slate-300 text-xs">{r.reason}</td>
                       <td className="px-3 py-2 text-center">
@@ -376,7 +376,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-white text-sm font-bold truncate">{s.name}</span>
                           {s.status === "inactive" && (
-                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">موقوف</span>
+                            <span className="shrink-0 text-[12px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">موقوف</span>
                           )}
                         </div>
                         <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
@@ -405,7 +405,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           <div className={`rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 ${(!isOldDate || editUnlocked) ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}
             title={(!isOldDate || editUnlocked) ? "سجل حضور اليوم مفتوح — عدّل عادي من غير باسورد" : "ده يوم قديم — عرض فقط. المستر بس يقدر يعدّل بعد إدخال الباسورد"}>
             <span className="text-sm leading-none">{(!isOldDate || editUnlocked) ? "✓" : "🔒"}</span>
-            <span className={`text-[10px] font-bold leading-tight ${(!isOldDate || editUnlocked) ? "text-emerald-400" : "text-amber-400"}`}>عرض الحضور</span>
+            <span className={`text-[12px] font-bold leading-tight ${(!isOldDate || editUnlocked) ? "text-emerald-400" : "text-amber-400"}`}>عرض الحضور</span>
           </div>
         </div>
       </div>
@@ -419,7 +419,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           {[{ k: "p", l: "حاضر", v: counts.p }, { k: "a", l: "غائب", v: counts.a }, { k: "l", l: "متأخر", v: counts.l }].map(x => (
             <div key={x.k} className={`rounded-lg py-2 text-center border ${stCfg[x.k].border}/30 ${stCfg[x.k].color}/10`}>
               <div className={`text-lg font-black ${stCfg[x.k].text}`}>{x.v}</div>
-              <div className="text-slate-500 text-[10px]">{x.l}</div>
+              <div className="text-slate-500 text-[12px]">{x.l}</div>
             </div>
           ))}
         </div>
@@ -488,7 +488,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     <Av name={s.name} size="sm" />
                     <div className="shrink-0 min-w-0" style={{ maxWidth: "84px" }}>
                       <div className="text-white text-sm font-bold truncate">{s.name}</div>
-                      <div className="text-slate-500 text-[10px] truncate">{s.present || 0}/{s.total || 0} ({pct(s.present || 0, s.total || 0)}%)</div>
+                      <div className="text-slate-500 text-[12px] truncate">{s.present || 0}/{s.total || 0} ({pct(s.present || 0, s.total || 0)}%)</div>
                     </div>
                     <div className="flex gap-1 shrink-0">
                       {[
@@ -509,7 +509,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                           onChange={e => setReasonDrafts(prev => ({ ...prev, [s.id]: e.target.value }))}
                           onKeyDown={e => { if (e.key === "Enter") saveReason(s.id); }}
                           placeholder="السبب"
-                          className="flex-1 min-w-0 bg-slate-900/50 border border-slate-700/40 rounded-lg px-2 py-1.5 text-[11px] text-slate-300 focus:outline-none" />
+                          className="flex-1 min-w-0 bg-slate-900/50 border border-slate-700/40 rounded-lg px-2 py-1.5 text-[13px] text-slate-300 focus:outline-none" />
                         <button onClick={() => saveReason(s.id)}
                           className="shrink-0 w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-600/30 text-blue-300 text-xs flex items-center justify-center">
                           💾

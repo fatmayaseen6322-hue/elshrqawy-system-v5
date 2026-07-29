@@ -242,7 +242,7 @@ function MonthlyChart({ finRecords }) {
           const isLast = i === months.length - 1;
           return (
             <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div className="text-center w-full" style={{ fontSize: "9px", color: "var(--text-muted)" }}>
+              <div className="text-center w-full" style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                 {m.total > 0 ? fmtM(m.total) : ""}
               </div>
               <div className="w-full rounded-t-lg transition-all" style={{
@@ -250,7 +250,7 @@ function MonthlyChart({ finRecords }) {
                 background: isLast ? "var(--accent)" : "var(--border)",
                 opacity: isLast ? 1 : 0.6,
               }} />
-              <div style={{ fontSize: "9px", color: isLast ? "var(--accent)" : "var(--text-muted)", fontWeight: isLast ? 700 : 400 }}>
+              <div style={{ fontSize: "11px", color: isLast ? "var(--accent)" : "var(--text-muted)", fontWeight: isLast ? 700 : 400 }}>
                 {m.label}
               </div>
             </div>

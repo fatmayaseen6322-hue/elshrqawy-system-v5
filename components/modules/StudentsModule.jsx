@@ -49,7 +49,7 @@ function ScoreHistoryChart({ student }) {
           return (
             <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
               <div className="rounded-t" style={{ width: "100%", height: `${Math.max(ratio * 48, 4)}px`, background: color }} />
-              <div style={{ fontSize: "8px", color: "var(--text-muted, #64748b)" }}>{h.label || `#${i+1}`}</div>
+              <div style={{ fontSize: "10px", color: "var(--text-muted, #64748b)" }}>{h.label || `#${i+1}`}</div>
             </div>
           );
         })}
@@ -149,7 +149,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             <button onClick={() => ready && setStep("section")} disabled={!ready}
               className={`rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 transition-all ${ready ? "border-blue-500/40 bg-blue-600/20 hover:bg-blue-600/30" : "border-slate-700/40 bg-slate-900/30 opacity-40 cursor-not-allowed"}`}>
               <span className="text-sm leading-none">✓</span>
-              <span className={`text-[10px] font-bold leading-tight ${ready ? "text-blue-300" : "text-slate-500"}`}>متابعة اختيار القسم</span>
+              <span className={`text-[12px] font-bold leading-tight ${ready ? "text-blue-300" : "text-slate-500"}`}>متابعة اختيار القسم</span>
             </button>
           </div>
         </div>
@@ -198,7 +198,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
                               <span className="text-white text-xs font-bold truncate">{s.name}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-500" style={{ fontSize: "10px" }}>{s.id}</td>
+                          <td className="px-3 py-2.5 text-slate-500" style={{ fontSize: "12px" }}>{s.id}</td>
                           <td className="px-3 py-2.5">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t}`}>{lvl === null ? "—" : `${lvl}%`}</span>
                           </td>

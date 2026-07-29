@@ -742,7 +742,7 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams }) {
                     <Av name={s.name} size="sm" />
                     <div className="flex-1 min-w-0">
                       <div className="text-white text-xs font-bold truncate">{s.name}</div>
-                      <div className="text-slate-500" style={{ fontSize: "10px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
+                      <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
                     </div>
                     {n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} خطأ</span>}
                     <span className="text-slate-500 text-xs shrink-0">تسجيل ›</span>
