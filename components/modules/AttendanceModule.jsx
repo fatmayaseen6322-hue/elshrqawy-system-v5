@@ -67,6 +67,47 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [reasonDrafts, setReasonDrafts] = useState({}); // نص السبب قبل ما يتحفظ بالزرار الصغير
   const [highlightId, setHighlightId] = useState(null); // تمييز الطالب لما نيجي من بحث التوبار
 
+  // ══════════════════════════════════════════════════════════════
+  // 🚫 تقرير الغياب السريع (زرار "غياب" جنب البحث)
+  // اختيار صف → بيفتح أوتوماتيك آخر تاريخ اتسجل فيه غياب لهذا الصف
+  // (أي مجموعة)، وممكن يغيّر التاريخ يدويًا بعد كده.
+  // ══════════════════════════════════════════════════════════════
+  const [reportOpen,  setReportOpen]  = useState(false);
+  const [reportGrade, setReportGrade] = useState(grade);
+  const [reportDate,  setReportDate]  = useState(TODAY);
+
+  const lastSessionDate = (g) => {
+    const dates = (attRecords || []).filter(r => r.grade === g).map(r => r.date);
+    if (!dates.length) return TODAY;
+    return dates.reduce((max, d) => (d > max ? d : max), dates[0]);
+  };
+
+  const openReport = () => {
+    const g = reportGrade || grade;
+    setReportGrade(g);
+    setReportDate(lastSessionDate(g));
+    setReportOpen(true);
+  };
+
+  const handleReportGradeChange = (g) => {
+    setReportGrade(g);
+    setReportDate(lastSessionDate(g));
+  };
+
+  const reportRows = useMemo(() => {
+    if (!reportOpen) return [];
+    return (attRecords || [])
+      .filter(r => r.grade === reportGrade && r.date === reportDate && r.status === "a")
+      .map(r => {
+        const st = (students || []).find(s => s.id === r.studentId);
+        return { recId: r.id, name: st?.name || r.studentId, group: r.group, reason: r.reason || "—", contacted: !!r.contacted };
+      });
+  }, [reportOpen, attRecords, reportGrade, reportDate, students]);
+
+  const toggleReportContacted = (recId) => {
+    setAttRecords(prev => (prev || []).map(r => r.id === recId ? { ...r, contacted: !r.contacted } : r));
+  };
+
   const safeAttRecords = attRecords || [];
   const grpList     = GROUPS_MAP[grade] || ["A"];
   const grpStudents = useMemo(
@@ -272,33 +313,84 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         />
       )}
 
-      {/* بحث عن طالب في كل المجاميع/الصفوف */}
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 دوّر على طالب بالاسم (في كل المجاميع)..."
-          className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
-        {searchResults && (
-          searchResults.length === 0
-            ? <div className="text-center text-slate-500 text-xs py-3">مفيش طالب بهذا الاسم</div>
-            : <div className="max-h-56 overflow-y-auto space-y-1">
-                {searchResults.map(s => (
-                  <button key={s.id} onClick={() => goToStudent(s)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-700/50 text-right">
-                    <Av name={s.name} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-white text-sm font-bold truncate">{s.name}</span>
-                        {s.status === "inactive" && (
-                          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">موقوف</span>
-                        )}
+      {reportOpen && (
+        <Modal title="🚫 غياب حصة" onClose={() => setReportOpen(false)} maxW="max-w-lg">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Sel value={reportGrade} onChange={e => handleReportGradeChange(e.target.value)}>
+                {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+              </Sel>
+              <DatePicker value={reportDate} onChange={setReportDate} max={TODAY} />
+            </div>
+            <div className="border border-slate-700/40 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-900/60 text-slate-400 text-xs">
+                    <th className="text-right px-3 py-2">الطالب</th>
+                    <th className="text-right px-3 py-2">السبب</th>
+                    <th className="text-center px-3 py-2 w-16">تواصل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportRows.length === 0 ? (
+                    <tr><td colSpan={3} className="text-center text-slate-500 text-xs py-4">مفيش غياب مسجّل في هذا التاريخ لهذا الصف</td></tr>
+                  ) : reportRows.map(r => (
+                    <tr key={r.recId} className="border-t border-slate-700/30">
+                      <td className="px-3 py-2">
+                        <div className="text-white text-sm font-medium">{r.name}</div>
+                        <div className="text-slate-500 text-[10px]">مجموعة {r.group}</div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-300 text-xs">{r.reason}</td>
+                      <td className="px-3 py-2 text-center">
+                        <button onClick={() => toggleReportContacted(r.recId)}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold ${r.contacted ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}
+                          title={r.contacted ? "تم التواصل — اضغط للتراجع" : "لم يتم التواصل — اضغط للتأكيد"}>
+                          {r.contacted ? "✓" : "✗"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* بحث عن طالب في كل المجاميع/الصفوف + زرار غياب سريع في نفس الخط */}
+      <div className="flex gap-2 items-stretch">
+        <div className="flex-1 bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="🔍 دوّر على طالب بالاسم (في كل المجاميع)..."
+            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
+          {searchResults && (
+            searchResults.length === 0
+              ? <div className="text-center text-slate-500 text-xs py-3">مفيش طالب بهذا الاسم</div>
+              : <div className="max-h-56 overflow-y-auto space-y-1">
+                  {searchResults.map(s => (
+                    <button key={s.id} onClick={() => goToStudent(s)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-700/50 text-right">
+                      <Av name={s.name} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-white text-sm font-bold truncate">{s.name}</span>
+                          {s.status === "inactive" && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">موقوف</span>
+                          )}
+                        </div>
+                        <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
                       </div>
-                      <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-        )}
+                    </button>
+                  ))}
+                </div>
+          )}
+        </div>
+        <button onClick={openReport}
+          className="shrink-0 w-24 bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-slate-700/50 transition-colors">
+          <span className="text-xl leading-none">🚫</span>
+          <span className="text-xs font-bold text-red-400">غياب</span>
+        </button>
       </div>
 
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
