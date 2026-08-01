@@ -14,6 +14,7 @@
     "tauri:build": "npx tauri build"
   },
   "dependencies": {
+    "docx": "^9.5.1",
     "firebase": "^10.14.1",
     "mammoth": "^1.12.0",
     "pdfjs-dist": "^4.10.38",

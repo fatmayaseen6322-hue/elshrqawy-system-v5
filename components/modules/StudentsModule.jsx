@@ -3,6 +3,7 @@ import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
 import { pct, fmt, genSID, genStudentId, waLink } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
+import { exportStudentsWord } from "../../utils/exportStudentsWord";
 
 // تطبيع الألف بأشكال الهمزة المختلفة عشان البحث ما يفرقش بين
 // "احمد" و"أحمد" و"إحمد" و"آحمد" — نفس آلية البحث في صفحة الحضور
@@ -70,6 +71,20 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
   const [showImport, setShowImport] = useState(false);
   const [search, setSearch] = useState("");
   const [openErrKey, setOpenErrKey] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  const doExportWord = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const ok = await exportStudentsWord(students || []);
+      setToast({ msg: ok ? "✓ تم تجهيز ملف Word للتحميل" : "مفيش طلاب لتصديرهم", type: ok ? "success" : "error" });
+    } catch {
+      setToast({ msg: "حصل خطأ أثناء إنشاء الملف", type: "error" });
+    } finally {
+      setExporting(false);
+    }
+  }, [students, exporting]);
 
   // بحث عن طالب بالاسم في كل المجاميع والصفوف — بيوديك على طول لملفه
   const searchResults = useMemo(() => {
@@ -107,10 +122,14 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
     const ready = grade && group && date;
     return (
       <div className="space-y-5">
-        <div className="text-center space-y-1">
+        <div className="text-center space-y-1 relative">
           <div className="text-2xl">📋</div>
           <div className="text-white font-black text-base">اختر الصف والمجموعة والتاريخ</div>
           <div className="text-slate-500 text-xs">يجب اختيار الثلاثة لتفعيل الأقسام</div>
+          <button onClick={doExportWord} disabled={exporting}
+            className="absolute left-0 top-0 flex items-center gap-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-50">
+            {exporting ? "⏳ جاري التجهيز..." : "📄 تصدير كشف Word"}
+          </button>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
           <input
@@ -168,6 +187,18 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
           <div className="flex justify-between items-center mb-3">
             <span className="text-slate-400 text-xs font-medium">طلاب {grade} — مجموعة {group} ({grpStudents.length})</span>
             <div className="flex gap-2">
+              <Btn size="sm" variant="ghost" onClick={async () => {
+                if (exporting) return;
+                setExporting(true);
+                try {
+                  const ok = await exportStudentsWord(grpStudents);
+                  setToast({ msg: ok ? "✓ تم تجهيز ملف Word للتحميل" : "مفيش طلاب لتصديرهم", type: ok ? "success" : "error" });
+                } catch {
+                  setToast({ msg: "حصل خطأ أثناء إنشاء الملف", type: "error" });
+                } finally {
+                  setExporting(false);
+                }
+              }}>📄 تصدير Word</Btn>
               <Btn size="sm" variant="ghost" onClick={() => setShowImport(true)}>📥 استيراد من ملف</Btn>
               <Btn size="sm" variant="ghost" onClick={() => setStep("add")}>+ طالب</Btn>
             </div>
