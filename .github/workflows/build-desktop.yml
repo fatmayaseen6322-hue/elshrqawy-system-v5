@@ -1,0 +1,34 @@
+name: بناء برنامج سطح المكتب (Windows)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: desktop-v__VERSION__
+          releaseName: "مركز الشرقاوي - نسخة سطح المكتب v__VERSION__"
+          releaseBody: "تحميل تلقائي لأحدث نسخة من برنامج مركز الشرقاوي لسطح المكتب (بدون إنترنت)."
+          releaseDraft: false
+          prerelease: false
