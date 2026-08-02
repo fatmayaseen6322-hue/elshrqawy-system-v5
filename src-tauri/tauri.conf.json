@@ -8,14 +8,15 @@
   },
   "package": {
     "productName": "ElshrqawySystem",
-    "version": "9.0.0"
+    "version": "9.1.0"
   },
   "tauri": {
     "allowlist": {
       "all": false,
       "shell": { "open": true },
       "dialog": { "all": true },
-      "window": { "all": true }
+      "window": { "all": true },
+      "process": { "relaunch": true }
     },
     "bundle": {
       "active": true,
@@ -30,6 +31,14 @@
     },
     "security": {
       "csp": null
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/fatmayaseen6322-hue/elshrqawy-system-v5/releases/latest/download/latest.json"
+      ],
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIxREY4RDExM0JCRDU5RDYKUldUV1diMDdFWTNmSVh2RFlkckxrK2lZMFpseUVNSVJWOWo1Z3h2ZUo2bnZtWVk4di9BTCticXcK"
     },
     "windows": [
       {
