@@ -14,8 +14,8 @@ const ROLES = [
 ];
 
 export const ROLE_PERMS = {
-  admin:  ["attendance","students","addStudent","finance","exams","dashboard","whatsapp","block","settings","parentFollowup"],
-  assist: ["attendance","finance","exams","dashboard","parentFollowup","addStudent"],
+  admin:  ["attendance","students","addStudent","finance","exams","dashboard","whatsapp","block","parentFollowup"],
+  assist: ["attendance","finance","exams","dashboard","parentFollowup","addStudent","settings"],
 };
 
 // صلاحيات عرض مقيّدة داخل صفحة المصاريف لدور Assist:
