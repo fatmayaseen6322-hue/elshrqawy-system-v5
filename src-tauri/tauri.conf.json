@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "ElshrqawySystem",
-    "version": "9.1.1"
+    "version": "9.1.2"
   },
   "tauri": {
     "allowlist": {
