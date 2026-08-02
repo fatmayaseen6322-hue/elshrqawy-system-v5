@@ -4,6 +4,86 @@ import { TODAY, GRADES_LIST } from "../../constants";
 import { INIT_STUDENTS } from "../../data";
 import { Field, Inp, Sel, Btn, Toggle, Toast } from "../ui";
 import { PrinterResetButton } from "../ui/PrinterPickerModal";
+import { isDesktopApp, checkForUpdate, installUpdateAndRestart } from "../../utils/updater";
+
+// ══════════════════════════════════════════════════════════════
+// زر التحديث التلقائي — نسخة سطح المكتب فقط (Tauri)
+// ══════════════════════════════════════════════════════════════
+function UpdateChecker() {
+  const [state, setState]   = useState("idle"); // idle | checking | none | available | downloading | restarting | error
+  const [version, setVersion] = useState(null);
+  const [err, setErr] = useState("");
+
+  if (!isDesktopApp()) {
+    return (
+      <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl px-4 py-3 text-slate-500 text-xs text-center">
+        زرار التحديث التلقائي متاح بس في نسخة البرنامج على الجهاز (Desktop) — مش في نسخة المتصفح.
+      </div>
+    );
+  }
+
+  const doCheck = async () => {
+    setState("checking"); setErr("");
+    const res = await checkForUpdate();
+    if (res.error) { setState("error"); setErr(res.error); return; }
+    if (res.available) { setVersion(res.version); setState("available"); }
+    else setState("none");
+  };
+
+  const doInstall = async () => {
+    setState("downloading"); setErr("");
+    try {
+      await installUpdateAndRestart(s => setState(s));
+      // البرنامج هيقفل ويفتح تاني تلقائيًا بعد الـ relaunch
+    } catch (e) {
+      setState("error"); setErr(e?.message || String(e));
+    }
+  };
+
+  return (
+    <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 space-y-3">
+      <div className="text-blue-400 font-bold text-sm mb-1">🔄 تحديث البرنامج</div>
+      <div className="text-slate-400 text-xs">
+        بيتحقق من آخر نسخة رفعناها على GitHub، ولو فيه تحديث بينزّله ويشغّل البرنامج بالنسخة الجديدة تلقائيًا. محتاج اتصال إنترنت وقت التحقق فقط.
+      </div>
+
+      {state === "idle" && (
+        <Btn variant="primary" size="lg" className="w-full" onClick={doCheck}>🔍 تحقق من وجود تحديث</Btn>
+      )}
+      {state === "checking" && (
+        <Btn variant="primary" size="lg" className="w-full" disabled>⏳ جاري التحقق...</Btn>
+      )}
+      {state === "none" && (
+        <>
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2.5 text-emerald-400 text-xs text-center">✓ عندك آخر نسخة بالفعل</div>
+          <Btn variant="ghost" size="lg" className="w-full" onClick={doCheck}>🔍 تحقق تاني</Btn>
+        </>
+      )}
+      {state === "available" && (
+        <>
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5 text-amber-400 text-xs text-center">
+            ⬆️ فيه نسخة جديدة {version ? `(v${version})` : ""} متاحة
+          </div>
+          <Btn variant="success" size="lg" className="w-full" onClick={doInstall}>⬇️ نزّل وثبّت التحديث الآن</Btn>
+        </>
+      )}
+      {state === "downloading" && (
+        <Btn variant="success" size="lg" className="w-full" disabled>⏳ جاري تنزيل التحديث...</Btn>
+      )}
+      {state === "restarting" && (
+        <Btn variant="success" size="lg" className="w-full" disabled>🔁 جاري إعادة تشغيل البرنامج...</Btn>
+      )}
+      {state === "error" && (
+        <>
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-xs text-center">
+            ⚠️ حصل خطأ أثناء التحديث — تأكد من الاتصال بالإنترنت وحاول تاني
+          </div>
+          <Btn variant="ghost" size="lg" className="w-full" onClick={doCheck}>🔍 حاول تاني</Btn>
+        </>
+      )}
+    </div>
+  );
+}
 
 // ══════════════════════════════════════════════════════════════
 // MODULE 7: SETTINGS
@@ -229,7 +309,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
           {view === "whatsapp" && <><Back /><div className="space-y-4"><div className="space-y-2">{waList.map(w => <div key={w.id} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center gap-3"><span className="text-xl">💬</span><div className="flex-1 min-w-0"><div className="text-white text-sm font-medium">{w.number}</div><div className="text-slate-500 text-xs">{w.label}</div></div><div className="flex gap-2"><button onClick={() => { const url = waLink(w.number); if (url) window.open(url, "_blank"); }} className="text-green-400 text-xs px-2 py-1 rounded-lg bg-green-700/20">اختبار</button><button onClick={() => delWa(w.id)} className="text-red-400 text-xs px-2 py-1 rounded-lg bg-red-700/20">حذف</button></div></div>)}</div><div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3"><div className="text-xs text-blue-400 font-bold">إضافة رقم</div><Field label="الرقم"><Inp value={newNum} onChange={e => setNewNum(e.target.value)} placeholder="01xxxxxxxxx" /></Field><div className="grid grid-cols-2 gap-2"><Field label="النوع"><Sel value={newType} onChange={e => setNewType(e.target.value)}><option value="admin">إدارة</option><option value="teacher">مدرس</option><option value="support">دعم</option></Sel></Field><Field label="اسم"><Inp value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="أ. محمود" /></Field></div><Btn variant="success" className="w-full" onClick={addWa}>+ إضافة</Btn></div></div></>}
           {view === "notifs" && <><Back /><div className="space-y-3">{[{k:"autoNotifs",l:"إشعارات تلقائية"},{k:"absenceAlert",l:"تنبيه الغياب"},{k:"feesAlert",l:"تنبيه المصاريف"},{k:"autoSave",l:"حفظ تلقائي"},{k:"scoreAlert",l:"تنبيه المستوى"}].map(s => <div key={s.k} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3.5 flex items-center justify-between"><span className="text-slate-200 text-sm">{s.l}</span><Toggle on={notifs[s.k] ?? true} onChange={v => { const n = { ...notifs, [s.k]: v }; setNotifs(n); save("notifs", n, `${s.l} ${v ? "✓ مفعّل" : "معطّل"}`); }} /></div>)}</div></>}
           {view === "backup" && <><Back /><div className="space-y-4"><div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4"><div className="text-blue-400 font-bold text-sm mb-1">💾 النسخ الاحتياطي</div><div className="text-slate-400 text-xs">احتفظ بنسخة من كل البيانات</div></div><Btn variant="primary" size="lg" className="w-full" onClick={exportData}>📤 تصدير البيانات (JSON)</Btn><div className="pt-1"><PrinterResetButton /></div><input ref={importRef} type="file" accept=".json" className="hidden" onChange={importData} /><Btn variant="ghost" size="lg" className="w-full" onClick={() => importRef.current?.click()}>📥 استيراد بيانات</Btn>{backupToCloud && <div className="border-t border-slate-800 pt-4 space-y-3"><div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-4"><div className="text-violet-400 font-bold text-sm mb-1">☁️ نسخة سحابية (Firebase)</div><div className="text-slate-400 text-xs">التخزين الأساسي محلي دايمًا. النسخة السحابية بقت تلقائية يوميًا (بترفع بس الجديد من المصاريف/الغياب/الدرجات)، والزرار ده لو حابة تجبري رفع أي جديد فورًا من غير ما تستني بداية يوم جديد</div></div><Btn variant="primary" size="lg" className="w-full" disabled={cloudBackupState?.status === "uploading"} onClick={backupToCloud}>{cloudBackupState?.status === "uploading" ? "⏳ جاري الرفع..." : "☁️ رفع نسخة على السحابة"}</Btn><Btn variant="ghost" size="lg" className="w-full" disabled={cloudBackupState?.status === "downloading"} onClick={() => setConfirmModal({ msg: "استرجاع النسخة السحابية هيستبدل كل البيانات الحالية على الجهاز ده. متأكد؟", onConfirm: () => { restoreFromCloud(); setConfirmModal(null); } })}>{cloudBackupState?.status === "downloading" ? "⏳ جاري الاسترجاع..." : "📥 استرجاع من السحابة"}</Btn>{cloudBackupState?.message && <div className={`text-xs text-center rounded-xl px-3 py-2 ${cloudBackupState.status === "error" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>{cloudBackupState.message}</div>}</div>}<div className="border-t border-slate-800 pt-4"><div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 space-y-3"><div className="text-red-400 font-bold text-sm">⚠️ منطقة الخطر</div><Btn variant="danger" className="w-full" onClick={() => setConfirmModal({ msg: "هل تريد إعادة تعيين بيانات الطلاب؟ لا يمكن التراجع.", onConfirm: () => { setStudents(INIT_STUDENTS); setConfirmModal(null); setToast({ msg: "✓ تم إعادة التعيين", type: "success" }); } })}>🗑 إعادة تعيين</Btn></div></div></div></>}
-          {view === "about" && <><Back /><div className="space-y-4"><div className="text-center py-6"><div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-600 via-violet-600 to-indigo-700 flex items-center justify-center mx-auto mb-4 text-4xl">🏫</div><div className="text-white font-black text-xl">Elshrqawy System</div><div className="text-slate-400 text-sm mt-1">نظام إدارة المراكز التعليمية</div><div className="text-blue-400 font-bold mt-2">الإصدار 9.0</div></div>{[{l:"الطلاب",v:`${students.length} طالب`},{l:"الوحدات",v:"7 وحدات + asal.ai"},{l:"آخر تحديث",v:TODAY}].map(x => <div key={x.l} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex justify-between"><span className="text-slate-400 text-sm">{x.l}</span><span className="text-white font-bold text-sm">{x.v}</span></div>)}</div></>}
+          {view === "about" && <><Back /><div className="space-y-4"><div className="text-center py-6"><div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-600 via-violet-600 to-indigo-700 flex items-center justify-center mx-auto mb-4 text-4xl">🏫</div><div className="text-white font-black text-xl">Elshrqawy System</div><div className="text-slate-400 text-sm mt-1">نظام إدارة المراكز التعليمية</div><div className="text-blue-400 font-bold mt-2">الإصدار 9.0</div></div>{[{l:"الطلاب",v:`${students.length} طالب`},{l:"الوحدات",v:"7 وحدات + asal.ai"},{l:"آخر تحديث",v:TODAY}].map(x => <div key={x.l} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex justify-between"><span className="text-slate-400 text-sm">{x.l}</span><span className="text-white font-bold text-sm">{x.v}</span></div>)}<UpdateChecker /></div></>}
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
         {confirmModal && <ConfirmModal msg={confirmModal.msg} onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(null)} />}
