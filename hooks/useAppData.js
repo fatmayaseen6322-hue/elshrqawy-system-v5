@@ -27,7 +27,7 @@ const KEYS = {
   cloudSync:   "app_cloud_sync_state", // #Cloud (تراكمي)
 };
 
-function loadStudents()    { return lsGet(KEYS.students, INIT_STUDENTS); }
+function loadStudents()    { return lsGet(KEYS.students, []); }
 function loadSettings()    { return { ...INIT_SETTINGS, ...(lsGet(KEYS.settings, {}) || {}) }; }
 function loadFinRecords()  { return lsGet(KEYS.finRecords, INIT_FIN_RECORDS); }
 function loadAttRecords()  { return lsGet(KEYS.attRecords, []); }
