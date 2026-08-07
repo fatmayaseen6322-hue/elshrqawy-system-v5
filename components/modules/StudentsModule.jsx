@@ -69,6 +69,8 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
   const [confirmDel, setConfirmDel] = useState(null);
   const [blockReason, setBlockReason] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deleteAllInput, setDeleteAllInput] = useState("");
   const [search, setSearch] = useState("");
   const [openErrKey, setOpenErrKey] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -130,6 +132,10 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             className="absolute left-0 top-0 flex items-center gap-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-50">
             {exporting ? "⏳ جاري التجهيز..." : "📄 تصدير كشف Word"}
           </button>
+          <button onClick={() => setConfirmDeleteAll(true)} disabled={!(students || []).length}
+            className="absolute right-0 top-0 flex items-center gap-1.5 bg-red-600/20 border border-red-500/30 text-red-300 text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-40">
+            🗑️ حذف كل الطلاب
+          </button>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
           <input
@@ -172,6 +178,39 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             </button>
           </div>
         </div>
+        {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+        {confirmDeleteAll && (
+          <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-red-700/50 rounded-2xl p-5 w-full max-w-xs space-y-4">
+              <div className="text-red-400 text-3xl text-center">⚠️</div>
+              <div className="text-white text-sm text-center font-bold">حذف كل الطلاب نهائيًا؟</div>
+              <div className="text-slate-400 text-xs text-center">
+                هيتم حذف <b className="text-white">{(students || []).length}</b> طالب نهائيًا من النظام (كل الصفوف والمجاميع)، والخطوة دي مش هترجع.
+                <br />اكتبي كلمة <b className="text-red-300">حذف</b> تحت للتأكيد.
+              </div>
+              <input value={deleteAllInput} onChange={e => setDeleteAllInput(e.target.value)}
+                placeholder='اكتبي "حذف"'
+                className="w-full bg-slate-800/80 border border-red-700/40 rounded-xl px-3 py-2.5 text-white text-sm text-center focus:outline-none" />
+              <div className="flex gap-2">
+                <button onClick={() => { setConfirmDeleteAll(false); setDeleteAllInput(""); }}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm">إلغاء</button>
+                <button
+                  disabled={deleteAllInput.trim() !== "حذف"}
+                  onClick={() => {
+                    const count = (students || []).length;
+                    setStudents([]);
+                    addActivity?.("حذف كل الطلاب", `تم حذف ${count} طالب نهائيًا دفعة واحدة`);
+                    setConfirmDeleteAll(false);
+                    setDeleteAllInput("");
+                    setToast({ msg: `✓ تم حذف ${count} طالب نهائيًا`, type: "success" });
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-40">
+                  ✗ حذف نهائي
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

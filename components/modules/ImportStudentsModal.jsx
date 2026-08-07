@@ -20,6 +20,52 @@ const GROUP_KEYS = ["المجموعة", "الفصل", "group", "section"];
 
 const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s/g, "");
 
+// ══════════════════════════════════════════════════════════════
+// دعم استيراد من ملف Word (.docx)
+// ══════════════════════════════════════════════════════════════
+// لو الملف فيه جدول (table) بنقرأ صفوفه زي ما هي (نفس منطق Excel).
+// لو مفيش جدول، بنقرأ النص سطر سطر ونحاول نفصل الاسم عن رقم الهاتف
+// تلقائيًا (تاب / فاصلة / أو اكتشاف رقم هاتف داخل السطر).
+function splitNameLine(line) {
+  const clean = line.trim();
+  if (!clean) return [];
+  if (clean.includes("\t")) {
+    return clean.split("\t").map(s => s.trim()).filter(Boolean);
+  }
+  // اكتشاف رقم هاتف (مصري أو عام) داخل السطر
+  const phoneMatch = clean.match(/(01[0-2,5][\s-]?\d{4}[\s-]?\d{4}|0\d{9,10}|\d{10,11})/);
+  if (phoneMatch) {
+    const phone = phoneMatch[0].replace(/[\s-]/g, "");
+    const name = clean.replace(phoneMatch[0], "").replace(/[,،\-–|]+/g, " ").trim();
+    return [name, phone];
+  }
+  if (clean.includes(",") || clean.includes("،")) {
+    return clean.split(/[,،]/).map(s => s.trim()).filter(Boolean);
+  }
+  return [clean];
+}
+
+async function parseDocxToGrid(file) {
+  const mammoth = await import("mammoth");
+  const buf = await file.arrayBuffer();
+  const { value: html } = await mammoth.convertToHtml({ arrayBuffer: buf });
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const tables = doc.querySelectorAll("table");
+  if (tables.length > 0) {
+    const grid = [];
+    tables.forEach(table => {
+      table.querySelectorAll("tr").forEach(tr => {
+        const cells = Array.from(tr.querySelectorAll("td,th")).map(td => td.textContent.trim());
+        if (cells.some(c => c)) grid.push(cells);
+      });
+    });
+    if (grid.length) return grid;
+  }
+  // مفيش جدول (أو الجدول فاضي) — نرجع للنص العادي سطر سطر
+  const { value: text } = await mammoth.extractRawText({ arrayBuffer: buf });
+  return text.split("\n").map(splitNameLine).filter(r => r.length);
+}
+
 function detectColumns(headerRow) {
   const map = {}; // fieldKey -> index
   headerRow.forEach((raw, idx) => {
@@ -64,18 +110,31 @@ export default function ImportStudentsModal({ onImport, onClose }) {
     setFileName(file.name);
     setBusy(true);
     try {
-      const XLSX = await import("xlsx");
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      const isDocx = /\.docx$/i.test(file.name);
+      let grid;
+      if (isDocx) {
+        grid = await parseDocxToGrid(file);
+      } else {
+        const XLSX = await import("xlsx");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      }
       if (!grid.length) { setToast({ msg: "الملف فاضي", type: "error" }); setBusy(false); return; }
 
       const headerRow = grid[0];
-      const cols = detectColumns(headerRow);
-      const dataRows = grid.slice(1).filter(r => r.some(c => String(c || "").trim() !== ""));
+      let cols = detectColumns(headerRow);
+      let dataRows;
 
-      if (cols.name === undefined) {
+      if (cols.name !== undefined) {
+        // أول صف عناوين أعمدة معروفة — نتعامل معاه كهيدر ونتجاهله من البيانات
+        dataRows = grid.slice(1).filter(r => r.some(c => String(c || "").trim() !== ""));
+      } else if (isDocx) {
+        // ملف Word من غير هيدر واضح — كل سطر/صف طالب، العمود الأول اسم والتاني هاتف
+        cols = { name: 0, phone: 1 };
+        dataRows = grid.filter(r => r.some(c => String(c || "").trim() !== ""));
+      } else {
         setToast({ msg: "لم أستطع إيجاد عمود الاسم — تأكد إن أول صف في الملف عناوين أعمدة", type: "error" });
         setBusy(false);
         return;
@@ -99,7 +158,7 @@ export default function ImportStudentsModal({ onImport, onClose }) {
 
       setRows(parsed);
     } catch (err) {
-      setToast({ msg: "تعذّرت قراءة الملف — تأكد إنه Excel أو CSV صحيح", type: "error" });
+      setToast({ msg: "تعذّرت قراءة الملف — تأكد إنه Excel أو CSV أو Word صحيح", type: "error" });
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -162,16 +221,18 @@ export default function ImportStudentsModal({ onImport, onClose }) {
             <>
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-xs text-blue-300 space-y-1">
                 <div className="font-bold">📋 الملف المطلوب</div>
-                <div>ملف Excel (.xlsx) أو CSV، أول صف فيه عناوين الأعمدة، وبعدها صف لكل طالب.</div>
-                <div>الأعمدة المتوقعة: <b>الاسم</b> (إجباري)، الهاتف، الصف، المجموعة — بأي ترتيب.</div>
+                <div>ملف Excel (.xlsx)، CSV، أو Word (.docx).</div>
+                <div>Excel/CSV: أول صف فيه عناوين الأعمدة، وبعدها صف لكل طالب.</div>
+                <div>Word: جدول (اسم / هاتف) أو حتى سطر لكل طالب زي "أحمد محمد 01012345678".</div>
+                <div>الاسم إجباري — الهاتف، الصف، المجموعة اختياريين وتقدري تعدّليهم في المعاينة قبل الحفظ.</div>
               </div>
               <div onClick={() => fileRef.current?.click()}
                 className="border-2 border-dashed border-slate-700/60 hover:border-blue-500/50 rounded-2xl p-10 text-center cursor-pointer transition-colors">
                 <div className="text-5xl mb-3">📁</div>
-                <div className="text-slate-300 font-medium">{busy ? "⏳ جاري القراءة..." : "اضغط لاختيار الملف"}</div>
+                <div className="text-slate-300 font-medium">{busy ? "⏳ جاري القراءة..." : "اضغط لاختيار الملف (Excel / CSV / Word)"}</div>
                 {fileName && <div className="text-slate-600 text-xs mt-1">{fileName}</div>}
               </div>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} disabled={busy} />
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.docx" className="hidden" onChange={handleFile} disabled={busy} />
             </>
           )}
 
