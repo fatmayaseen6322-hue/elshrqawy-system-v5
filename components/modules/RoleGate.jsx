@@ -31,10 +31,13 @@ export default function RoleGate({ settings, onEnter }) {
   const [err,     setErr]     = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ⚠️ الباسورد معطّل مؤقتًا بناءً على طلب صريح — دخول مباشر باختيار
-  // الدور فقط. لازم تتفعّل تاني قبل الاستخدام الفعلي مع بيانات حقيقية.
   const handleEnter = async () => {
     if (!role) { setErr("اختر الدور أولاً"); return; }
+    if (!pw) { setErr("اكتب كلمة المرور"); return; }
+    setLoading(true);
+    const ok = await checkPwd(pw, settings?.[role.pwdKey]);
+    setLoading(false);
+    if (!ok) { setErr("كلمة المرور غلط"); return; }
     onEnter({ role: role.key, label: role.label, icon: role.icon });
   };
 
@@ -69,7 +72,19 @@ export default function RoleGate({ settings, onEnter }) {
           ))}
         </div>
 
-        {/* الباسورد معطّل مؤقتًا — الدخول باختيار الدور فقط */}
+        {/* كلمة المرور */}
+        {role && (
+          <input
+            type="password"
+            value={pw}
+            autoFocus
+            onChange={e => { setPw(e.target.value); setErr(""); }}
+            onKeyDown={e => { if (e.key === "Enter") handleEnter(); }}
+            placeholder="كلمة المرور"
+            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-2xl px-4 py-3.5 text-white text-sm text-center focus:outline-none focus:border-blue-500/60"
+          />
+        )}
+
         {err && <p className="text-red-400 text-xs text-center">{err}</p>}
 
         <button onClick={handleEnter} disabled={loading || !role}

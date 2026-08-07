@@ -440,7 +440,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                   const rec = existingMap[s.id];
                   return (
                     <tr key={s.id} className={`${i % 2 === 0 ? "bg-slate-900/20" : ""} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
-                      <td className="px-3 py-2.5 text-white text-sm font-bold truncate max-w-[140px]">{s.name}</td>
+                      <td className="px-3 py-2.5 text-white text-sm font-bold break-words">{s.name}</td>
                       <td className="px-3 py-2.5 text-center">
                         {rec?.status
                           ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[rec.status].color}/20 border ${stCfg[rec.status].border}/40 ${stCfg[rec.status].text}`}>
@@ -486,8 +486,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                   <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl ${st === "p" ? "bg-emerald-500/5" : st === "a" ? "bg-red-500/5" : st === "l" ? "bg-amber-500/5" : "bg-slate-800/60"}`}>
                     <div className="w-6 h-6 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">{i + 1}</div>
                     <Av name={s.name} size="sm" />
-                    <div className="shrink-0 min-w-0" style={{ maxWidth: "84px" }}>
-                      <div className="text-white text-sm font-bold truncate">{s.name}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-bold break-words">{s.name}</div>
                       <div className="text-slate-500 text-[12px] truncate">{s.present || 0}/{s.total || 0} ({pct(s.present || 0, s.total || 0)}%)</div>
                     </div>
                     <div className="flex gap-1 shrink-0">
