@@ -51,7 +51,13 @@ function splitNameLine(line) {
 function matchGradeHeading(text) {
   const t = norm(text);
   if (!t) return null;
-  return GRADES_LIST.find(g => norm(g) === t) || null;
+  // تطابق تام أولاً
+  const exact = GRADES_LIST.find(g => norm(g) === t);
+  if (exact) return exact;
+  // تطابق جزئي (لو العنوان مكتوب بصياغة مختلفة شوية زي "الصف الأول الإعدادي")
+  // — بشرط إن السطر ميكونش طويل جدًا (عشان ميلخبطش مع فقرات عادية)
+  if (t.length > 40) return null;
+  return GRADES_LIST.find(g => t.includes(norm(g)) || norm(g).includes(t)) || null;
 }
 
 async function parseDocxToGrid(file) {
