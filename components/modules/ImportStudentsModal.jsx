@@ -45,25 +45,64 @@ function splitNameLine(line) {
   return [clean];
 }
 
+// بيدوّر لو النص ده مطابق (تمامًا تقريبًا) لاسم صف من GRADES_LIST —
+// بيُستخدم لاكتشاف عناوين الصفوف اللي بتيجي كفقرة منفصلة فوق كل جدول
+// أو كسطر منفصل قبل مجموعة أسماء الطلاب.
+function matchGradeHeading(text) {
+  const t = norm(text);
+  if (!t) return null;
+  return GRADES_LIST.find(g => norm(g) === t) || null;
+}
+
 async function parseDocxToGrid(file) {
   const mammoth = await import("mammoth");
   const buf = await file.arrayBuffer();
   const { value: html } = await mammoth.convertToHtml({ arrayBuffer: buf });
   const doc = new DOMParser().parseFromString(html, "text/html");
-  const tables = doc.querySelectorAll("table");
-  if (tables.length > 0) {
-    const grid = [];
-    tables.forEach(table => {
-      table.querySelectorAll("tr").forEach(tr => {
+
+  // نمشي على عناصر المستند بالترتيب (فقرات وجداول) — لما نلاقي فقرة
+  // عنوانها اسم صف (زي "أولى إعدادي") نسجّله كـ"الصف الحالي"، وكل
+  // جدول جاي بعده بناخد صفوفه ونربطها بالصف ده لحد ما نلاقي عنوان جديد.
+  const grid = [];
+  let currentGrade = "";
+  let sawAnyTable = false;
+  Array.from(doc.body.children).forEach(el => {
+    if (el.tagName === "TABLE") {
+      sawAnyTable = true;
+      let isFirstRow = true;
+      el.querySelectorAll("tr").forEach(tr => {
         const cells = Array.from(tr.querySelectorAll("td,th")).map(td => td.textContent.trim());
-        if (cells.some(c => c)) grid.push(cells);
+        if (!cells.some(c => c)) return;
+        // كل جدول (لكل صف) بييجي بصف عناوين خاص بيه ("اسم الطالب"/"رقم الهاتف") —
+        // نتجاهله عشان ميتحسبش كطالب.
+        if (isFirstRow) {
+          isFirstRow = false;
+          if (detectColumns(cells).name !== undefined) return;
+        }
+        grid.push(currentGrade ? [...cells, currentGrade] : cells);
       });
-    });
-    if (grid.length) return grid;
-  }
-  // مفيش جدول (أو الجدول فاضي) — نرجع للنص العادي سطر سطر
+    } else {
+      const heading = matchGradeHeading(el.textContent);
+      if (heading) currentGrade = heading;
+    }
+  });
+  if (sawAnyTable && grid.length) return grid;
+
+  // مفيش جدول (أو الجدول فاضي) — نرجع للنص العادي سطر سطر، ونطبّق
+  // نفس منطق اكتشاف عنوان الصف على الأسطر بدل الفقرات.
   const { value: text } = await mammoth.extractRawText({ arrayBuffer: buf });
-  return text.split("\n").map(splitNameLine).filter(r => r.length);
+  const rows = [];
+  currentGrade = "";
+  text.split("\n").forEach(line => {
+    const heading = matchGradeHeading(line);
+    if (heading) { currentGrade = heading; return; }
+    const parts = splitNameLine(line);
+    const name = (parts[0] || "").trim();
+    if (!name) return;
+    const phone = parts[1] || "";
+    rows.push(currentGrade ? [name, phone, currentGrade] : [name, phone]);
+  });
+  return rows;
 }
 
 function detectColumns(headerRow) {
@@ -131,8 +170,11 @@ export default function ImportStudentsModal({ onImport, onClose }) {
         // أول صف عناوين أعمدة معروفة — نتعامل معاه كهيدر ونتجاهله من البيانات
         dataRows = grid.slice(1).filter(r => r.some(c => String(c || "").trim() !== ""));
       } else if (isDocx) {
-        // ملف Word من غير هيدر واضح — كل سطر/صف طالب، العمود الأول اسم والتاني هاتف
-        cols = { name: 0, phone: 1 };
+        // ملف Word من غير هيدر أعمدة واضح — العمود الأول اسم والتاني هاتف.
+        // لو parseDocxToGrid لقى عناوين صفوف فوق الجداول (زي "أولى إعدادي")،
+        // بيكون ضاف عمود تالت لكل صف بالصف المكتشف — نستخدمه هنا.
+        const hasGradeCol = grid.some(r => r.length >= 3 && String(r[2] || "").trim());
+        cols = hasGradeCol ? { name: 0, phone: 1, grade: 2 } : { name: 0, phone: 1 };
         dataRows = grid.filter(r => r.some(c => String(c || "").trim() !== ""));
       } else {
         setToast({ msg: "لم أستطع إيجاد عمود الاسم — تأكد إن أول صف في الملف عناوين أعمدة", type: "error" });
