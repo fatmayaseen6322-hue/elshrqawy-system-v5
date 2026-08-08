@@ -25,6 +25,7 @@ const KEYS = {
   lastBackup:  "app_last_backup_ts",  // #1
   session:     "app_session",         // #7
   cloudSync:   "app_cloud_sync_state", // #Cloud (تراكمي)
+  liveSyncTs:  "app_live_sync_ts",    // #LiveSync (مزامنة تلقائية لحظية)
 };
 
 function loadStudents()    { return lsGet(KEYS.students, []); }
@@ -272,7 +273,76 @@ export default function useAppData() {
     }
   }, []);
 
-  // ── تشغيل النسخة التراكمية أوتوماتيك أول ما الموقع يتفتح في يوم جديد ──
+  // ── #LiveSync: مزامنة تلقائية بين أي جهاز أونلاين (فون النت) والنسخة
+  // المحلية على اللاب توب (أوفلاين) — بدون أي زرار يدوي.
+  // الفكرة: كل تغيير في الطلاب أو الإعدادات (إضافة/حذف/تعديل) بيتحفظ محليًا
+  // زي العادة فورًا، وكمان (لو فيه نت وقتها) بيترفع نسخة كاملة على Firebase
+  // مع وقت التحديث. أي جهاز تاني (زي اللاب توب لما يوصله نت) بيقارن وقته
+  // المحلي بوقت السحابة، ولو السحابة أحدث بيسحب النسخة الجديدة تلقائيًا
+  // ويحدّث نفسه — كله من غير تدخّل يدوي.
+  const [liveSyncState, setLiveSyncState] = useState({ status: "idle", message: "" });
+  const isApplyingRemote = useRef(false);
+  const pushTimer = useRef(null);
+  const firstRun  = useRef(true);
+
+  const pushLiveState = useCallback(async (ts) => {
+    if (!navigator.onLine) return;
+    try {
+      const { doc, setDoc } = await import("firebase/firestore");
+      const { db } = await import("../src/firebase");
+      await setDoc(doc(db, "elshrqawy_live_state", "main"), {
+        students: lsGet(KEYS.students, []),
+        settings: lsGet(KEYS.settings, {}),
+        updatedAt: ts,
+      });
+      setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });
+    } catch (e) {
+      setLiveSyncState({ status: "error", message: "تعذّرت المزامنة التلقائية (تأكد من النت)" });
+    }
+  }, []);
+
+  const pullLiveState = useCallback(async () => {
+    if (!navigator.onLine) return;
+    try {
+      const { doc, getDoc } = await import("firebase/firestore");
+      const { db } = await import("../src/firebase");
+      const snap = await getDoc(doc(db, "elshrqawy_live_state", "main"));
+      if (!snap.exists()) return;
+      const cloud = snap.data();
+      const localTs = lsGet(KEYS.liveSyncTs, 0);
+      if (cloud.updatedAt && cloud.updatedAt > localTs) {
+        isApplyingRemote.current = true;
+        setStudents(cloud.students || []);
+        setSettings(prev => ({ ...prev, ...(cloud.settings || {}) }));
+        lsSet(KEYS.liveSyncTs, cloud.updatedAt);
+        setLiveSyncState({ status: "success", message: "تم تحديث البيانات من جهاز تاني تلقائيًا ✓" });
+      }
+    } catch (e) {
+      setLiveSyncState({ status: "error", message: "تعذّر سحب التحديثات (تأكد من النت)" });
+    }
+  }, [setStudents, setSettings]);
+
+  // أول ما الصفحة تتفتح، وكل مرة الجهاز يرجع أونلاين: اسحب أحدث نسخة
+  useEffect(() => {
+    pullLiveState();
+    window.addEventListener("online", pullLiveState);
+    return () => window.removeEventListener("online", pullLiveState);
+  }, [pullLiveState]);
+
+  // أي تغيير حقيقي (من المستخدم) في الطلاب أو الإعدادات → ارفع نسخة جديدة
+  // (بعد 3 ثواني هدوء عشان ميرفعش مرة لكل حرف بيتكتب)
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    if (isApplyingRemote.current) { isApplyingRemote.current = false; return; } // تحديث جاي من السحابة نفسها، متبقاش ترفعه تاني
+    const ts = Date.now();
+    lsSet(KEYS.liveSyncTs, ts);
+    clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => pushLiveState(ts), 3000);
+    return () => clearTimeout(pushTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, settings]);
+
+
   const cloudAutoRan = useRef(false);
   useEffect(() => {
     if (cloudAutoRan.current) return;
@@ -297,5 +367,7 @@ export default function useAppData() {
     pendingBackup, dismissPendingBackup: () => setPendingBackup(null),
     // #Cloud
     cloudBackupState, backupToCloud, restoreFromCloud,
+    // #LiveSync
+    liveSyncState,
   };
 }
