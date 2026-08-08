@@ -85,7 +85,7 @@ export default function BlockModule({ students: studentsProp, setStudents, addAc
             <div key={s.id} className="bg-slate-800/50 border border-slate-700/30 rounded-xl px-3 py-2.5 flex items-center gap-3">
               <Av name={s.name} size="sm" />
               <div className="flex-1 min-w-0 text-right">
-                <div className="text-white text-sm font-bold truncate">{s.name}</div>
+                <div className="text-white text-sm font-bold whitespace-normal break-words">{s.name}</div>
                 <div className="text-slate-500 text-xs">مجموعة {s.group} · {s.id}</div>
                 {lastBlock && (
                   <div className="text-amber-400/80 text-xs mt-0.5">

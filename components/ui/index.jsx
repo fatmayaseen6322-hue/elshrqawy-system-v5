@@ -386,7 +386,7 @@ export function TopSearchBar({ students, onSelect }) {
               >
                 <Av name={s.name} size="sm" />
                 <div className="flex-1 text-right min-w-0">
-                  <div className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{s.name}</div>
+                  <div className="text-sm font-medium whitespace-normal break-words" style={{ color: "var(--text-primary)" }}>{s.name}</div>
                   <div className="text-xs" style={{ color: "var(--text-muted)" }}>{s.grade} · {s.id}</div>
                 </div>
                 <div className="text-xs font-bold shrink-0" style={{ color: scC(s.score) }}>{s.score}%</div>

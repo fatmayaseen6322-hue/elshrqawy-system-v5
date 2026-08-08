@@ -374,7 +374,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                       <Av name={s.name} size="sm" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-white text-sm font-bold truncate">{s.name}</span>
+                          <span className="text-white text-sm font-bold whitespace-normal break-words">{s.name}</span>
                           {s.status === "inactive" && (
                             <span className="shrink-0 text-[12px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">موقوف</span>
                           )}

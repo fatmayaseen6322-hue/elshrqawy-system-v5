@@ -175,7 +175,7 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
             <div key={s.id} className="bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 flex items-center gap-3">
               <Av name={s.name} size="sm" />
               <div className="flex-1 min-w-0">
-                <div className="text-white text-sm font-medium truncate">{s.name}</div>
+                <div className="text-white text-sm font-medium whitespace-normal break-words">{s.name}</div>
                 <div className="text-slate-500 text-xs">{s.parentPhone}</div>
               </div>
               <button

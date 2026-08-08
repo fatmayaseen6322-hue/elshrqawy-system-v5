@@ -741,7 +741,7 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams }) {
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
                     <Av name={s.name} size="sm" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-white text-xs font-bold truncate">{s.name}</div>
+                      <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
                       <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
                     </div>
                     {n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} خطأ</span>}
@@ -841,7 +841,7 @@ function ExamPanelAlertsOld({ students }) {
             <div key={s.id} className="bg-slate-800/60 border border-red-500/20 rounded-xl px-3 py-2.5 flex items-center gap-3">
               <Av name={s.name} size="sm" />
               <div className="flex-1 min-w-0">
-                <div className="text-white text-xs font-bold truncate">{s.name}</div>
+                <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
                 <div className="text-red-400 text-xs">{s.score}%</div>
               </div>
               <button onClick={() => notify(s, "score")} className="text-xs px-2.5 py-1.5 rounded-lg bg-green-700/30 text-green-300 shrink-0">💬</button>
@@ -857,7 +857,7 @@ function ExamPanelAlertsOld({ students }) {
             <div key={s.id} className="bg-slate-800/60 border border-amber-500/20 rounded-xl px-3 py-2.5 flex items-center gap-3">
               <Av name={s.name} size="sm" />
               <div className="flex-1 min-w-0">
-                <div className="text-white text-xs font-bold truncate">{s.name}</div>
+                <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
                 <div className="text-amber-400 text-xs">{pct(s.absent, s.total)}% غياب</div>
               </div>
               <button onClick={() => notify(s, "absent")} className="text-xs px-2.5 py-1.5 rounded-lg bg-green-700/30 text-green-300 shrink-0">💬</button>
@@ -934,7 +934,7 @@ function ExamPanelCurriculum({ webExams, students }) {
                     : "bg-slate-800 text-slate-500"
                   }`}>{r.rank}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm truncate">{getName(r.studentId)}</div>
+                    <div className="text-white text-sm whitespace-normal break-words">{getName(r.studentId)}</div>
                     <Bar value={r.score} max={r.max} />
                   </div>
                   <div className="font-black text-sm shrink-0" style={{ color: scC(p) }}>{p}%</div>

@@ -131,7 +131,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
           <div className="flex items-center gap-2 min-w-0">
             <Av name={student.name} size="sm" />
             <div className="min-w-0">
-              <div className="text-white text-xs font-bold truncate" style={{ maxWidth: "90px" }}>{student.name}</div>
+              <div className="text-white text-xs font-bold whitespace-normal break-words">{student.name}</div>
               <div className="text-slate-500" style={{ fontSize: "9px" }}>{student.id}</div>
             </div>
           </div>
@@ -272,12 +272,22 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [dSelDay,       setDSelDay]       = useState(curDay);
   const [dSelMonth,     setDSelMonth]     = useState(curMonth);
+  const [dSelYear,      setDSelYear]      = useState(curYear);
+
+  // تصفح إلكتروني بين الأيام (زي صفحات كتاب) — يوم قبل / يوم بعد
+  const goDay = (delta) => {
+    const d = new Date(dSelYear, dSelMonth - 1, dSelDay);
+    d.setDate(d.getDate() + delta);
+    setDSelDay(d.getDate());
+    setDSelMonth(d.getMonth() + 1);
+    setDSelYear(d.getFullYear());
+  };
 
   const dayRecords = useMemo(() => {
-    if (!dSelDay || !dSelMonth) return [];
-    const dayStr = `${curYear}-${String(dSelMonth).padStart(2, "0")}-${String(dSelDay).padStart(2, "0")}`;
+    if (!dSelDay || !dSelMonth || !dSelYear) return [];
+    const dayStr = `${dSelYear}-${String(dSelMonth).padStart(2, "0")}-${String(dSelDay).padStart(2, "0")}`;
     return safeRecords.filter(r => r && r.timestamp?.startsWith(dayStr));
-  }, [safeRecords, dSelDay, dSelMonth, curYear]);
+  }, [safeRecords, dSelDay, dSelMonth, dSelYear]);
 
   const dayTotal = dayRecords.reduce((a, r) => a + (r.amount || 0), 0);
 
@@ -422,7 +432,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                                 <td className="px-3 py-2.5">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <Av name={s.name} size="sm" />
-                                    <span className="text-white text-xs font-bold truncate" style={{ maxWidth: "110px" }}>{s.name}</span>
+                                    <span className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</span>
                                     {existing && <span className="text-emerald-400 text-xs">✓</span>}
                                   </div>
                                 </td>
@@ -497,7 +507,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             <td className="px-3 py-2.5">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Av name={student.name} size="sm" />
-                                <span className="text-white text-xs font-bold truncate" style={{ maxWidth: "110px" }}>{student.name}</span>
+                                <span className="text-white text-xs font-bold whitespace-normal break-words">{student.name}</span>
                               </div>
                             </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{student.grade} — {student.group}</td>
@@ -605,7 +615,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       {dayReportOpen && (
         <Modal title="📅 سجل المصاريف اليومي" onClose={() => setDayReportOpen(false)} maxW="max-w-2xl">
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Field label="اليوم">
                 <input type="number" min={1} max={31} value={dSelDay}
                   onChange={e => setDSelDay(e.target.value ? parseInt(e.target.value) : "")}
@@ -618,6 +628,18 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
                 </select>
               </Field>
+              <Field label="السنة">
+                <input type="number" value={dSelYear}
+                  onChange={e => setDSelYear(e.target.value ? parseInt(e.target.value) : curYear)}
+                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+              </Field>
+            </div>
+
+            {/* تصفح إلكتروني — زي صفحات كتاب: يوم قبل / يوم بعد */}
+            <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2.5">
+              <button onClick={() => goDay(-1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold">◀ اليوم اللي قبله</button>
+              <span className="text-slate-300 text-xs font-bold">{dSelDay} {MONTHS_AR[dSelMonth - 1]} {dSelYear}</span>
+              <button onClick={() => goDay(1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold">اليوم اللي بعده ▶</button>
             </div>
 
             {dayRecords.length === 0
@@ -638,7 +660,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             <td className="px-3 py-2.5">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Av name={r.studentName} size="sm" />
-                                <span className="text-white text-xs font-bold truncate" style={{ maxWidth: "110px" }}>{r.studentName}</span>
+                                <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
                               </div>
                             </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{r.grade} — {r.group}</td>

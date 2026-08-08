@@ -152,7 +152,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
                       <Av name={s.name} size="sm" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-white text-sm font-bold truncate">{s.name}</span>
+                          <span className="text-white text-sm font-bold whitespace-normal break-words">{s.name}</span>
                         </div>
                         <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
                       </div>
@@ -265,7 +265,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-2 min-w-0">
                               <Av name={s.name} size="sm" />
-                              <span className="text-white text-xs font-bold truncate">{s.name}</span>
+                              <span className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</span>
                             </div>
                           </td>
                           <td className="px-3 py-2.5 text-slate-500" style={{ fontSize: "12px" }}>{s.id}</td>

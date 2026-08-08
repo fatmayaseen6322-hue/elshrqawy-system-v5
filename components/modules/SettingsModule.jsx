@@ -152,6 +152,28 @@ export default function SettingsModule({ settings, setSettings, students, setStu
   const [newNum, setNewNum] = useState(""); const [newType, setNewType] = useState("admin"); const [newLabel, setNewLabel] = useState("");
   const logoRef = useRef(null); const bgRef = useRef(null); const importRef = useRef(null);
 
+  // ── إدارة أسماء المستلمين (اللي بتظهر في زرار "المستلم" بصفحة المصاريف) ──
+  const [newReceiverName, setNewReceiverName] = useState("");
+  const [editReceiverId,  setEditReceiverId]  = useState(null);
+  const [editReceiverVal, setEditReceiverVal] = useState("");
+  const addReceiver = () => {
+    const name = newReceiverName.trim();
+    if (!name) return;
+    const nextId = Math.max(0, ...(settings.receivers || []).map(r => r.id)) + 1;
+    save("receivers", [...(settings.receivers || []), { id: nextId, name, active: true }], `✓ اتضاف "${name}"`);
+    setNewReceiverName("");
+  };
+  const startEditReceiver = (r) => { setEditReceiverId(r.id); setEditReceiverVal(r.name); };
+  const saveEditReceiver = () => {
+    const val = editReceiverVal.trim();
+    if (!val) return;
+    save("receivers", (settings.receivers || []).map(r => r.id === editReceiverId ? { ...r, name: val } : r), "✓ تم تعديل الاسم");
+    setEditReceiverId(null); setEditReceiverVal("");
+  };
+  const deleteReceiver = (id) => {
+    save("receivers", (settings.receivers || []).filter(r => r.id !== id), "✓ تم الحذف");
+  };
+
   // ── إدخال رسم الصف الشهري (كل صف) — منقولة من صفحة المصاريف ──
   const [feeGrade,    setFeeGrade]    = useState("");
   const [feeAmount,   setFeeAmount]   = useState("");
@@ -235,13 +257,14 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     }; r.readAsText(f); e.target.value = "";
   };
   const Back = ({ to = "main" }) => <button onClick={() => setView(to)} className="text-slate-400 hover:text-white text-sm flex items-center gap-1 mb-5">← رجوع</button>;
-  const viewTitles = { passwords: "كلمة السر", password: "كلمة سر المستر", cashierpwd: "كلمة سر الاسيست" };
+  const viewTitles = { passwords: "كلمة السر", password: "كلمة سر المستر", cashierpwd: "كلمة سر الاسيست", receivers: "أسماء المستلمين (التحصيل)" };
   const menu = [
     { i: "🏫", l: "اسم السنتر",         d: settings.centerName,              v: "center"        },
     { i: "🔑", l: "كلمة السر",           d: "المستر · الاسيست",              v: "passwords"     },
     { i: "🖼️", l: "شعار السنتر",        d: settings.logo ? "✓ تم الرفع" : "لم يُرفع", v: "logo" },
     { i: "🎨", l: "صورة الخلفية",       d: settings.bg   ? "✓ تم الرفع" : "لم تُرفع", v: "bg"   },
     { i: "💵", l: "ادخل المصاريف كل صف", d: "رسوم الصفوف الشهرية",             v: "classfees"     },
+    { i: "🧾", l: "أسماء المستلمين",     d: `${(settings.receivers || []).filter(r => r.active !== false).length} اسم — للتحصيل في المصاريف`, v: "receivers" },
     { i: "📱", l: "أرقام الواتساب",     d: `${waList.length} أرقام`,          v: "whatsapp"      },
     { i: "🔔", l: "الإشعارات",          d: "تفضيلات",                         v: "notifs"        },
     { i: "💾", l: "النسخ الاحتياطي",    d: "تصدير / استيراد",                v: "backup"        },
@@ -295,6 +318,54 @@ export default function SettingsModule({ settings, setSettings, students, setStu
           {view === "cashierpwd" && <><Back to="passwords" /><div className="space-y-4"><div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-400 text-xs">💼 كلمة سر الاسيست — تُستخدم عند دخول دور Assist</div><Field label="كلمة المرور الجديدة"><Inp type="password" value={caP} onChange={e => { setCaP(e.target.value); setCaErr(""); }} /></Field><Field label="تأكيد"><Inp type="password" value={caConfP} onChange={e => { setCaConfP(e.target.value); setCaErr(""); }} /></Field>{caErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {caErr}</div>}<Btn variant="primary" size="lg" className="w-full" onClick={() => changeRolePwd("الاسيست","cashierPassword",caP,caConfP,setCaErr)}>💾 حفظ كلمة سر الاسيست</Btn></div></>}
           {view === "logo" && <><Back /><div className="space-y-4">{settings.logo ? <div className="text-center space-y-3"><img src={settings.logo} alt="logo" className="w-28 h-28 rounded-2xl object-cover mx-auto border-2 border-blue-500/30" /><div className="text-slate-400 text-xs">الشعار الحالي</div></div> : <div className="border-2 border-dashed border-slate-700/60 rounded-2xl p-10 text-center"><div className="text-5xl mb-3">🏫</div><div className="text-slate-500 text-sm">لم يُرفع شعار بعد</div></div>}<input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={e => handleImg(e, "logo", "الشعار")} /><Btn variant="primary" size="lg" className="w-full" onClick={() => logoRef.current?.click()}>📤 {settings.logo ? "استبدال" : "رفع شعار"}</Btn>{settings.logo && <Btn variant="danger" size="lg" className="w-full" onClick={() => save("logo", null, "تم حذف الشعار")}>🗑 حذف</Btn>}</div></>}
           {view === "bg" && <><Back /><div className="space-y-4">{settings.bg && settings.bg.startsWith("data:") ? <div className="text-center space-y-2"><img src={settings.bg} alt="bg" className="w-full h-36 rounded-2xl object-cover border border-slate-700/50" /><div className="text-slate-400 text-xs">الخلفية الحالية</div></div> : <div className="border-2 border-dashed border-slate-700/60 rounded-2xl p-8 text-center"><div className="text-4xl mb-2">🎨</div><div className="text-slate-500 text-sm">لم تُرفع صورة</div></div>}<div className="space-y-2"><div className="text-xs text-slate-400 font-medium">ألوان جاهزة</div><div className="grid grid-cols-5 gap-2">{["#0f172a","#1e1b4b","#0c4a6e","#14532d","#1c1917"].map(c => <button key={c} onClick={() => save("bg", c, "✓ تم تغيير اللون")} className={`h-10 rounded-xl border-2 transition-colors ${settings.bg === c ? "border-white/60" : "border-slate-700/50 hover:border-white/20"}`} style={{ backgroundColor: c }} />)}</div></div><input ref={bgRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => handleImg(e, "bg", "الخلفية")} /><Btn variant="primary" size="lg" className="w-full" onClick={() => bgRef.current?.click()}>📤 رفع صورة خلفية</Btn>{settings.bg && <Btn variant="ghost" size="lg" className="w-full" onClick={() => save("bg", null, "تمت الإزالة")}>↩ إزالة</Btn>}</div></>}
+          {view === "receivers" && (
+            <>
+              <Back />
+              <div className="space-y-4">
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
+                  <div className="text-blue-400 font-bold text-sm mb-1">🧾 أسماء المستلمين</div>
+                  <div className="text-slate-400 text-xs">دي الأسماء اللي بتظهر في زرار "المستلم" وقت تسجيل أي مصروف. تقدري تضيفي "المستر" أو أي اسم، وتعدّلي أو تمسحي أي اسم قديم.</div>
+                </div>
+
+                <div className="space-y-2">
+                  {(settings.receivers || []).length === 0 && (
+                    <div className="text-slate-500 text-sm text-center py-6">مفيش أسماء مضافة</div>
+                  )}
+                  {(settings.receivers || []).map(r => (
+                    <div key={r.id} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center gap-3">
+                      {editReceiverId === r.id ? (
+                        <>
+                          <input value={editReceiverVal} onChange={e => setEditReceiverVal(e.target.value)}
+                            autoFocus onKeyDown={e => { if (e.key === "Enter") saveEditReceiver(); }}
+                            className="flex-1 bg-slate-900 border border-blue-500/40 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none" />
+                          <button onClick={saveEditReceiver} className="w-8 h-8 rounded-lg bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm">💾</button>
+                          <button onClick={() => { setEditReceiverId(null); setEditReceiverVal(""); }} className="w-8 h-8 rounded-lg bg-slate-700/40 text-slate-300 text-sm">✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 text-white text-sm font-medium whitespace-normal break-words">{r.name}</span>
+                          <button onClick={() => startEditReceiver(r)} className="w-8 h-8 shrink-0 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm">✏️</button>
+                          <button onClick={() => setConfirmModal({ msg: `هل تريد حذف "${r.name}" من قائمة المستلمين؟`, onConfirm: () => { deleteReceiver(r.id); setConfirmModal(null); } })}
+                            className="w-8 h-8 shrink-0 rounded-lg bg-red-700/20 border border-red-600/30 text-red-400 text-sm">🗑</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+                  <div className="text-xs text-blue-400 font-bold">+ إضافة اسم جديد (مثلاً: المستر)</div>
+                  <div className="flex gap-2">
+                    <input value={newReceiverName} onChange={e => setNewReceiverName(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") addReceiver(); }}
+                      placeholder="اسم المستلم"
+                      className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
+                    <Btn variant="success" onClick={addReceiver}>+ إضافة</Btn>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
           {view === "classfees" && (
             <>
               <Back />
