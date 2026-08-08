@@ -9,24 +9,36 @@ import { exportStudentsWord } from "../../utils/exportStudentsWord";
 // "احمد" و"أحمد" و"إحمد" و"آحمد" — نفس آلية البحث في صفحة الحضور
 const normalizeAr = (str = "") => str.replace(/[أإآء]/g, "ا");
 
-// المستوى الحقيقي للطالب: 100% ناقص نسبة النقط الغلط من إجمالي نقط
-// الامتحانات الحقيقية المرفوعة (مش رقم ثابت ولا عشوائي). لو معندوش أي
-// أخطاء مسجَّلة على امتحان حقيقي، بترجع null (مفيش بيانات كفاية لسه).
+// المستوى الحقيقي للطالب: مبني على حاجتين مع بعض —
+//  1) دقة الامتحانات الحقيقية (100% ناقص نسبة النقط الغلط من إجمالي نقط
+//     الامتحانات المرفوعة فعليًا)
+//  2) نسبة الحضور (present / total)
+// لو الاتنين متاحين، المستوى = المتوسط بينهم. لو واحد بس متاح، بيتاخد هو
+// لوحده. لو مفيش أي بيانات كفاية، بترجع null.
 function computeRealLevel(s, centerExams) {
   const lessonKeys = [...new Set((s.examErrors || []).map(e => `${e.grade}__${e.unit}__${e.lesson}`))];
-  if (lessonKeys.length === 0) return null;
-  let totalPoints = 0, wrongPoints = 0;
-  lessonKeys.forEach(key => {
-    const [g, u, l] = key.split("__");
-    const exam = (centerExams || []).find(ex => ex.grade === g && String(ex.unit) === u && String(ex.lesson) === l);
-    const pts = exam ? (exam.numQuestions || 0) * (exam.pointsPerQuestion || 0) : 0;
-    if (!pts) return;
-    const wrong = (s.examErrors || []).filter(e => e.grade === g && e.unit === u && e.lesson === l).length;
-    totalPoints += pts;
-    wrongPoints += wrong;
-  });
-  if (totalPoints === 0) return null;
-  return Math.max(0, Math.round(100 - (wrongPoints / totalPoints) * 100));
+  let examLevel = null;
+  if (lessonKeys.length > 0) {
+    let totalPoints = 0, wrongPoints = 0;
+    lessonKeys.forEach(key => {
+      const [g, u, l] = key.split("__");
+      const exam = (centerExams || []).find(ex => ex.grade === g && String(ex.unit) === u && String(ex.lesson) === l);
+      const pts = exam ? (exam.numQuestions || 0) * (exam.pointsPerQuestion || 0) : 0;
+      if (!pts) return;
+      const wrong = (s.examErrors || []).filter(e => e.grade === g && e.unit === u && e.lesson === l).length;
+      totalPoints += pts;
+      wrongPoints += wrong;
+    });
+    if (totalPoints > 0) examLevel = Math.max(0, Math.round(100 - (wrongPoints / totalPoints) * 100));
+  }
+
+  const attTotal = s.total || 0;
+  const attLevel = attTotal > 0 ? Math.max(0, Math.round(((s.present || 0) / attTotal) * 100)) : null;
+
+  if (examLevel === null && attLevel === null) return null;
+  if (examLevel === null) return attLevel;
+  if (attLevel === null) return examLevel;
+  return Math.round((examLevel + attLevel) / 2);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -251,7 +263,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
                   <thead>
                     <tr className="led-thead bg-slate-800/70 text-slate-400 text-xs">
                       <th className="px-3 py-2 font-medium">الطالب</th>
-                      <th className="px-3 py-2 font-medium">الكود</th>
+                      <th className="px-3 py-2 font-medium">أرقام التليفونات</th>
                       <th className="px-3 py-2 font-medium">المستوى</th>
                     </tr>
                   </thead>
@@ -268,7 +280,12 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
                               <span className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-500" style={{ fontSize: "12px" }}>{s.id}</td>
+                          <td className="px-3 py-2.5 text-slate-400 whitespace-normal break-words" style={{ fontSize: "12px" }}>
+                            <div>{s.phone || "—"}</div>
+                            {s.parentPhone && s.parentPhone !== s.phone && (
+                              <div className="text-slate-600">ولي الأمر: {s.parentPhone}</div>
+                            )}
+                          </td>
                           <td className="px-3 py-2.5">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t}`}>{lvl === null ? "—" : `${lvl}%`}</span>
                           </td>
