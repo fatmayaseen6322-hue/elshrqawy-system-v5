@@ -164,9 +164,12 @@ export default function useAppData() {
   //   2) كل يوم بيتحط مستند جديد في Collection (مش مستند واحد بيتغطى)،
   //      وبيحتوي بس على السجلات "الجديدة" اللي اتضافت من آخر نسخة (Diff)،
   //      مش كل البيانات القديمة تاني — عشان الكوتة تفضل عملية كتابة واحدة/يوم.
-  //   3) نطاق البيانات المرفوعة اتقلّص لبس: المصاريف (finRecords)،
-  //      الغياب (attRecords)، ودرجات/أخطاء الامتحانات — بيانات الطلاب
-  //      الأساسية (اسم/موبايل/ولي أمر) والإعدادات (settings) فضلوا محليين بس.
+  //   3) النسخة التلقائية اليومية (الخلفية) نطاقها بس: المصاريف
+  //      (finRecords)، الغياب (attRecords)، ودرجات/أخطاء الامتحانات.
+  //   4) زرار "رفع نسخة على السحابة" اليدوي (Settings) بيرفع كمان نسخة
+  //      كاملة من الطلاب (بالبلوك) والإعدادات (بالباسورد) — عشان جهاز
+  //      تاني (زي نسخة سطح المكتب) يقدر "يسترجع من السحابة" ويحصل على
+  //      نفس الطلاب/البلوك/الباسورد بالظبط من غير تصدير/استيراد ملف.
   const [cloudBackupState, setCloudBackupState] = useState({ status: "idle", message: "" });
   // status: "idle" | "uploading" | "success" | "error" | "downloading"
 
@@ -182,6 +185,7 @@ export default function useAppData() {
       const curFin         = lsGet(KEYS.finRecords,  []);
       const curAtt          = lsGet(KEYS.attRecords,  []);
       const curStudents     = lsGet(KEYS.students,    []);
+      const curSettings     = lsGet(KEYS.settings,    {});
       const curCenterExams  = lsGet(KEYS.centerExams, []);
 
       // الجديد فقط منذ آخر نسخة (بالـ id، مش بالتاريخ، عشان يتحمل أي تعديل رجعي)
@@ -203,18 +207,27 @@ export default function useAppData() {
         .filter(e => e.status === "needs_review" && e._score != null && !sync.syncedExamIds.includes(e.id))
         .map(e => ({ id: e.id, name: e.name, score: e._score, max: e._max, correctionDate: e.correctionDate }));
 
-      const hasAnything = newFin.length || newAtt.length || examChanges.length || newCenterExamResults.length;
+      // زرار "رفع نسخة على السحابة" اليدوي (force=true) بيرفع كمان نسخة كاملة
+      // من الطلاب (بكل حالات البلوك) والإعدادات (بكل الباسوردات) — عشان أي
+      // جهاز تاني (زي نسخة سطح المكتب) يقدر "يستورد" نفس الطلاب والباسورد
+      // بالظبط من زرار "استرجاع من السحابة" من غير تصدير/استيراد ملف يدوي.
+      const hasAnything = force || newFin.length || newAtt.length || examChanges.length || newCenterExamResults.length;
 
       if (hasAnything) {
         const { doc, setDoc } = await import("firebase/firestore");
         const { db } = await import("../src/firebase");
-        await setDoc(doc(db, "elshrqawy_daily_backups", today), {
+        const payload = {
           finRecords:        newFin,
           attRecords:        newAtt,
           examChanges,
           centerExamResults: newCenterExamResults,
           savedAt:           new Date().toISOString(),
-        });
+        };
+        if (force) {
+          payload.students = curStudents; // نسخة كاملة (فيها البلوك)
+          payload.settings = curSettings; // نسخة كاملة (فيها الباسورد)
+        }
+        await setDoc(doc(db, "elshrqawy_daily_backups", today), payload);
       }
 
       lsSet(KEYS.cloudSync, {
@@ -250,6 +263,7 @@ export default function useAppData() {
 
       const finMap = {}, attMap = {}, examSnap = {}, examResultsMap = {};
       let lastDate = "";
+      let fullStudents = null, fullSettings = null; // آخر نسخة كاملة (من زرار الرفع اليدوي)
       snaps.forEach(d => {
         const data = d.data();
         lastDate = data.savedAt?.split("T")[0] || d.id;
@@ -257,12 +271,22 @@ export default function useAppData() {
         (data.attRecords || []).forEach(r => { attMap[r.id] = r; });
         (data.examChanges || []).forEach(c => { examSnap[c.studentId] = c; });
         (data.centerExamResults || []).forEach(c => { examResultsMap[c.id] = c; });
+        if (data.students) fullStudents = data.students; // بترتيب الوقت (asc) فآخر واحد فيه students هو الأحدث
+        if (data.settings) fullSettings = data.settings;
       });
 
       // دمج مع الموجود محليًا (مش استبدال كامل) — لأن رفع السحابة نفسه تراكمي
       setFinRecords(prev => Object.values({ ...Object.fromEntries((prev || []).map(r => [r.id, r])), ...finMap }));
       setAttRecords(prev => Object.values({ ...Object.fromEntries((prev || []).map(r => [r.id, r])), ...attMap }));
-      setStudents(prev => (prev || []).map(s => examSnap[s.id] ? { ...s, score: examSnap[s.id].score, weak: examSnap[s.id].weak } : s));
+      // الطلاب والإعدادات: لو فيه نسخة كاملة اترفعت من زرار يدوي، بتستبدل
+      // بالكامل (مش دمج) — عشان البلوك والباسورد يبقوا مطابقين تمامًا
+      // للنسخة اللي رفعتيها، بدل ما يفضل خليط قديم/جديد.
+      if (fullStudents) {
+        setStudents(fullStudents);
+      } else {
+        setStudents(prev => (prev || []).map(s => examSnap[s.id] ? { ...s, score: examSnap[s.id].score, weak: examSnap[s.id].weak } : s));
+      }
+      if (fullSettings) setSettings(fullSettings);
       setCenterExams(prev => (prev || []).map(e => examResultsMap[e.id]
         ? { ...e, _score: examResultsMap[e.id].score, _max: examResultsMap[e.id].max, correctionDate: examResultsMap[e.id].correctionDate, status: "needs_review" }
         : e));
