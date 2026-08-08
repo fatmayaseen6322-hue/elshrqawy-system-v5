@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, MONTHS_AR, TODAY } from "../../constants";
-import { pct, fmt, fmtM, scC, speak } from "../../utils";
+import { pct, fmt, fmtM, scC, speak, isBlocked } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Bar } from "../ui";
 
@@ -498,7 +498,7 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
 export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone }) {
-  const students   = studentsProp   || [];
+  const students   = (studentsProp || []).filter(s => !isBlocked(s));
   const finRecords = finRecordsProp || [];
   const attRecords = attRecordsProp || [];
   const [period, setPeriod] = useState("today");

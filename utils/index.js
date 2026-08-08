@@ -51,6 +51,36 @@ export function lsGet(key, fallback) {
   }
 }
 
+// ── حالة البلوك (مصدر واحد يُستخدم في كل الموديولات) ───────────
+// طالب "بلوك" = اتنقل يدويًا (blocked) أو حالته "موقوف" (inactive).
+// لازم يتشال من كل القوائم/العمليات النشطة (طلاب، حضور، مصاريف،
+// داشبورد) لحد ما يترجع من صفحة "بلوك" — بياناته القديمة (finRecords/
+// attRecords) فضلت زي ما هي في كل الأحوال، إحنا بس بنفلترها من العرض.
+export function isBlocked(s) {
+  return !!(s && (s.blocked === true || s.status === "inactive"));
+}
+
+// كل فترات البلوك لطالب واحد: [{ start:"YYYY-MM-DD", end:"YYYY-MM-DD"|null }]
+// end=null يعني لسه بلوك (ما رجعش لحد دلوقتي).
+export function getBlockPeriods(s) {
+  return ((s && s.blockHistory) || [])
+    .filter(h => h && h.blockDate)
+    .map(h => ({ start: h.blockDate, end: h.unblockDate || null }));
+}
+
+// هل شهر معيّن (month: 1-12, year) بيتقاطع مع أي فترة بلوك لهذا الطالب؟
+// بتُستخدم عشان شهور البلوك ما تتحسبش "متأخر سداد" لا وقت البلوك ولا
+// بعد الرجوع — الفترة اللي كان فيها بلوك تفضل تبان "بلوك" مش دَين.
+export function isMonthBlocked(s, month, year) {
+  const periods = getBlockPeriods(s);
+  if (!periods.length) return false;
+  const mm = String(month).padStart(2, "0");
+  const monthStart = `${year}-${mm}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const monthEnd = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
+  return periods.some(p => monthStart <= (p.end || "9999-12-31") && p.start <= monthEnd);
+}
+
 export function lsSet(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));

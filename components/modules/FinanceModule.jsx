@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR, TODAY } from "../../constants";
-import { fmtM, genFinId, nowStr } from "../../utils";
+import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn } from "../ui";
 
@@ -29,12 +29,13 @@ function getOverdueInfo(student, finRecords) {
 
   const overdueMonths = [];
   for (let m = startMonth; m <= currentMonthNum; m++) {
+    if (isMonthBlocked(student, m, currentYearNum)) continue; // شهر بلوك — مش دَين
     if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(MONTHS_AR[m - 1]);
   }
   return {
     overdueMonths,
     count: overdueMonths.length,
-    currentMonthOverdue: !isMonthPaid(currentMonthNum, currentYearNum),
+    currentMonthOverdue: !isMonthBlocked(student, currentMonthNum, currentYearNum) && !isMonthPaid(currentMonthNum, currentYearNum),
   };
 }
 
@@ -176,7 +177,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
 
 export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone }) {
   const isAssist     = role === "assist";
-  const safeStudents = students   || [];
+  const safeStudents = (students || []).filter(s => !isBlocked(s));
   const safeSettings = settings   || {};
   const safeRecords  = finRecords || [];
 

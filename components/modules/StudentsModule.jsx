@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
-import { pct, fmt, genSID, genStudentId, waLink } from "../../utils";
+import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
 import { exportStudentsWord } from "../../utils/exportStudentsWord";
@@ -104,7 +104,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
   const searchResults = useMemo(() => {
     if (!search.trim()) return null;
     const q = normalizeAr(search.trim());
-    return (students || []).filter(s => s && normalizeAr(s.name || "").includes(q));
+    return (students || []).filter(s => s && !isBlocked(s) && normalizeAr(s.name || "").includes(q));
   }, [students, search]);
 
   const goToStudentDirect = s => {
@@ -229,7 +229,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
 
   // ── SECTION step ───────────────────────────────────────────
   if (step === "section") {
-    const grpStudents = students.filter(s => s.grade === grade && s.group === group);
+    const grpStudents = students.filter(s => s.grade === grade && s.group === group && !isBlocked(s));
     return (
       <div className="space-y-4">
         <button onClick={() => setStep("select")} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← تعديل الاختيار</button>
@@ -335,6 +335,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
     const overdueMonths = [];
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
     for (let m = startMonth; m < currentMonthNum; m++) {
+      if (isMonthBlocked(s, m, currentYearNum)) continue; // شهر بلوك — مش دَين
       if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(m);
     }
 
