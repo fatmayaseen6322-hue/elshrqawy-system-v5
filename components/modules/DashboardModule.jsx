@@ -77,6 +77,7 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     .map(s => ({ id: s.id, name: s.name, due: fmt(s._realDue), owedMonths: getOwedMonthsLabel(s), dueDate: s.paymentDueDate || "", _due: s._realDue, grade: s.grade }));
 
   const totalDebt = students.reduce((a, s) => a + getRealDue(s), 0);
+  const gradeDebts = GRADES_LIST.map(g => ({ grade: g, count: students.filter(s => s.grade === g).reduce((a, s) => a + getRealDue(s), 0) }));
 
   const expensesSection = {
     title: "حالة حرجة - المصروفات", icon: "🔴",
@@ -104,7 +105,7 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     grades: groupByGrade(examStudents),
   };
 
-  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, expensesSection, absenceSection, examsSection };
+  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, expensesSection, absenceSection, examsSection };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -128,9 +129,10 @@ export function buildTodayAttendance(attRecords, students) {
 }
 
 // ══════════════════════════════════════════════════════════════
-function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown }) {
+function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown, formatValue }) {
   const [open, setOpen] = useState(false);
   const [selGrade, setSelGrade] = useState(null);
+  const fmt = formatValue || (v => v);
   return (
     <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 relative">
       <div className="flex items-center justify-between">
@@ -140,13 +142,13 @@ function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown }) {
           {gradeBreakdown && <button onClick={() => setOpen(o => !o)} className="text-emerald-400 text-sm leading-none">▾</button>}
         </div>
       </div>
-      <div className="text-2xl font-bold" style={{ color }}>{selGrade ? gradeBreakdown.find(g => g.grade === selGrade)?.count : value}</div>
+      <div className="text-2xl font-bold" style={{ color }}>{selGrade ? fmt(gradeBreakdown.find(g => g.grade === selGrade)?.count) : value}</div>
       <div className="text-slate-400 text-xs">{selGrade || label}</div>
       {sub && !selGrade && <div className="text-slate-500 text-xs mt-1">{sub}</div>}
       {selGrade && <button onClick={() => setSelGrade(null)} className="text-slate-500 text-xs mt-1 underline self-start">عرض الإجمالي</button>}
       {open && gradeBreakdown && (
         <div className="absolute top-12 left-3 right-3 bg-slate-900 border border-slate-700/60 rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
-          {gradeBreakdown.map((g, i) => <button key={i} onClick={() => { setSelGrade(g.grade); setOpen(false); }} className="w-full px-3 py-2 text-right text-xs text-slate-200 hover:bg-slate-800 flex justify-between border-b border-slate-800 last:border-0"><span>{g.grade}</span><span className="text-blue-400 font-bold">{g.count}</span></button>)}
+          {gradeBreakdown.map((g, i) => <button key={i} onClick={() => { setSelGrade(g.grade); setOpen(false); }} className="w-full px-3 py-2 text-right text-xs text-slate-200 hover:bg-slate-800 flex justify-between border-b border-slate-800 last:border-0"><span>{g.grade}</span><span className="text-blue-400 font-bold">{fmt(g.count)}</span></button>)}
         </div>
       )}
     </div>
@@ -558,7 +560,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       <div className={`grid gap-3 ${isAssist ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"}`}>
         {!isAssist && <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />}
         <KPICard icon="💰" label={`المحصّل (${periodLabels[effectivePeriod]})`} value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
-        {!isAssist && <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" />}
+        {!isAssist && <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" gradeBreakdown={dd.gradeDebts} formatValue={fmtM} />}
       </div>
       <ProblemSection data={dd.expensesSection} idRef={refs.expenses} extra={{ onSaveDueDate: handleSaveDueDate }} />
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
