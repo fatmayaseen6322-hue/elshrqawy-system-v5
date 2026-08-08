@@ -33,13 +33,6 @@ export default function RoleGate({ settings, onEnter }) {
 
   const handleEnter = async () => {
     if (!role) { setErr("اختر الدور أولاً"); return; }
-    // ⚠️ تعطيل مؤقت للتحقق من كلمة المرور (نفس نمط سابق) — بسبب مشكلة
-    // في عدم تطابق الباسورد المحفوظة، تم فتح الدخول مباشرة باختيار الدور فقط
-    // للسماح بالدخول وتصحيح كلمتي المرور من داخل الإعدادات. يُفضَّل إعادة
-    // تفعيل السطور المعلَّقة تحت بعد التأكد من أن كلمتي المرور الجديدتين تعملان.
-    onEnter({ role: role.key, label: role.label, icon: role.icon });
-    return;
-    // eslint-disable-next-line no-unreachable
     if (!pw) { setErr("اكتب كلمة المرور"); return; }
     setLoading(true);
     const ok = await checkPwd(pw, settings?.[role.pwdKey]);
