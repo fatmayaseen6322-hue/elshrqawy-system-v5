@@ -24,8 +24,8 @@ export const INIT_SETTINGS = {
   //   Assist (cashier) → "123456789"
   //   teacher (غير مستخدم حاليًا بعد تقليص الأدوار لدورين)
   // لتغييرها: الإعدادات → كلمة مرور الدور المطلوب
-  password:        "sha256:15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225",
-  cashierPassword: "sha256:15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225",
+  password:        "sha256:c546cdc4c872c8ec5477ea533e418452728c4f7c13fe01ad453ae673387cd590",
+  cashierPassword: "sha256:c546cdc4c872c8ec5477ea533e418452728c4f7c13fe01ad453ae673387cd590",
   teacherPassword: "sha256:5d284a8fa5b70176873cfc553d6da0008c212cb8c3f8ca8097e7f347d68bf3d2",
   logo: null,
   bg: null,
