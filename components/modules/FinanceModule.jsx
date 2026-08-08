@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR, TODAY } from "../../constants";
-import { genFinId, nowStr } from "../../utils";
+import { fmtM, genFinId, nowStr } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn } from "../ui";
 
@@ -182,6 +182,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
   const curMonth = new Date().getMonth() + 1;
   const curYear  = new Date().getFullYear();
+  const curDay   = new Date().getDate();
 
   // ══════════════ Assist: تبويب "المصاريف" (تسجيل دفعة) ══════════════
   const [aTab,       setATab]       = useState(null); // "pay" | "late" | null
@@ -266,6 +267,19 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const [toast,            setToast]            = useState(null);
   const [highlightId,      setHighlightId]      = useState(null); // تمييز طالب جاي من بحث التوبار
   const [receiverStreak,   setReceiverStreak]   = useState({ id: null, count: 0 });
+
+  // ══════════════ المستر: "عرض سجل المصاريف" — تقرير كل المعاملات في يوم معيّن (كل الصفوف) ══════════════
+  const [dayReportOpen, setDayReportOpen] = useState(false);
+  const [dSelDay,       setDSelDay]       = useState(curDay);
+  const [dSelMonth,     setDSelMonth]     = useState(curMonth);
+
+  const dayRecords = useMemo(() => {
+    if (!dSelDay || !dSelMonth) return [];
+    const dayStr = `${curYear}-${String(dSelMonth).padStart(2, "0")}-${String(dSelDay).padStart(2, "0")}`;
+    return safeRecords.filter(r => r && r.timestamp?.startsWith(dayStr));
+  }, [safeRecords, dSelDay, dSelMonth, curYear]);
+
+  const dayTotal = dayRecords.reduce((a, r) => a + (r.amount || 0), 0);
 
   // بحث التوبار العلوي: افتحلها صف وصف الطالب وافتح السجل تلقائي
   useEffect(() => {
@@ -515,7 +529,12 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   return (
     <div className="space-y-4">
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <div className="text-xs text-slate-400 font-bold mb-1">🔍 فلاتر البحث</div>
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-xs text-slate-400 font-bold">🔍 فلاتر البحث</div>
+          <button onClick={() => setDayReportOpen(true)} className="text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1 hover:bg-blue-500/20">
+            📅 عرض سجل المصاريف
+          </button>
+        </div>
         <div className="grid grid-cols-3 gap-2">
           <Field label="الصف">
             <select value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(""); setTableOpen(false); }}
@@ -582,6 +601,66 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       )}
       {!tableOpen && selGrade && <div className="text-center py-6 text-slate-600 text-sm">اضغط "عرض السجل" لفتح الجدول</div>}
       {!selGrade && <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">💰</div><div className="text-sm">اختر الصف للبدء</div></div>}
+
+      {dayReportOpen && (
+        <Modal title="📅 سجل المصاريف اليومي" onClose={() => setDayReportOpen(false)} maxW="max-w-2xl">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="اليوم">
+                <input type="number" min={1} max={31} value={dSelDay}
+                  onChange={e => setDSelDay(e.target.value ? parseInt(e.target.value) : "")}
+                  placeholder="يوم"
+                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+              </Field>
+              <Field label="الشهر">
+                <select value={dSelMonth} onChange={e => setDSelMonth(parseInt(e.target.value))}
+                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+                  {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            {dayRecords.length === 0
+              ? <div className="text-center py-8 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">محدش دفع في يوم {dSelDay} {MONTHS_AR[dSelMonth - 1]}</div></div>
+              : <div className="bg-slate-900/40 border border-slate-700/30 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto max-h-96">
+                    <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
+                      <thead className="sticky top-0">
+                        <tr className="led-thead bg-slate-900 border-b border-slate-700/60">
+                          {["اسم الطالب","الصف","المبلغ (ج)","المستلم"].map(h => (
+                            <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dayRecords.map(r => (
+                          <tr key={r.id} className="border-b border-slate-700/20">
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Av name={r.studentName} size="sm" />
+                                <span className="text-white text-xs font-bold truncate" style={{ maxWidth: "110px" }}>{r.studentName}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{r.grade} — {r.group}</td>
+                            <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
+                            <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-emerald-900/20 border-t-2 border-emerald-700/30">
+                          <td colSpan={2} className="px-3 py-3 text-emerald-400 font-bold text-sm">💰 إجمالي التحصيل</td>
+                          <td colSpan={2} className="px-3 py-3 text-emerald-400 font-black text-base">{fmtM(dayTotal)} ({dayRecords.length} دفعة)</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+            }
+          </div>
+        </Modal>
+      )}
+
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
