@@ -9,7 +9,7 @@ import { Av, Sel, Btn, Toast } from "../ui";
 export default function WhatsappModule({ students: studentsProp, settings }) {
   const students = studentsProp || [];
   const [msgType,   setMsgType]   = useState("absent");
-  const [selGrade,  setSelGrade]  = useState("الكل");
+  const [selGrade,  setSelGrade]  = useState(""); // فاضي لحد ما تختار — مفيش عرض قبل اختيار الصف
   const [sent,      setSent]      = useState([]);
   const [toast,     setToast]     = useState(null);
   // قائمة الانتظار لـ "إرسال للكل"
@@ -17,9 +17,9 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
 
   const cn = settings?.centerName || "مركز الشرقاوي";
 
-  // فلتر الطلاب — الصف + النشطين فقط
-  const filtered = students.filter(s =>
-    (selGrade === "الكل" || s.grade === selGrade) && s.status !== "inactive"
+  // فلتر الطلاب — لازم صف مختار الأول، وإلا القائمة فاضية
+  const filtered = !selGrade ? [] : students.filter(s =>
+    s.grade === selGrade && s.status !== "inactive"
   );
 
   const tpls = {
@@ -144,61 +144,70 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
         ))}
       </div>
 
-      {/* فلتر الصف */}
+      {/* اختيار الصف — إجباري الأول */}
       <Sel value={selGrade} onChange={e => setSelGrade(e.target.value)}>
-        <option>الكل</option>
+        <option value="">اختر الصف أولاً...</option>
         {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
       </Sel>
 
-      {/* معاينة الرسالة */}
-      {filtered[0] && (
-        <div className="bg-slate-800/60 border border-green-700/20 rounded-2xl p-3">
-          <div className="text-xs text-green-400 font-medium mb-2">نموذج الرسالة</div>
-          <div className="text-slate-300 text-xs leading-relaxed whitespace-pre-line bg-slate-900/40 rounded-xl p-3">
-            {tpls[msgType](filtered[0]).replace(filtered[0].name, "[اسم الطالب]")}
-          </div>
-        </div>
-      )}
-
-      {filtered.length === 0 && (
+      {!selGrade ? (
         <div className="text-center py-10 text-slate-600">
-          <div className="text-4xl mb-2">💬</div>
-          <div className="text-sm">لا يوجد طلاب لهذا الاختيار</div>
+          <div className="text-4xl mb-2">🎓</div>
+          <div className="text-sm">اختاري الصف الأول عشان تظهر أسماء الطلاب</div>
         </div>
-      )}
-
-      {/* قائمة الطلاب */}
-      <div className="space-y-2">
-        {filtered.map(s => {
-          const isSent = sent.includes(s.id);
-          return (
-            <div key={s.id} className="bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 flex items-center gap-3">
-              <Av name={s.name} size="sm" />
-              <div className="flex-1 min-w-0">
-                <div className="text-white text-sm font-medium whitespace-normal break-words">{s.name}</div>
-                <div className="text-slate-500 text-xs">{s.parentPhone}</div>
+      ) : (
+        <>
+          {/* معاينة الرسالة */}
+          {filtered[0] && (
+            <div className="bg-slate-800/60 border border-green-700/20 rounded-2xl p-3">
+              <div className="text-xs text-green-400 font-medium mb-2">نموذج الرسالة</div>
+              <div className="text-slate-300 text-xs leading-relaxed whitespace-pre-line bg-slate-900/40 rounded-xl p-3">
+                {tpls[msgType](filtered[0]).replace(filtered[0].name, "[اسم الطالب]")}
               </div>
-              <button
-                onClick={() => send(s)}
-                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold ${
-                  isSent
-                    ? "bg-emerald-700/30 border border-emerald-600/20 text-emerald-300"
-                    : "bg-green-600 hover:bg-green-500 text-white"
-                }`}
-              >
-                {isSent ? "✓ أُرسل" : "إرسال"}
-              </button>
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      <div className="flex gap-2">
-        <Btn variant="ghost" size="lg" className="flex-1" onClick={() => setSent([])}>↩ إعادة تعيين</Btn>
-        <Btn variant="green" size="lg" className="flex-1" onClick={startQueue}>
-          💬 إرسال للكل ({filtered.filter(s => !sent.includes(s.id)).length})
-        </Btn>
-      </div>
+          {filtered.length === 0 && (
+            <div className="text-center py-10 text-slate-600">
+              <div className="text-4xl mb-2">💬</div>
+              <div className="text-sm">لا يوجد طلاب في هذا الصف</div>
+            </div>
+          )}
+
+          {/* قائمة الطلاب */}
+          <div className="space-y-2">
+            {filtered.map(s => {
+              const isSent = sent.includes(s.id);
+              return (
+                <div key={s.id} className="bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 flex items-center gap-3">
+                  <Av name={s.name} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-sm font-medium whitespace-normal break-words">{s.name}</div>
+                    <div className="text-slate-500 text-xs">{s.parentPhone}</div>
+                  </div>
+                  <button
+                    onClick={() => send(s)}
+                    className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                      isSent
+                        ? "bg-emerald-700/30 border border-emerald-600/20 text-emerald-300"
+                        : "bg-green-600 hover:bg-green-500 text-white"
+                    }`}
+                  >
+                    {isSent ? "✓ أُرسل" : "إرسال"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2">
+            <Btn variant="ghost" size="lg" className="flex-1" onClick={() => setSent([])}>↩ إعادة تعيين</Btn>
+            <Btn variant="green" size="lg" className="flex-1" onClick={startQueue}>
+              💬 إرسال للكل ({filtered.filter(s => !sent.includes(s.id)).length})
+            </Btn>
+          </div>
+        </>
+      )}
 
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
