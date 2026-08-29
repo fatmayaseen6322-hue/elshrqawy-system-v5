@@ -665,6 +665,16 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
           <Field label="إيميل الطالب"><Inp value={pEmail} onChange={e => setPEmail(e.target.value)} placeholder="example@mail.com" /></Field>
           <Field label="باسورد الطالب"><Inp value={pPass} onChange={e => setPPass(e.target.value)} placeholder="كلمة سر بسيطة" /></Field>
         </div>
+        <Btn
+          variant="ghost" size="sm" className="w-full"
+          onClick={() => {
+            if (!pEmail.trim() || !pPass) { setToast({ msg: "اكتبي الإيميل والباسورد الأول", type: "error" }); return; }
+            const phone = sPhone.trim() || pPhone.trim();
+            const link  = waLink(phone, `?text=${encodeURIComponent(`بيانات دخولك على بوابة ${name || "الطالب"}:\nالإيميل: ${pEmail.trim()}\nالباسورد: ${pPass}`)}`);
+            if (!link) { setToast({ msg: "محتاجة تكتبي رقم هاتف الطالب أو ولي الأمر الأول", type: "error" }); return; }
+            window.open(link, "_blank");
+          }}
+        >📲 ابعتيله بيانات الدخول واتساب</Btn>
       </div>
       {mode === "add" && (
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
