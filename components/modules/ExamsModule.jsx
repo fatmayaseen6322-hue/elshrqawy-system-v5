@@ -1173,14 +1173,9 @@ function ExamPanelCurriculum({ webExams, students }) {
     <div className="space-y-4">
       <h3 className="text-white font-black">🔗 ربط الامتحان بالمحتوى</h3>
       <div className="flex gap-2">
-        <Sel value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(GROUPS_MAP[e.target.value]?.[0] || "A"); setGroupLink(""); }}>
-          {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-        </Sel>
-      </div>
-      <div className="flex gap-2">
         <div className="flex-1">
-          <Sel value={selGroup} onChange={e => { setSelGroup(e.target.value); setGroupLink(""); }}>
-            {(GROUPS_MAP[selGrade] || ["A"]).map(g => <option key={g}>مج. {g}</option>)}
+          <Sel value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(GROUPS_MAP[e.target.value]?.[0] || "A"); setGroupLink(""); }}>
+            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
           </Sel>
         </div>
         <div className="flex-1">
