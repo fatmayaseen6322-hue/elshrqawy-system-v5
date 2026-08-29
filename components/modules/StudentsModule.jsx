@@ -89,7 +89,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
   const [showNoPhone, setShowNoPhone] = useState(false);
 
   const noPhoneStudents = useMemo(
-    () => (students || []).filter(s => s && !isBlocked(s) && !(s.parentPhone && s.parentPhone.trim())),
+    () => (students || []).filter(s => s && !isBlocked(s) && !(s.parentPhone && s.parentPhone.trim()) && !(s.phone && s.phone.trim())),
     [students]
   );
 

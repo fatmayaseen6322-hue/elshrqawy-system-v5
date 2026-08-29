@@ -105,9 +105,9 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     grades: groupByGrade(examStudents),
   };
 
-  // طلاب بدون رقم هاتف ولي أمر مسجَّل — بيظهر مستطيل بعد "الامتحانات" وقبل "الإيرادات"
+  // طلاب بدون أي رقم هاتف مسجَّل (لا رقم الطالب ولا رقم ولي الأمر) — بيظهر مستطيل بعد "الامتحانات" وقبل "الإيرادات"
   const noPhoneStudents = students
-    .filter(s => !(s.parentPhone && s.parentPhone.trim()))
+    .filter(s => !(s.parentPhone && s.parentPhone.trim()) && !(s.phone && s.phone.trim()))
     .map(s => ({ name: s.name, group: s.group, grade: s.grade }));
   const noPhoneSection = {
     title: "الطلاب بدون أرقام", icon: "📵",

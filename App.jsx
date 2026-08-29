@@ -312,8 +312,8 @@ export default function App() {
     examsMissing.reduce((acc, s) => { const g = s.grade || "غير محدد"; (acc[g] ||= []).push(s); return acc; }, {})
   );
 
-  // 4) طلاب بدون رقم هاتف ولي أمر مسجَّل
-  const noPhoneStudents = (students || []).filter(s => s && !(s.parentPhone && s.parentPhone.trim()));
+  // 4) طلاب بدون أي رقم هاتف مسجَّل (لا رقم الطالب ولا رقم ولي الأمر)
+  const noPhoneStudents = (students || []).filter(s => s && !(s.parentPhone && s.parentPhone.trim()) && !(s.phone && s.phone.trim()));
   const noPhoneByGrade = Object.entries(
     noPhoneStudents.reduce((acc, s) => { const g = s.grade || "غير محدد"; (acc[g] ||= []).push(s); return acc; }, {})
   );
