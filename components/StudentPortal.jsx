@@ -9,21 +9,23 @@ const STATUS_COLOR = { present: "text-emerald-400", late: "text-amber-400", abse
 // 🔗 بوابة الطالب — صفحة عامة مستقلة عن باقي النظام
 // بتتفتح من "لينك المجموعة" (قسم الامتحانات → الويب)، بتقرأ آخر نسخة
 // لحظية من Firebase (elshrqawy_live_state/main) وتديها لأي طالب عنده
-// إيميل + باسورد مسجّلين له من شاشة "تسجيل طالب" في نظام الإدارة.
+// اسم + رقم مسجَّل له من شاشة "تسجيل طالب" في نظام الإدارة.
 // لا تحتاج تسجيل دخول كمستر/Assist ولا تلمس بيانات الجهاز المحلي.
 // ══════════════════════════════════════════════════════════════
 
 export default function StudentPortal({ grade, group }) {
-  const [email, setEmail] = useState("");
-  const [pass,  setPass]  = useState("");
+  const [name, setNameVal] = useState("");
+  const [sid,  setSid]     = useState("");
   const [err,   setErr]   = useState("");
   const [loading, setLoading] = useState(false);
   const [cloud, setCloud] = useState(null); // { students, finRecords, attRecords, webExams }
   const [student, setStudent] = useState(null);
 
+  const normalizeAr = (str = "") => String(str).trim().replace(/[أإآء]/g, "ا").replace(/\s+/g, " ");
+
   const login = async () => {
     setErr("");
-    if (!email.trim() || !pass) { setErr("اكتب الإيميل والباسورد"); return; }
+    if (!name.trim() || !sid.trim()) { setErr("اكتب اسمك والرقم المسجل"); return; }
     setLoading(true);
     try {
       const { doc, getDoc } = await import("firebase/firestore");
@@ -32,11 +34,13 @@ export default function StudentPortal({ grade, group }) {
       if (!snap.exists()) { setErr("النظام لسه ما عملش أي مزامنة سحابية — كلّمي إدارة السنتر"); setLoading(false); return; }
       const data = snap.data();
       const list = data.students || [];
+      const typedName = normalizeAr(name);
+      const typedId   = sid.trim();
       const found = list.find(s =>
-        (s.portalEmail || "").trim().toLowerCase() === email.trim().toLowerCase() &&
-        (s.portalPass  || "") === pass
+        String(s.id || "").trim() === typedId &&
+        normalizeAr(s.name || "").includes(typedName)
       );
-      if (!found) { setErr("الإيميل أو الباسورد غلط"); setLoading(false); return; }
+      if (!found) { setErr("الاسم أو الرقم المسجل غلط"); setLoading(false); return; }
       setCloud(data);
       setStudent(found);
     } catch (e) {
@@ -153,7 +157,7 @@ export default function StudentPortal({ grade, group }) {
                 <span className="text-slate-500">←</span>
               </button>
 
-              <button onClick={() => { setStudent(null); setCloud(null); setPass(""); setTab("home"); }}
+              <button onClick={() => { setStudent(null); setCloud(null); setSid(""); setTab("home"); }}
                 className="text-slate-500 text-xs w-full text-center py-2">تسجيل خروج</button>
             </div>
           )}
@@ -293,20 +297,20 @@ export default function StudentPortal({ grade, group }) {
           {(grade || group) && <div className="text-slate-500 text-xs mt-1">{grade}{grade && group ? " · " : ""}{group ? `مجموعة ${group}` : ""}</div>}
         </div>
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">الإيميل</label>
-          <input value={email} onChange={e => setEmail(e.target.value)} type="email"
+          <label className="text-xs text-slate-400 mb-1 block">اسمك</label>
+          <input value={name} onChange={e => setNameVal(e.target.value)} type="text" placeholder="اكتب اسمك"
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-500" />
         </div>
         <div>
-          <label className="text-xs text-slate-400 mb-1 block">الباسورد</label>
-          <input value={pass} onChange={e => setPass(e.target.value)} type="password"
+          <label className="text-xs text-slate-400 mb-1 block">الرقم المسجل بيه عندنا</label>
+          <input value={sid} onChange={e => setSid(e.target.value)} type="text" inputMode="numeric" placeholder="مثال: 01xxxxxxxxx"
             onKeyDown={e => e.key === "Enter" && login()}
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-500" />
         </div>
         {err && <div className="text-red-400 text-xs text-center bg-red-500/10 rounded-lg py-2">{err}</div>}
         <button onClick={login} disabled={loading}
           className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 rounded-xl py-2.5 font-bold text-sm transition-colors">
-          {loading ? "⏳ جاري الدخول..." : "دخول"}
+          {loading ? "⏳ جاري الدخول..." : "▶ تشغيل"}
         </button>
       </div>
     </div>

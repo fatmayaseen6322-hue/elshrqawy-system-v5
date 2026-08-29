@@ -608,8 +608,6 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
   const [pPhone, setPPhone] = useState(s.parentPhone  || "");
   const [sPhone, setSPhone] = useState(s.phone        || "");
   const [fees,   setFees]   = useState(s.totalFees    || 2400);
-  const [pEmail, setPEmail] = useState(s.portalEmail  || "");
-  const [pPass,  setPPass]  = useState(s.portalPass   || "");
   const [err,    setErr]    = useState({});
 
   // ── تسجيل بتاريخ الحضور الفعلي + حساب المطلوب حسب الحصص المتبقية (بس عند الإضافة) ──
@@ -646,7 +644,6 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
       score: s.score || 0, present: s.present || 0,
       absent: s.absent || 0, late: s.late || 0, total: s.total || 0,
       weak: s.weak || [],
-      portalEmail: pEmail.trim(), portalPass: pPass,
     };
 
     if (mode === "add") setStudents(p => [st, ...p]);
@@ -660,7 +657,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
     setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name} — عليه ${fmt(owedAmount)} (${remainingSessions} حصة من ${sessionsPerMonth})${noPhoneWarn}` : `✓ تم تعديل ${st.name}${noPhoneWarn}`, type: !pPhone.trim() ? "info" : "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
     if (mode === "edit") setStep("profile"); else finishStep();
-  }, [name, sg, sgp, pPhone, sPhone, fees, pEmail, pPass, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
+  }, [name, sg, sgp, pPhone, sPhone, fees, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
 
   return (
     <div className="space-y-4">
@@ -698,23 +695,25 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
           <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
         </div>
       </div>
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <div className="text-slate-400 text-xs font-bold">🔐 دخول الطالب على بوابة "لينك المجموعة" (اختياري)</div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="إيميل الطالب"><Inp value={pEmail} onChange={e => setPEmail(e.target.value)} placeholder="example@mail.com" /></Field>
-          <Field label="باسورد الطالب"><Inp value={pPass} onChange={e => setPPass(e.target.value)} placeholder="كلمة سر بسيطة" /></Field>
+      {mode === "edit" && (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+          <div className="text-slate-400 text-xs font-bold">🔐 دخول الطالب على بوابة "لينك المجموعة"</div>
+          <div className="text-slate-500 text-xs">الطالب بيدخل ببياناته هو بس بكتابة اسمه (كامل أو جزء منه) + الرقم المسجل بيه عندنا:</div>
+          <div className="flex items-center justify-between bg-slate-900/50 rounded-xl px-3 py-2.5">
+            <span className="text-slate-400 text-xs">الرقم المسجل</span>
+            <span className="text-emerald-400 font-black text-base" style={{ direction: "ltr" }}>{s.id}</span>
+          </div>
+          <Btn
+            variant="ghost" size="sm" className="w-full"
+            onClick={() => {
+              const phone = sPhone.trim() || pPhone.trim();
+              const link  = waLink(phone, `?text=${encodeURIComponent(`بيانات دخولك على بوابة ${name || "الطالب"}:\nاكتب اسمك: ${name || ""}\nالرقم المسجل: ${s.id}`)}`);
+              if (!link) { setToast({ msg: "محتاجة تكتبي رقم هاتف الطالب أو ولي الأمر الأول", type: "error" }); return; }
+              window.open(link, "_blank");
+            }}
+          >📲 ابعتيله رقمه واتساب</Btn>
         </div>
-        <Btn
-          variant="ghost" size="sm" className="w-full"
-          onClick={() => {
-            if (!pEmail.trim() || !pPass) { setToast({ msg: "اكتبي الإيميل والباسورد الأول", type: "error" }); return; }
-            const phone = sPhone.trim() || pPhone.trim();
-            const link  = waLink(phone, `?text=${encodeURIComponent(`بيانات دخولك على بوابة ${name || "الطالب"}:\nالإيميل: ${pEmail.trim()}\nالباسورد: ${pPass}`)}`);
-            if (!link) { setToast({ msg: "محتاجة تكتبي رقم هاتف الطالب أو ولي الأمر الأول", type: "error" }); return; }
-            window.open(link, "_blank");
-          }}
-        >📲 ابعتيله بيانات الدخول واتساب</Btn>
-      </div>
+      )}
       {mode === "add" && (
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
           <div className="text-slate-400 text-xs font-bold">📅 تاريخ الانضمام وحساب المطلوب</div>
