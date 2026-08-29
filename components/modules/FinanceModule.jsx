@@ -140,7 +140,9 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
         </td>
         <td className="px-2 py-3">
           {editing || !saved
-            ? <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-16 bg-slate-700 border border-blue-500/40 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
+            ? <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
+                onBlur={() => { if (receiverId && amount) doSave(); }}
+                className="w-16 bg-slate-700 border border-blue-500/40 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
             : <span className="text-amber-400 font-black text-sm">{amount}</span>
           }
         </td>
