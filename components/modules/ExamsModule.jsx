@@ -981,6 +981,21 @@ function ExamPanelCurriculum({ webExams, students }) {
   const [selGroup, setSelGroup] = useState("A");
   const [selExam, setSelExam]   = useState(null);
   const [activeTab, setActiveTab] = useState("results");
+  const [groupLink, setGroupLink] = useState(""); // 🔗 لينك المجموعة الحالي المُولّد
+  const [linkToast, setLinkToast] = useState(null);
+
+  const buildGroupLink = () => `${window.location.origin}${window.location.pathname}?portal=1&grade=${encodeURIComponent(selGrade)}&group=${encodeURIComponent(selGroup)}`;
+
+  const showGroupLink = () => {
+    const url = buildGroupLink();
+    setGroupLink(url);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(
+        () => setLinkToast({ msg: "✓ اتنسخ اللينك", type: "success" }),
+        () => setLinkToast({ msg: "اتعرض اللينك تحت — انسخيه يدوي", type: "error" })
+      );
+    }
+  };
 
   const filtW = useMemo(() =>
     webExams.filter(e => e.grade === selGrade && e.group === selGroup),
@@ -1108,17 +1123,30 @@ function ExamPanelCurriculum({ webExams, students }) {
     <div className="space-y-4">
       <h3 className="text-white font-black">🔗 ربط الامتحان بالمحتوى</h3>
       <div className="flex gap-2">
+        <Sel value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(GROUPS_MAP[e.target.value]?.[0] || "A"); setGroupLink(""); }}>
+          {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+        </Sel>
+      </div>
+      <div className="flex gap-2">
         <div className="flex-1">
-          <Sel value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
-            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-          </Sel>
-        </div>
-        <div style={{ width: "100px" }}>
-          <Sel value={selGroup} onChange={e => setSelGroup(e.target.value)}>
+          <Sel value={selGroup} onChange={e => { setSelGroup(e.target.value); setGroupLink(""); }}>
             {(GROUPS_MAP[selGrade] || ["A"]).map(g => <option key={g}>مج. {g}</option>)}
           </Sel>
         </div>
+        <div className="flex-1">
+          <Btn variant="primary" className="w-full" onClick={showGroupLink}>🔗 رابط المجموعة</Btn>
+        </div>
       </div>
+      {groupLink && (
+        <div className="bg-slate-800/60 border border-emerald-500/25 rounded-2xl p-3 flex items-center gap-2">
+          <div className="flex-1 text-xs text-slate-300 break-all">{groupLink}</div>
+          <button
+            onClick={() => { navigator.clipboard?.writeText(groupLink); setLinkToast({ msg: "✓ اتنسخ اللينك", type: "success" }); }}
+            className="shrink-0 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 py-1.5"
+          >نسخ</button>
+        </div>
+      )}
+      {linkToast && <Toast msg={linkToast.msg} type={linkToast.type} onDone={() => setLinkToast(null)} />}
 
       {filtW.length === 0
         ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">🔗</div>لا توجد امتحانات لهذه المجموعة</div>

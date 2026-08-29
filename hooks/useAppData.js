@@ -315,8 +315,13 @@ export default function useAppData() {
       const { doc, setDoc } = await import("firebase/firestore");
       const { db } = await import("../src/firebase");
       await setDoc(doc(db, "elshrqawy_live_state", "main"), {
-        students: lsGet(KEYS.students, []),
-        settings: lsGet(KEYS.settings, {}),
+        students:    lsGet(KEYS.students,    []),
+        settings:    lsGet(KEYS.settings,    {}),
+        // #StudentPortal: لازم البيانات دي كمان عشان بوابة الطالب (لينك المجموعة)
+        // تقدر تعرض حضوره ومصاريفه ودرجاته لحظيًا من أي جهاز.
+        finRecords:  lsGet(KEYS.finRecords,  []),
+        attRecords:  lsGet(KEYS.attRecords,  []),
+        webExams:    lsGet(KEYS.webExams,    []),
         updatedAt: ts,
       });
       setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });
@@ -364,7 +369,7 @@ export default function useAppData() {
     pushTimer.current = setTimeout(() => pushLiveState(ts), 3000);
     return () => clearTimeout(pushTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, settings]);
+  }, [students, settings, finRecords, attRecords, webExams]);
 
 
   const cloudAutoRan = useRef(false);

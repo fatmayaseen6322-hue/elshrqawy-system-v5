@@ -19,6 +19,7 @@ import DashboardModule  from "./components/modules/DashboardModule";
 import WhatsappModule   from "./components/modules/WhatsappModule";
 import SettingsModule   from "./components/modules/SettingsModule";
 import RoleGate, { ROLE_PERMS } from "./components/modules/RoleGate";
+import StudentPortal            from "./components/StudentPortal";
 
 // ══════════════════════════════════════════════════════════════
 // ROOT APP
@@ -199,6 +200,16 @@ function AbsentNotifRow({ a, onToggleContacted }) {
 }
 
 export default function App() {
+  // 🔗 بوابة الطالب: لينك مستقل تمامًا (?portal=1) — بيتفتح من قسم
+  // الامتحانات → الويب → "رابط المجموعة". لازم يتشيّك هنا فورًا قبل أي
+  // hook تاني، عشان الجهاز اللي بيفتح اللينك ده (موبايل الطالب) ميعملش
+  // useAppData() اللي بيحمّل/يرفع بيانات الجهاز المحلي (اللي أصلاً فاضية
+  // عند الطالب) فوق النسخة السحابية الحقيقية بالغلط.
+  const portalParams = new URLSearchParams(window.location.search);
+  if (portalParams.get("portal") === "1") {
+    return <StudentPortal grade={portalParams.get("grade") || ""} group={portalParams.get("group") || ""} />;
+  }
+
   const [theme, setTheme]             = useTheme();
   const [showTheme, setShowTheme]     = useState(false);
   const [page, setPage]               = useState("dashboard");

@@ -571,6 +571,8 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
   const [pPhone, setPPhone] = useState(s.parentPhone  || "");
   const [sPhone, setSPhone] = useState(s.phone        || "");
   const [fees,   setFees]   = useState(s.totalFees    || 2400);
+  const [pEmail, setPEmail] = useState(s.portalEmail  || "");
+  const [pPass,  setPPass]  = useState(s.portalPass   || "");
   const [err,    setErr]    = useState({});
 
   // ── تسجيل بتاريخ الحضور الفعلي + حساب المطلوب حسب الحصص المتبقية (بس عند الإضافة) ──
@@ -608,6 +610,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
       score: s.score || 0, present: s.present || 0,
       absent: s.absent || 0, late: s.late || 0, total: s.total || 0,
       weak: s.weak || [],
+      portalEmail: pEmail.trim(), portalPass: pPass,
     };
 
     if (mode === "add") setStudents(p => [st, ...p]);
@@ -618,7 +621,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
     setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name} — عليه ${fmt(owedAmount)} (${remainingSessions} حصة من ${sessionsPerMonth})` : `✓ تم تعديل ${st.name}`, type: "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
     if (mode === "edit") setStep("profile"); else finishStep();
-  }, [name, sg, sgp, pPhone, sPhone, fees, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
+  }, [name, sg, sgp, pPhone, sPhone, fees, pEmail, pPass, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
 
   return (
     <div className="space-y-4">
@@ -654,6 +657,13 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
         <div className="grid grid-cols-2 gap-3">
           <Field label="هاتف ولي الأمر *" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} /></Field>
           <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+        <div className="text-slate-400 text-xs font-bold">🔐 دخول الطالب على بوابة "لينك المجموعة" (اختياري)</div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="إيميل الطالب"><Inp value={pEmail} onChange={e => setPEmail(e.target.value)} placeholder="example@mail.com" /></Field>
+          <Field label="باسورد الطالب"><Inp value={pPass} onChange={e => setPPass(e.target.value)} placeholder="كلمة سر بسيطة" /></Field>
         </div>
       </div>
       {mode === "add" && (
