@@ -260,7 +260,7 @@ export default function App() {
   const NOTIF_READ_KEY = "app_notif_read";
   const [notifRead, setNotifReadRaw] = useState(() => {
     const saved = lsGet(NOTIF_READ_KEY, null);
-    return (saved && saved.date === TODAY) ? saved.read : { absence: false, finance: false, exams: false };
+    return (saved && saved.date === TODAY) ? saved.read : { absence: false, finance: false, exams: false, phone: false };
   });
   const [expandedNotif, setExpandedNotif] = useState(null);
   const markNotifRead = (key) => {
@@ -312,13 +312,29 @@ export default function App() {
     examsMissing.reduce((acc, s) => { const g = s.grade || "غير محدد"; (acc[g] ||= []).push(s); return acc; }, {})
   );
 
+  // 4) طلاب بدون رقم هاتف ولي أمر مسجَّل
+  const noPhoneStudents = (students || []).filter(s => s && !(s.parentPhone && s.parentPhone.trim()));
+  const noPhoneByGrade = Object.entries(
+    noPhoneStudents.reduce((acc, s) => { const g = s.grade || "غير محدد"; (acc[g] ||= []).push(s); return acc; }, {})
+  );
+
   const absenceCount = absentToday.length;
   const financeCount = finGrandCount;
   const examsCount   = examsMissing.length;
+  const noPhoneCount = noPhoneStudents.length;
   const notifBadgeTotal =
     (notifRead.absence ? 0 : absenceCount) +
     (notifRead.finance ? 0 : financeCount) +
-    (notifRead.exams   ? 0 : examsCount);
+    (notifRead.exams   ? 0 : examsCount) +
+    (notifRead.phone   ? 0 : noPhoneCount);
+
+  // فتح ملف الطالب مباشرة من قائمة "بدون رقم" — بيقفل قائمة التنبيهات
+  // ويودّي المستخدم لصفحة الطلاب على طول عشان يضيف الرقم.
+  const openStudentFromNotif = s => {
+    setJumpStudent(s.id);
+    setPage("students");
+    setShowNotifs(false);
+  };
 
   // نمرر فقط الـ id بدل الكائن كامل — عشان StudentsModule يقرأ
   // أحدث نسخة من بيانات الطالب من `students` وقت التنقل، مش نسخة قديمة (snapshot)
@@ -565,6 +581,25 @@ export default function App() {
                         <div className="flex flex-wrap gap-1">
                           {list.map(s => (
                             <span key={s.id} className="text-[12px] px-2 py-0.5 rounded-lg" style={{ background: "var(--card-bg)", color: "var(--text-primary)" }}>{s.name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </NotifSection>
+
+                {/* 4) طلاب بدون رقم هاتف ولي أمر */}
+                <NotifSection icon="📵" title="بدون رقم" count={notifRead.phone ? 0 : noPhoneCount}
+                  expanded={expandedNotif === "phone"} onToggle={() => toggleNotifSection("phone")}>
+                  {noPhoneStudents.length === 0 ? <NotifEmpty msg="كل الطلاب عندهم رقم مسجَّل ✓" /> : (
+                    noPhoneByGrade.map(([grade, list]) => (
+                      <div key={grade} className="px-4 py-2">
+                        <div className="text-[13px] font-bold mb-1" style={{ color: "var(--text-muted)" }}>{grade} ({list.length})</div>
+                        <div className="flex flex-wrap gap-1">
+                          {list.map(s => (
+                            <button key={s.id} onClick={() => openStudentFromNotif(s)}
+                              className="text-[12px] px-2 py-0.5 rounded-lg"
+                              style={{ background: "rgba(248,113,113,0.15)", color: "#f87171" }}>{s.name} ›</button>
                           ))}
                         </div>
                       </div>

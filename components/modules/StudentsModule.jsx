@@ -86,6 +86,12 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
   const [search, setSearch] = useState("");
   const [openErrKey, setOpenErrKey] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [showNoPhone, setShowNoPhone] = useState(false);
+
+  const noPhoneStudents = useMemo(
+    () => (students || []).filter(s => s && !isBlocked(s) && !(s.parentPhone && s.parentPhone.trim())),
+    [students]
+  );
 
   const doExportWord = useCallback(async () => {
     if (exporting) return;
@@ -148,6 +154,10 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
             className="absolute right-0 top-0 flex items-center gap-1.5 bg-red-600/20 border border-red-500/30 text-red-300 text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-40">
             🗑️ حذف كل الطلاب
           </button>
+          <button onClick={() => setShowNoPhone(true)}
+            className="absolute right-0 top-9 flex items-center gap-1.5 bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold px-3 py-1.5 rounded-xl">
+            📵 الطلاب بدون أرقام{noPhoneStudents.length > 0 ? ` (${noPhoneStudents.length})` : ""}
+          </button>
         </div>
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
           <input
@@ -191,6 +201,33 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
           </div>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+        {showNoPhone && (
+          <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center p-4" onClick={() => setShowNoPhone(false)}>
+            <div className="bg-slate-900 border border-amber-700/50 rounded-2xl p-5 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <div className="text-white text-sm font-bold">📵 الطلاب بدون أرقام ({noPhoneStudents.length})</div>
+                <button onClick={() => setShowNoPhone(false)} className="text-slate-400 text-lg">✕</button>
+              </div>
+              {noPhoneStudents.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-xs">✓ كل الطلاب عندهم رقم هاتف ولي أمر مسجَّل</div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto space-y-1.5">
+                  {noPhoneStudents.map(st => (
+                    <button key={st.id} onClick={() => { setShowNoPhone(false); goToStudentDirect(st); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-amber-500/15 hover:bg-slate-800 text-right">
+                      <Av name={st.name} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-xs font-bold whitespace-normal break-words">{st.name}</div>
+                        <div className="text-slate-500 text-xs">{st.grade} — مجموعة {st.group}</div>
+                      </div>
+                      <span className="text-amber-400 text-xs shrink-0">إضافة الرقم ›</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {confirmDeleteAll && (
           <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-red-700/50 rounded-2xl p-5 w-full max-w-xs space-y-4">
@@ -594,14 +631,13 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
   const save = useCallback(() => {
     const e = {};
     if (!name.trim())    e.name   = "مطلوب";
-    if (!pPhone.trim())  e.pPhone = "مطلوب";
     setErr(e);
     if (Object.keys(e).length) return;
 
     const st = {
       id: s.id || genStudentId((students || []).map(x => x.id)),
       name: name.trim(), grade: sg, group: sgp,
-      phone: sPhone.trim(), parentName: s.parentName || "", parentPhone: pPhone,
+      phone: sPhone.trim(), parentName: s.parentName || "", parentPhone: pPhone.trim(),
       joinDate: mode === "add" ? joinDate : (s.joinDate || TODAY), status: s.status || "active",
       paid: s.paid || 0,
       totalFees: mode === "add" ? owedAmount : (parseInt(fees) || 2400),
@@ -617,8 +653,11 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
     else                setStudents(p => p.map(x => x.id === st.id ? st : x));
     if (mode === "edit") setSel(st);
 
-    // FIX: use parent's setToast directly — no local toast state needed
-    setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name} — عليه ${fmt(owedAmount)} (${remainingSessions} حصة من ${sessionsPerMonth})` : `✓ تم تعديل ${st.name}`, type: "success" });
+    // لو اتسجّل من غير رقم هاتف ولي أمر، بننبّه فورًا هنا + الطالب هيظهر
+    // تلقائيًا في قسم "📵 بدون رقم" بالتنبيهات وفي "الطلاب بدون أرقام"
+    // في برج المراقبة وفي قسم الطلاب لحد ما يتضاف الرقم.
+    const noPhoneWarn = !pPhone.trim() ? " — ⚠️ من غير رقم هاتف ولي أمر" : "";
+    setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name} — عليه ${fmt(owedAmount)} (${remainingSessions} حصة من ${sessionsPerMonth})${noPhoneWarn}` : `✓ تم تعديل ${st.name}${noPhoneWarn}`, type: !pPhone.trim() ? "info" : "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
     if (mode === "edit") setStep("profile"); else finishStep();
   }, [name, sg, sgp, pPhone, sPhone, fees, pEmail, pPass, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
@@ -655,7 +694,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="هاتف ولي الأمر *" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} /></Field>
+          <Field label="هاتف ولي الأمر" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} placeholder="اختياري — لو فاضي هيظهر تنبيه" /></Field>
           <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
         </div>
       </div>

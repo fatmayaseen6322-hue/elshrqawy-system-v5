@@ -105,7 +105,17 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     grades: groupByGrade(examStudents),
   };
 
-  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, expensesSection, absenceSection, examsSection };
+  // طلاب بدون رقم هاتف ولي أمر مسجَّل — بيظهر مستطيل بعد "الامتحانات" وقبل "الإيرادات"
+  const noPhoneStudents = students
+    .filter(s => !(s.parentPhone && s.parentPhone.trim()))
+    .map(s => ({ name: s.name, group: s.group, grade: s.grade }));
+  const noPhoneSection = {
+    title: "الطلاب بدون أرقام", icon: "📵",
+    cols: ["اسم الطالب","المجموعة"],
+    grades: groupByGrade(noPhoneStudents),
+  };
+
+  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, expensesSection, absenceSection, examsSection, noPhoneSection };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -196,6 +206,7 @@ function renderProblemRow(title, s, extra) {
     case "الغياب": return [s.name, <span className="text-red-400 font-bold">{s.absentDays}</span>, s.lateCount, s.absentPct];
     case "غياب اليوم": return [s.name, <span className={s.statusLabel === "غائب" ? "text-red-400 font-bold" : "text-amber-400 font-bold"}>{s.statusLabel}</span>, s.reason];
     case "الامتحانات": return [s.name, s.score, <span className="text-red-400 font-bold">{s.pct}</span>, s.lessons];
+    case "الطلاب بدون أرقام": return [s.name, s.group];
     default: return [];
   }
 }
@@ -525,7 +536,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     addActivity?.("ميعاد تسديد", `تم تحديد ميعاد ${dateStr} لطالب`);
   };
   const periodLabels = { today: "اليوم", week: "الأسبوع", month: "الشهر" };
-  const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null), todayAtt: useRef(null) };
+  const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null), todayAtt: useRef(null), noPhone: useRef(null) };
 
   // زرار الإشعارات في التوب بار → قسم "حالة حرجة" هنا. بيوصل لآخر مكان
   // فيه بيانات فعلية (المصروفات المتأخرة أولاً، وإلا الغياب) بدل مكان تايه.
@@ -566,6 +577,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
       {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
+      <ProblemSection data={dd.noPhoneSection} idRef={refs.noPhone} />
       <MonthlyChart finRecords={finRecords} />
       <ReportButtons students={students} finRecords={finRecords} settings={settings} />
       <AsalAI sectionRefs={refs} students={students} finRecords={finRecords} />
