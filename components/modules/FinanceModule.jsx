@@ -75,6 +75,7 @@ function FinancePasswordGate({ onUnlock, onCancel }) {
 function FinRow({ student, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, centerName, highlighted }) {
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
   const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
+  const [pickTime,    setPickTime]    = useState(""); // ⏱ وقت اختيار المستلم (قبل الحفظ)
   const [saved,       setSaved]       = useState(!!record);
   const [editing,     setEditing]     = useState(false);
   const [showPw,      setShowPw]      = useState(false);
@@ -145,7 +146,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
         </td>
         <td className="px-2 py-3" style={{ minWidth: "100px" }}>
           {editing || !saved
-            ? <select value={receiverId || ""} onChange={e => setReceiverId(parseInt(e.target.value))} className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+            ? <select value={receiverId || ""} onChange={e => { setReceiverId(parseInt(e.target.value)); setPickTime(nowStr()); }} className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
                 <option value="">اختر</option>
                 {(activeReceivers || []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
@@ -153,7 +154,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
           }
         </td>
         <td className="px-2 py-3">
-          <span className="text-slate-500 text-xs whitespace-nowrap">{localRecord?.timestamp || "—"}</span>
+          <span className="text-slate-500 text-xs whitespace-nowrap">{(editing || !saved) ? (pickTime || "—") : (localRecord?.timestamp || "—")}</span>
         </td>
         <td className="px-2 py-3 text-center">
           {saved && !editing
