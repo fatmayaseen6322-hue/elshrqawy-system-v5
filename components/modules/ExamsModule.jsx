@@ -595,15 +595,16 @@ const unitsCountFor = grade => grade === "ثالثة ثانوي" ? 8 : 4;
 const LESSONS_COUNT = 6;
 
 // ─── ورقة تسجيل خطأ سؤال لطالب معيّن ────────────────────────
-function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActivity, centerExams, onClose }) {
+// exam بييجي جاهز من ExamErrorEntry (سواء امتحان مرفوع فعليًا أو امتحان
+// اتسجّل يدويًا بعدد أسئلة/نقط بس من غير رفع ملف) — الشاشة دايمًا بتظهر
+// طول ما فيه امتحان متحدد، سواء اتربط بملف مرفوع أو لأ.
+function StudentErrorSheet({ student, grade, unit, lesson, exam, setStudents, addActivity, onClose }) {
   const [toast,   setToast]   = useState(null);
 
   const tag = `و${unit} - د${lesson}`;
-  const linkedExam = (centerExams || []).find(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson)) || null;
-  // عدد الأسئلة وعدد النقط بيجوا أوتوماتيك من الامتحان المرفوع لنفس الصف/الوحدة/الدرس
-  const numQ   = linkedExam?.numQuestions      || 0;
-  const numPts = linkedExam?.pointsPerQuestion || 0;
-  const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson);
+  const numQ   = exam?.numQuestions      || 0;
+  const numPts = exam?.pointsPerQuestion || 0;
+  const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id);
 
   const markPoint = (q, p) => {
     const label = `${tag} - سؤال ${q} (نقطة ${p})`;
@@ -611,8 +612,8 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
     setStudents(prev => (prev || []).map(s => {
       if (s.id !== student.id) return s;
       const newErrors = already
-        ? (s.examErrors || []).filter(e => !(e.grade === grade && e.unit === unit && e.lesson === lesson && e.q === q && e.p === p))
-        : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: linkedExam?.id || null, ts: new Date().toISOString() }];
+        ? (s.examErrors || []).filter(e => !(e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id && e.q === q && e.p === p))
+        : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() }];
       const newWeak = already
         ? (s.weak || []).filter(w => w !== label)
         : ((s.weak || []).includes(label) ? (s.weak || []) : [...(s.weak || []), label]);
@@ -637,11 +638,10 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
   return (
     <Modal title={`📝 ${student.name} — ${tag}`} onClose={onClose} maxW="max-w-lg">
       <div className="space-y-4">
-        {linkedExam
-          ? <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-emerald-300 text-xs text-center">📎 مربوط بامتحان: {linkedExam.fileName} — {numQ} سؤال × {numPts} نقط</div>
-          : <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">⚠️ لا يوجد امتحان مرفوع لهذه الوحدة/الدرس بعد — ارفعي الامتحان أولًا من قسم "الامتحانات" وحددي عدد الأسئلة والنقط عشان تقدري تسجّلي الأخطاء هنا</div>}
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-emerald-300 text-xs text-center">
+          📎 {exam?.fileName ? `مربوط بامتحان: ${exam.fileName}` : "امتحان مسجَّل يدويًا (بدون ملف)"} — {numQ} سؤال × {numPts} نقط
+        </div>
 
-        {linkedExam && (
         <div>
           <div className="text-xs text-slate-400 font-bold mb-2">دوسي على ✓ جنب رقم النقطة الغلط في كل سؤال — دوسي تاني عليها لو غلطتِ عشان تلغيها</div>
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
@@ -665,7 +665,6 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
             ))}
           </div>
         </div>
-        )}
 
         {errors.length > 0 && (
           <div>
@@ -688,37 +687,75 @@ function StudentErrorSheet({ student, grade, unit, lesson, setStudents, addActiv
   );
 }
 
-// ─── تسجيل أخطاء الأسئلة: صف ← وحدة ← درس ← جدول طلاب الصف ─────
-function ExamErrorEntry({ students, setStudents, addActivity, centerExams }) {
+// ─── تسجيل أخطاء الأسئلة: صف ← وحدة ← درس ← اختيار الامتحان ← جدول طلاب الصف ─────
+// بعد اختيار الصف/الوحدة/الدرس: لو فيه امتحان أو أكتر مسجّل قبل كده لنفس
+// الدرس ده، بتظهر قائمة منسدلة بيهم (+ خيار "تسجيل امتحان جديد" في الآخر).
+// لو مفيش أي امتحان لسه، بيظهر مباشرة نموذج تسجيل امتحان جديد — من غير
+// ما تكون مضطرة ترفعي ملف الامتحان الأول من قسم "الامتحانات".
+function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCenterExams }) {
   const [grade,   setGrade]   = useState("");
   const [unit,    setUnit]    = useState("");
   const [lesson,  setLesson]  = useState("");
   const [openStudent, setOpenStudent] = useState(null);
+  const [selectedExamId, setSelectedExamId] = useState(""); // "" = لسه محددتش | "NEW" | id امتحان حقيقي
+  const [newName,   setNewName]   = useState("");
+  const [newNumQ,   setNewNumQ]   = useState(20);
+  const [newNumPts, setNewNumPts] = useState(4);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
   const gradeStudents = useMemo(() => students.filter(s => s.grade === grade), [students, grade]);
 
-  const errCountFor = s => (s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson).length;
+  const examsForLesson = useMemo(() =>
+    (centerExams || [])
+      .filter(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson))
+      .sort((a, b) => (a.date || "").localeCompare(b.date || "")),
+    [centerExams, grade, unit, lesson]
+  );
+
+  const selectedExam = useMemo(
+    () => examsForLesson.find(e => e.id === selectedExamId) || null,
+    [examsForLesson, selectedExamId]
+  );
+
+  const errCountFor = s => selectedExam
+    ? (s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).length
+    : 0;
+
+  const resetPick = () => { setSelectedExamId(""); setNewName(""); setNewNumQ(20); setNewNumPts(4); };
+
+  const createManualExam = () => {
+    const id = genExamId();
+    const exam = {
+      id, grade, unit, lesson,
+      fileName: newName.trim() || null,
+      date: TODAY,
+      numQuestions: Math.max(1, parseInt(newNumQ) || 1),
+      pointsPerQuestion: Math.max(1, parseInt(newNumPts) || 1),
+      manual: true,
+    };
+    setCenterExams(p => [exam, ...(p || [])]);
+    setSelectedExamId(id);
+  };
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-2">
         <Field label="الصف">
-          <select value={grade} onChange={e => { setGrade(e.target.value); setUnit(""); setLesson(""); }}
+          <select value={grade} onChange={e => { setGrade(e.target.value); setUnit(""); setLesson(""); resetPick(); }}
             className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
             <option value="">— اختر —</option>
             {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
           </select>
         </Field>
         <Field label="الوحدة">
-          <select value={unit} onChange={e => setUnit(e.target.value)} disabled={!grade}
+          <select value={unit} onChange={e => { setUnit(e.target.value); setLesson(""); resetPick(); }} disabled={!grade}
             className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
             <option value="">— اختر —</option>
             {Array.from({ length: maxUnits }, (_, i) => i + 1).map(u => <option key={u} value={u}>وحدة {u}</option>)}
           </select>
         </Field>
         <Field label="الدرس">
-          <select value={lesson} onChange={e => setLesson(e.target.value)} disabled={!unit}
+          <select value={lesson} onChange={e => { setLesson(e.target.value); resetPick(); }} disabled={!unit}
             className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
             <option value="">— اختر —</option>
             {Array.from({ length: LESSONS_COUNT }, (_, i) => i + 1).map(l => <option key={l} value={l}>درس {l}</option>)}
@@ -730,35 +767,94 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams }) {
         <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
       )}
 
-      {grade && unit && lesson && (
-        gradeStudents.length === 0
-          ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
-          : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
-              {gradeStudents.map(s => {
-                const n = errCountFor(s);
-                return (
-                  <button key={s.id} onClick={() => setOpenStudent(s)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
-                    <Av name={s.name} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
-                      <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
-                    </div>
-                    {n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} خطأ</span>}
-                    <span className="text-slate-500 text-xs shrink-0">تسجيل ›</span>
-                  </button>
-                );
-              })}
-            </div>
+      {/* اختيار الامتحان (لو موجود أكتر من امتحان لنفس الدرس) أو نموذج تسجيل امتحان جديد */}
+      {grade && unit && lesson && !selectedExam && selectedExamId !== "NEW" && (
+        examsForLesson.length > 0 ? (
+          <Field label={`فيه ${examsForLesson.length} امتحان مسجَّل لهذا الدرس — اختاري واحد`}>
+            <select value={selectedExamId} onChange={e => setSelectedExamId(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+              <option value="">— اختر —</option>
+              {examsForLesson.map((ex, i) => (
+                <option key={ex.id} value={ex.id}>
+                  امتحان {i + 1}{ex.fileName ? ` — ${ex.fileName}` : " — يدوي"} — {ex.date}
+                </option>
+              ))}
+              <option value="NEW">➕ تسجيل امتحان جديد</option>
+            </select>
+          </Field>
+        ) : (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-3 text-amber-300 text-xs text-center space-y-2">
+            <div>⚠️ لا يوجد امتحان مسجَّل لهذه الوحدة/الدرس بعد</div>
+            <Btn variant="danger" className="w-full" onClick={() => setSelectedExamId("NEW")}>➕ تسجيل امتحان جديد</Btn>
+          </div>
+        )
       )}
+
+      {grade && unit && lesson && selectedExamId === "NEW" && (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+          <div className="text-white font-black text-sm">➕ تسجيل امتحان جديد لهذا الدرس</div>
+          <div className="text-slate-500 text-xs">مش لازم ترفعي ملف الامتحان — يكفي تحددي عدد الأسئلة والنقط عشان تقدري تبدئي تسجيل الأخطاء فورًا.</div>
+          <Field label="اسم الامتحان (اختياري)">
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: امتحان الأسبوع 2"
+              className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none" />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="عدد الأسئلة">
+              <input type="number" min={1} max={100} value={newNumQ} onChange={e => setNewNumQ(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+            </Field>
+            <Field label="عدد النقط لكل سؤال">
+              <input type="number" min={1} max={20} value={newNumPts} onChange={e => setNewNumPts(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+            </Field>
+          </div>
+          <div className="flex gap-2">
+            <Btn variant="ghost" className="flex-1" onClick={resetPick}>رجوع</Btn>
+            <Btn variant="success" className="flex-1" onClick={createManualExam}>بدء التسجيل</Btn>
+          </div>
+        </div>
+      )}
+
+      {grade && unit && lesson && selectedExam && (
+        <>
+          <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2 flex-wrap gap-1">
+            <div className="text-xs text-slate-300">
+              📎 {selectedExam.fileName || "امتحان يدوي"} — {selectedExam.numQuestions} سؤال × {selectedExam.pointsPerQuestion} نقط — {selectedExam.date}
+            </div>
+            <button onClick={resetPick} className="text-blue-400 text-xs shrink-0">🔄 تغيير الامتحان</button>
+          </div>
+
+          {gradeStudents.length === 0
+            ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
+            : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
+                {gradeStudents.map(s => {
+                  const n = errCountFor(s);
+                  return (
+                    <button key={s.id} onClick={() => setOpenStudent(s)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
+                      <Av name={s.name} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
+                        <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
+                      </div>
+                      {n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} خطأ</span>}
+                      <span className="text-slate-500 text-xs shrink-0">تسجيل ›</span>
+                    </button>
+                  );
+                })}
+              </div>
+          }
+        </>
+      )}
+
       {(!grade || !unit || !lesson) && (
         <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">📝</div><div className="text-sm">اختاري الصف ثم الوحدة ثم الدرس</div></div>
       )}
 
-      {openStudent && (
+      {openStudent && selectedExam && (
         <StudentErrorSheet
-          student={openStudent} grade={grade} unit={unit} lesson={lesson}
-          setStudents={setStudents} addActivity={addActivity} centerExams={centerExams}
+          student={openStudent} grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
+          setStudents={setStudents} addActivity={addActivity}
           onClose={() => setOpenStudent(null)}
         />
       )}
@@ -766,7 +862,7 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams }) {
   );
 }
 
-function ExamPanelAlerts({ students, setStudents, addActivity, centerExams }) {
+function ExamPanelAlerts({ students, setStudents, addActivity, centerExams, setCenterExams }) {
   const [tab, setTab] = useState("record"); // record = تسجيل الأخطاء (الافتراضي الجديد) | notif = التنبيهات القديمة
   return (
     <div className="space-y-4">
@@ -780,7 +876,7 @@ function ExamPanelAlerts({ students, setStudents, addActivity, centerExams }) {
           🔔 التنبيهات
         </button>
       </div>
-      {tab === "record" && <ExamErrorEntry students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} />}
+      {tab === "record" && <ExamErrorEntry students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
       {tab === "notif"  && <ExamPanelAlertsOld students={students} />}
     </div>
   );
@@ -1839,7 +1935,7 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
           </div>
         </div>
 
-        {activePanel === "errors"     && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} />}
+        {activePanel === "errors"     && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "correction" && <ExamPanelErrorsHub     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
         {activePanel === "exams"      && <ExamUploadLinked       students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
