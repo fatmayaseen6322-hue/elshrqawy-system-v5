@@ -322,6 +322,10 @@ export default function useAppData() {
         finRecords:  lsGet(KEYS.finRecords,  []),
         attRecords:  lsGet(KEYS.attRecords,  []),
         webExams:    lsGet(KEYS.webExams,    []),
+        // #StudentPortal: لازم centerExams كمان عشان زر "الدرجات" في بوابة
+        // الطالب يقدر يترجم رقم السؤال (examErrors) لاسم/وصف السؤال الفعلي
+        // من questionMeta بتاع الامتحان الورقي المرتبط.
+        centerExams: lsGet(KEYS.centerExams, []),
         updatedAt: ts,
       });
       setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });

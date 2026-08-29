@@ -233,7 +233,19 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
   // أي نتيجة خالص (مش رقم عشوائي زي الأول).
   const saveExam = useCallback((finalScore, examQs, finalAnswers) => {
     const totalMarks = examQs.reduce((a, q) => a + q.marks, 0);
-    const wrongTopics = examQs.filter(q => finalAnswers[q.id] !== q.correct).map(q => q.topic || "عام");
+    const wrongQs = examQs.filter(q => finalAnswers[q.id] !== q.correct);
+    const wrongTopics = wrongQs.map(q => q.topic || "عام");
+    // #StudentPortal: بنسجّل نص السؤال نفسه (مش بس اسم الموضوع) عشان لما
+    // الطالب/ولي الأمر يفتح زر "الدرجات" في البوابة ويدوس على أي خطأ،
+    // يشوف نص السؤال والاختيار الصح واختياره هو بالظبط.
+    const wrongQ = wrongQs.map(q => ({
+      id: q.id,
+      text: q.text,
+      topic: q.topic || "عام",
+      options: q.options,
+      correct: q.correct,
+      chosen: finalAnswers[q.id],
+    }));
     const newExam = {
       id: genExamId(),
       name,
@@ -242,7 +254,7 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
       group,
       lesson: topicFilter || "متنوع",
       unit: "إنشاء سريع",
-      results: [{ studentId: takerId, score: finalScore, max: totalMarks, wrong: wrongTopics }],
+      results: [{ studentId: takerId, score: finalScore, max: totalMarks, wrong: wrongTopics, wrongQ }],
       cheating: [],
       _myScore: finalScore,
       _myMax: totalMarks,
