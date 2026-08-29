@@ -701,6 +701,10 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
   const [newName,   setNewName]   = useState("");
   const [newNumQ,   setNewNumQ]   = useState(20);
   const [newNumPts, setNewNumPts] = useState(4);
+  const [editOpen,   setEditOpen]   = useState(false); // فتح إعدادات تعديل الامتحان المختار
+  const [editName,   setEditName]   = useState("");
+  const [editNumQ,   setEditNumQ]   = useState(20);
+  const [editNumPts, setEditNumPts] = useState(4);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
   const gradeStudents = useMemo(() => students.filter(s => s.grade === grade), [students, grade]);
@@ -721,7 +725,7 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
     ? (s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).length
     : 0;
 
-  const resetPick = () => { setSelectedExamId(""); setNewName(""); setNewNumQ(20); setNewNumPts(4); };
+  const resetPick = () => { setSelectedExamId(""); setNewName(""); setNewNumQ(20); setNewNumPts(4); setEditOpen(false); };
 
   const createManualExam = () => {
     const id = genExamId();
@@ -735,6 +739,24 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
     };
     setCenterExams(p => [exam, ...(p || [])]);
     setSelectedExamId(id);
+  };
+
+  const openEdit = () => {
+    if (!selectedExam) return;
+    setEditName(selectedExam.fileName || "");
+    setEditNumQ(selectedExam.numQuestions || 1);
+    setEditNumPts(selectedExam.pointsPerQuestion || 1);
+    setEditOpen(true);
+  };
+
+  const saveEdit = () => {
+    if (!selectedExam) return;
+    const numQuestions = Math.max(1, parseInt(editNumQ) || 1);
+    const pointsPerQuestion = Math.max(1, parseInt(editNumPts) || 1);
+    setCenterExams(p => (p || []).map(e => e.id === selectedExam.id
+      ? { ...e, fileName: editName.trim() || null, numQuestions, pointsPerQuestion }
+      : e));
+    setEditOpen(false);
   };
 
   return (
@@ -821,8 +843,36 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
             <div className="text-xs text-slate-300">
               📎 {selectedExam.fileName || "امتحان يدوي"} — {selectedExam.numQuestions} سؤال × {selectedExam.pointsPerQuestion} نقط — {selectedExam.date}
             </div>
-            <button onClick={resetPick} className="text-blue-400 text-xs shrink-0">🔄 تغيير الامتحان</button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={openEdit} title="إعدادات الامتحان" className="text-slate-400 hover:text-white text-sm">⚙️</button>
+              <button onClick={resetPick} className="text-blue-400 text-xs">🔄 تغيير الامتحان</button>
+            </div>
           </div>
+
+          {editOpen && (
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+              <div className="text-white font-black text-sm">⚙️ إعدادات الامتحان</div>
+              <Field label="اسم الامتحان (اختياري)">
+                <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="مثال: امتحان الأسبوع 2"
+                  className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none" />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="عدد الأسئلة">
+                  <input type="number" min={1} max={100} value={editNumQ} onChange={e => setEditNumQ(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+                </Field>
+                <Field label="عدد النقط لكل سؤال">
+                  <input type="number" min={1} max={20} value={editNumPts} onChange={e => setEditNumPts(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+                </Field>
+              </div>
+              <div className="text-slate-500 text-xs">لو قلّلتِ عدد الأسئلة، أي أخطاء متسجّلة قبل كده على أسئلة بعد الرقم الجديد هتفضل محفوظة بس مش هتظهر في شاشة التسجيل.</div>
+              <div className="flex gap-2">
+                <Btn variant="ghost" className="flex-1" onClick={() => setEditOpen(false)}>إلغاء</Btn>
+                <Btn variant="success" className="flex-1" onClick={saveEdit}>حفظ التعديل</Btn>
+              </div>
+            </div>
+          )}
 
           {gradeStudents.length === 0
             ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
