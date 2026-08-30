@@ -107,13 +107,13 @@ export function Inp({ className = "", err, style: extraStyle = {}, ...p }) {
 }
 
 /** Styled select */
-export function Sel({ children, className = "", style: extraStyle = {}, ...p }) {
+export function Sel({ children, className = "", err, style: extraStyle = {}, ...p }) {
   return (
     <select {...p}
       className={`w-full px-3 py-2.5 text-sm focus:outline-none ${className}`}
       style={{
         background: "var(--card-bg)",
-        border: `1px solid var(--border)`,
+        border: `1px solid ${err ? "#ef4444" : "var(--border)"}`,
         borderRadius: "var(--radius-md)",
         color: "var(--text-primary)",
         ...extraStyle,

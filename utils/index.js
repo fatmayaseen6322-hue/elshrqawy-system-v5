@@ -125,6 +125,18 @@ export function genStudentId(existingIds = []) {
   } while (idsSet.has(id));
   return id;
 }
+// ── ترتيب قائمة الطلاب: البنات مع بعض ثم الأولاد مع بعض، وجوه كل
+// مجموعة ترتيب أبجدي (يتجاهل اختلاف أشكال الهمزة زي باقي البحث) ──
+export function sortStudentsList(list = []) {
+  const normalizeAr = (str = "") => String(str).replace(/[أإآء]/g, "ا");
+  const rank = g => (g === "بنت" ? 0 : g === "ولد" ? 1 : 2); // بدون نوع محدد يظهر في الآخر
+  return [...(list || [])].sort((a, b) => {
+    const r = rank(a.gender) - rank(b.gender);
+    if (r !== 0) return r;
+    return normalizeAr(a.name).localeCompare(normalizeAr(b.name), "ar");
+  });
+}
+
 export const genRID    = () => genId("R", 2);
 export const genFinId  = () => genId("FIN", 2);
 export const genExamId = () => genId("E", 2);

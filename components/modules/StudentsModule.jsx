@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
-import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked } from "../../utils";
+import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked, sortStudentsList } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
 import { exportStudentsWord } from "../../utils/exportStudentsWord";
@@ -110,7 +110,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
   const searchResults = useMemo(() => {
     if (!search.trim()) return null;
     const q = normalizeAr(search.trim());
-    return (students || []).filter(s => s && !isBlocked(s) && normalizeAr(s.name || "").includes(q));
+    return sortStudentsList((students || []).filter(s => s && !isBlocked(s) && normalizeAr(s.name || "").includes(q)));
   }, [students, search]);
 
   const goToStudentDirect = s => {
@@ -266,7 +266,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
 
   // ── SECTION step ───────────────────────────────────────────
   if (step === "section") {
-    const grpStudents = students.filter(s => s.grade === grade && s.group === group && !isBlocked(s));
+    const grpStudents = sortStudentsList(students.filter(s => s.grade === grade && s.group === group && !isBlocked(s)));
     return (
       <div className="space-y-4">
         <button onClick={() => setStep("select")} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← تعديل الاختيار</button>
@@ -603,8 +603,9 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
 // ══════════════════════════════════════════════════════════════
 function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, students, setStudents, setSel, setToast, setStep, addActivity, onDoneAdd }) {
   const [name,   setName]   = useState(s.name        || "");
-  const [sg,     setSg]     = useState(s.grade        || defaultGrade);
+  const [sg,     setSg]     = useState(s.grade        || defaultGrade || "");
   const [sgp,    setSgp]    = useState(s.group        || defaultGroup);
+  const [gender, setGender] = useState(s.gender       || "");
   const [pPhone, setPPhone] = useState(s.parentPhone  || "");
   const [sPhone, setSPhone] = useState(s.phone        || "");
   const [fees,   setFees]   = useState(s.totalFees    || 2400);
@@ -629,12 +630,19 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
   const save = useCallback(() => {
     const e = {};
     if (!name.trim())    e.name   = "مطلوب";
+    if (!sg)             e.grade  = "مطلوب اختيار الصف";
+    if (!gender)         e.gender = "مطلوب";
     setErr(e);
     if (Object.keys(e).length) return;
 
+    // لو الطالب لسه من غير أي رقم هاتف حقيقي (لا هاتفه ولا هاتف ولي أمره)،
+    // "الرقم المسجل" اللي هيدخل بيه على بوابة الويب ما ينفعش يبقى بنفس
+    // شكل رقم تليفون حقيقي (01xxxxxxxxx) عشان محدش يتلخبط ويفتكره رقم
+    // فعلي — فبيتولد كود بشكل مختلف واضح (SHR-...) بدل رقم عشوائي شكله رقم تليفون.
+    const hasRealPhone = !!(sPhone.trim() || pPhone.trim());
     const st = {
-      id: s.id || genStudentId((students || []).map(x => x.id)),
-      name: name.trim(), grade: sg, group: sgp,
+      id: s.id || (hasRealPhone ? genStudentId((students || []).map(x => x.id)) : genSID()),
+      name: name.trim(), grade: sg, group: sgp, gender,
       phone: sPhone.trim(), parentName: s.parentName || "", parentPhone: pPhone.trim(),
       joinDate: mode === "add" ? joinDate : (s.joinDate || TODAY), status: s.status || "active",
       paid: s.paid || 0,
@@ -656,8 +664,19 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
     const noPhoneWarn = !pPhone.trim() ? " — ⚠️ من غير رقم هاتف ولي أمر" : "";
     setToast({ msg: mode === "add" ? `✓ تم تسجيل ${st.name} — عليه ${fmt(owedAmount)} (${remainingSessions} حصة من ${sessionsPerMonth})${noPhoneWarn}` : `✓ تم تعديل ${st.name}${noPhoneWarn}`, type: !pPhone.trim() ? "info" : "success" });
     addActivity?.(mode === "add" ? "إضافة طالب" : "تعديل طالب", st.name);
-    if (mode === "edit") setStep("profile"); else finishStep();
-  }, [name, sg, sgp, pPhone, sPhone, fees, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
+
+    if (mode === "edit") {
+      setStep("profile");
+    } else {
+      // بعد الإضافة نفضل في نفس صفحة "تسجيل طالب" عشان تسجّلي طالب جديد
+      // على طول، من غير ما نرجع لصفحة تانية — الصف/المجموعة بيفضلوا
+      // زي ما هما (نفس الفصل)، وباقي الحقول بترجع فاضية للطالب الجديد.
+      setName(""); setPPhone(""); setSPhone(""); setGender("");
+      setErr({});
+      setJoinDate(TODAY);
+      setRemainingSessions(sessionsPerMonth);
+    }
+  }, [name, sg, sgp, gender, pPhone, sPhone, fees, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
 
   return (
     <div className="space-y-4">
@@ -671,8 +690,9 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
             <Field label="الاسم الرباعي *" error={err.name}><Inp value={name} onChange={e => setName(e.target.value)} err={!!err.name} /></Field>
           </div>
           <div className="flex-1 min-w-0">
-            <Field label="الصف">
-              <Sel value={sg} onChange={e => { setSg(e.target.value); setSgp(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
+            <Field label="الصف *" error={err.grade}>
+              <Sel value={sg} err={!!err.grade} onChange={e => { setSg(e.target.value); setSgp(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
+                <option value="">اختر الصف</option>
                 {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
               </Sel>
             </Field>
@@ -690,6 +710,16 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
         </div>
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="النوع *" error={err.gender}>
+            <Sel value={gender} err={!!err.gender} onChange={e => setGender(e.target.value)}>
+              <option value="">اختر النوع</option>
+              <option value="بنت">بنت</option>
+              <option value="ولد">ولد</option>
+            </Sel>
+          </Field>
+          <div />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="هاتف ولي الأمر" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} placeholder="اختياري — لو فاضي هيظهر تنبيه" /></Field>
           <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
