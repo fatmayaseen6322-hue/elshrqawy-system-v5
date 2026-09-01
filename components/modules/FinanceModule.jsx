@@ -451,6 +451,34 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const paidCount      = monthRecords.length;
   const lateCount      = Math.max(0, baseTableStudents.length - paidCount);
 
+  // ── "تسجيل الشهور الماضية": الشهور اللي لسه فيها طلاب (أي صف) لم
+  // يدفعوا، للسنة المختارة بس — بدل ما تظهر كل شهور السنة الـ12 ──
+  const pastLateMonths = useMemo(() => {
+    if (financeMode !== "past") return [];
+    // مفيش معنى لشهر "لسه ما جاش" يبقى متأخر فيه حد — نوقف عند الشهر
+    // الحالي لو نفس السنة الحالية، أو آخر السنة لو سنة قديمة، ومفيش
+    // شهور خالص لو السنة مستقبلية.
+    const maxMonth = regYear === curYear ? curMonth : (regYear < curYear ? 12 : 0);
+    const months = [];
+    for (let m = 1; m <= maxMonth; m++) {
+      const hasLate = safeStudents.some(s =>
+        !isMonthBlocked(s, m, regYear) &&
+        !safeRecords.some(r => r.studentId === s.id && r.month === m && r.year === regYear)
+      );
+      if (hasLate) months.push(m);
+    }
+    return months;
+  }, [financeMode, safeStudents, safeRecords, regYear, curYear, curMonth]);
+
+  // لو الشهر المختار حاليًا ملوش متأخرين (أو اتسددت كلها)، انقل الاختيار
+  // تلقائي لأول شهر لسه فيه متأخرين
+  useEffect(() => {
+    if (financeMode !== "past") return;
+    if (pastLateMonths.length === 0) return;
+    if (!pastLateMonths.includes(regMonth)) setRegMonth(pastLateMonths[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [financeMode, pastLateMonths]);
+
   // ── "تسجيل الشهور الماضية": الصفوف اللي فيها طلاب متأخرين بس (نفس الشهر/السنة المختارين) ──
   // بنفس منطق tableStudents بالظبط (بلوك + مفيش سجل دفع لنفس الشهر) لكن
   // على مستوى الصف كله (كل المجموعات) عشان نقرر نعرض الصف كمستطيل ولا لأ.
@@ -464,6 +492,17 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       );
     });
   }, [financeMode, safeStudents, safeRecords, regMonth, regYear]);
+
+  // ── "متأخر": نفس فكرة pastLateGrades بالظبط لكن بمنطق getOverdueInfo
+  // (أي شهر سابق أو الشهر الحالي لسه مش مدفوع) — الصفوف اللي مفيهاش
+  // ولا طالب متأخر أصلاً متتعرضش كمستطيل ──
+  const lateGradesWithDebt = useMemo(() => {
+    if (financeMode !== "late") return GRADES_LIST;
+    return GRADES_LIST.filter(g => {
+      const gradeStudents = safeStudents.filter(s => s && s.grade === g);
+      return gradeStudents.some(s => getOverdueInfo(s, safeRecords).count > 0);
+    });
+  }, [financeMode, safeStudents, safeRecords]);
 
   // ══════════════════════════ ADMIN VIEW ══════════════════════════
 
@@ -546,19 +585,28 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // الصفوف اللي فيها متأخرين بس عن الشهر ده (زي ما طلبتي) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">🗓️ تسجيل الشهور الماضية — اختر الشهر</div>
-            <div className="grid grid-cols-4 gap-2">
-              {MONTHS_AR.map((m, i) => (
-                <button key={i + 1}
-                  onClick={() => setRegMonth(i + 1)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all ${regMonth === i + 1 ? "bg-emerald-600 text-white" : "bg-slate-700/60 hover:bg-slate-600 text-slate-300"}`}>
-                  {m}
-                </button>
-              ))}
-            </div>
             <Field label="السنة">
               <input type="number" value={regYear} onChange={e => setRegYear(e.target.value ? parseInt(e.target.value) : curYear)}
                 className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
             </Field>
+            {pastLateMonths.length === 0 ? (
+              <div className="text-center py-6 text-slate-600">
+                <div className="text-3xl mb-2">🎉</div>
+                <div className="text-sm">مفيش شهور متأخرة في سنة {regYear}</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {pastLateMonths.map(m => (
+                  <button key={m}
+                    onClick={() => setRegMonth(m)}
+                    className={`py-2.5 rounded-xl text-xs font-bold transition-all ${regMonth === m ? "bg-emerald-600 text-white" : "bg-slate-700/60 hover:bg-slate-600 text-slate-300"}`}>
+                    {MONTHS_AR[m - 1]}
+                  </button>
+                ))}
+              </div>
+            )}
+            {pastLateMonths.length > 0 && (
+            <>
             <div className="text-xs text-slate-400 font-bold mb-1 pt-1">
               الصفوف المتأخرة في شهر {MONTHS_AR[regMonth - 1]} {regYear}
             </div>
@@ -578,6 +626,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 ))}
               </div>
             )}
+            </>
+            )}
           </div>
         ) : (
           // ── صف متاختار: زرارين بس فوق (رجوع / تسجيل شهر كذا — الصف) بدون عرض سجل المصاريف ──
@@ -595,18 +645,25 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         )
       ) : (
         !selGrade ? (
-          // ── مفيش صف متاختار: 6 مستطيلات للصفوف (زي الشهر الحالي بالظبط) ──
+          // ── مفيش صف متاختار: مستطيلات الصفوف اللي فيها متأخرين بس (زي تسجيل الشهور الماضية) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">⏰ المتأخرين في السداد — اختر الصف</div>
-            <div className="grid grid-cols-2 gap-2">
-              {GRADES_LIST.map(g => (
-                <button key={g}
-                  onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
-                  className="py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
-                  {g}
-                </button>
-              ))}
-            </div>
+            {lateGradesWithDebt.length === 0 ? (
+              <div className="text-center py-6 text-slate-600">
+                <div className="text-3xl mb-2">🎉</div>
+                <div className="text-sm">مفيش أي طالب متأخر في السداد حاليًا</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {lateGradesWithDebt.map(g => (
+                  <button key={g}
+                    onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
+                    className="py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
+                    {g}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           // ── صف متاختار: زرارين بس فوق (رجوع / المتأخرين — الصف) بدون عرض سجل المصاريف ──
