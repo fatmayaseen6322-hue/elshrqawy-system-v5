@@ -58,6 +58,29 @@ function getOverdueInfo(student, finRecords) {
   };
 }
 
+// ── نفس منطق getOverdueInfo بالظبط لكن بيرجّع إجمالي "المبلغ" المتأخر
+// (مش عدد الشهور) — بيحسب رسوم كل شهر متأخر فعليًا (مع مراعاة قاعدة
+// نص المصاريف لو الطالب اتسجّل بعد يوم 15 في شهر انضمامه) ──
+function getOverdueAmount(student, finRecords, gradeFees) {
+  const [curYearStr, curMonthStr] = TODAY.split("-");
+  const currentYearNum  = parseInt(curYearStr, 10);
+  const currentMonthNum = parseInt(curMonthStr, 10);
+  const [joinYearStr, joinMonthStr] = (student.joinDate || TODAY).split("-");
+  const joinYearNum  = parseInt(joinYearStr, 10);
+  const joinMonthNum = parseInt(joinMonthStr, 10);
+
+  const studentFinRecords = (finRecords || []).filter(r => r.studentId === student.id);
+  const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
+  const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
+
+  let total = 0;
+  for (let m = startMonth; m <= currentMonthNum; m++) {
+    if (isMonthBlocked(student, m, currentYearNum)) continue;
+    if (!isMonthPaid(m, currentYearNum)) total += getExpectedFeeForMonth(student, m, currentYearNum, gradeFees);
+  }
+  return total;
+}
+
 // ══════════════════════════════════════════════════════════════
 // FINANCE PASSWORD GATE (كلمة مرور المصاريف العادية — تُستخدم فقط
 // إذا فُعِّل الخيار العام financePasswordEnabled من الإعدادات)
@@ -504,6 +527,23 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     });
   }, [financeMode, safeStudents, safeRecords]);
 
+  // ── إجمالي المبلغ المتأخر لكل صف + إجمالي عام لكل الصفوف مع بعض
+  // (بيظهر جنب كل صف ومستطيل الإجمالي فوق) ──
+  const lateGradeTotals = useMemo(() => {
+    if (financeMode !== "late") return {};
+    const map = {};
+    GRADES_LIST.forEach(g => {
+      const gradeStudents = safeStudents.filter(s => s && s.grade === g);
+      map[g] = gradeStudents.reduce((a, s) => a + getOverdueAmount(s, safeRecords, safeSettings.gradeFees), 0);
+    });
+    return map;
+  }, [financeMode, safeStudents, safeRecords, safeSettings.gradeFees]);
+
+  const lateGrandTotal = useMemo(
+    () => Object.values(lateGradeTotals).reduce((a, v) => a + v, 0),
+    [lateGradeTotals]
+  );
+
   // ══════════════════════════ ADMIN VIEW ══════════════════════════
 
   // ── لسه محددتش قسم: اعرض 4 مستطيلات كبيرة تملا الشاشة (بدل قائمة منسدلة) ──
@@ -654,15 +694,22 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 <div className="text-sm">مفيش أي طالب متأخر في السداد حاليًا</div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {lateGradesWithDebt.map(g => (
-                  <button key={g}
-                    onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
-                    className="py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
-                    {g}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="bg-red-500/10 border border-red-500/25 rounded-2xl px-4 py-3 text-center">
+                  <div className="text-slate-400 text-xs mb-1">إجمالي المبالغ المتبقية على كل الصفوف</div>
+                  <div className="text-red-400 font-black text-2xl">{fmtM(lateGrandTotal)} ج</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {lateGradesWithDebt.map(g => (
+                    <button key={g}
+                      onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
+                      className="flex flex-col items-center justify-center gap-1 py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
+                      <span>{g}</span>
+                      <span className="text-xs font-normal text-amber-300">{fmtM(lateGradeTotals[g] || 0)} ج</span>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         ) : (
