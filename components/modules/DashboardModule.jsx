@@ -84,6 +84,28 @@ export function buildDashboardData(students, finRecords, gradeFees) {
   const totalDebt = students.reduce((a, s) => a + getRealDue(s), 0);
   const gradeDebts = GRADES_LIST.map(g => ({ grade: g, count: students.filter(s => s.grade === g).reduce((a, s) => a + getRealDue(s), 0) }));
 
+  // أقدم شهر متأخر لكل طالب — عشان قائمة "الطلاب المتأخرين من شهر كذا أو قبل"
+  // بجوار كارت إجمالي الديون في برج المراقبة
+  const getOldestOwedMonth = s => {
+    const [curYearStr, curMonthStr] = TODAY.split("-");
+    const currentYearNum  = parseInt(curYearStr, 10);
+    const currentMonthNum = parseInt(curMonthStr, 10);
+    const [joinYearStr, joinMonthStr] = (s.joinDate || TODAY).split("-");
+    const joinYearNum  = parseInt(joinYearStr, 10);
+    const joinMonthNum = parseInt(joinMonthStr, 10);
+    const studentFinRecords = finRecords.filter(r => r.studentId === s.id);
+    const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
+    const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
+    for (let m = startMonth; m <= currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) return m;
+    return null;
+  };
+  const debtorsList = students
+    .map(s => ({ s, oldest: getOldestOwedMonth(s), due: getRealDue(s) }))
+    .filter(x => x.due > 0 && x.oldest !== null)
+    .sort((a, b) => a.oldest - b.oldest)
+    .map(x => ({ name: x.s.name, grade: x.s.grade, monthNum: x.oldest, monthLabel: MONTHS_AR[x.oldest - 1] }));
+  const gradeDebtStudents = GRADES_LIST.map(g => ({ grade: g, list: debtorsList.filter(x => x.grade === g) }));
+
   const expensesSection = {
     title: "حالة حرجة - المصروفات", icon: "🔴",
     cols: ["اسم الطالب","المتبقي","الشهور المستحقة","آخر ميعاد للتسديد"],
@@ -120,7 +142,7 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     grades: groupByGrade(noPhoneStudents),
   };
 
-  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, expensesSection, absenceSection, examsSection, noPhoneSection };
+  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, expensesSection, absenceSection, examsSection, noPhoneSection };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -144,9 +166,11 @@ export function buildTodayAttendance(attRecords, students) {
 }
 
 // ══════════════════════════════════════════════════════════════
-function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown, formatValue }) {
+function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown, formatValue, namesBreakdown, namesLabel }) {
   const [open, setOpen] = useState(false);
   const [selGrade, setSelGrade] = useState(null);
+  const [namesOpen, setNamesOpen] = useState(false);
+  const [namesGrade, setNamesGrade] = useState(null);
   const fmt = formatValue || (v => v);
   return (
     <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 relative">
@@ -154,7 +178,8 @@ function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown, format
         <span className="text-2xl">{icon}</span>
         <div className="flex items-center gap-1">
           {trend != null && <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${trend >= 0 ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>{trend >= 0 ? "▲" : "▼"} {Math.abs(trend)}%</span>}
-          {gradeBreakdown && <button onClick={() => setOpen(o => !o)} className="text-emerald-400 text-sm leading-none">▾</button>}
+          {namesBreakdown && <button onClick={() => { setNamesOpen(o => !o); setOpen(false); }} className="text-amber-400 text-sm leading-none" title={namesLabel || "الأسماء"}>👤▾</button>}
+          {gradeBreakdown && <button onClick={() => { setOpen(o => !o); setNamesOpen(false); }} className="text-emerald-400 text-sm leading-none">▾</button>}
         </div>
       </div>
       <div className="text-2xl font-bold" style={{ color }}>{selGrade ? fmt(gradeBreakdown.find(g => g.grade === selGrade)?.count) : value}</div>
@@ -164,6 +189,30 @@ function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown, format
       {open && gradeBreakdown && (
         <div className="absolute top-12 left-3 right-3 bg-slate-900 border border-slate-700/60 rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
           {gradeBreakdown.map((g, i) => <button key={i} onClick={() => { setSelGrade(g.grade); setOpen(false); }} className="w-full px-3 py-2 text-right text-xs text-slate-200 hover:bg-slate-800 flex justify-between border-b border-slate-800 last:border-0"><span>{g.grade}</span><span className="text-blue-400 font-bold">{fmt(g.count)}</span></button>)}
+        </div>
+      )}
+      {namesOpen && namesBreakdown && (
+        <div className="absolute top-12 left-3 right-3 bg-slate-900 border border-slate-700/60 rounded-xl shadow-xl z-50 overflow-hidden max-h-72 overflow-y-auto">
+          {!namesGrade ? (
+            namesBreakdown.map((g, i) => (
+              <button key={i} onClick={() => setNamesGrade(g.grade)} disabled={!g.list.length}
+                className="w-full px-3 py-2 text-right text-xs text-slate-200 hover:bg-slate-800 flex justify-between border-b border-slate-800 last:border-0 disabled:opacity-40">
+                <span>{g.grade}</span><span className="text-amber-400 font-bold">{g.list.length ? `${g.list.length} طالب` : "—"}</span>
+              </button>
+            ))
+          ) : (
+            <>
+              <button onClick={() => setNamesGrade(null)} className="w-full px-3 py-2 text-right text-xs text-slate-400 hover:bg-slate-800 border-b border-slate-800 sticky top-0 bg-slate-900">← رجوع للصفوف</button>
+              {(namesBreakdown.find(g => g.grade === namesGrade)?.list || []).map((s, i) => (
+                <div key={i} className="w-full px-3 py-2 text-right text-xs text-slate-200 flex justify-between border-b border-slate-800 last:border-0">
+                  <span>{s.name}</span><span className="text-red-400 shrink-0">من شهر {s.monthLabel}</span>
+                </div>
+              ))}
+              {(namesBreakdown.find(g => g.grade === namesGrade)?.list || []).length === 0 && (
+                <div className="px-3 py-4 text-center text-slate-500 text-xs">مفيش طلاب متأخرين في الصف ده</div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -576,7 +625,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       <div className={`grid gap-3 ${isAssist ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3"}`}>
         {!isAssist && <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />}
         <KPICard icon="💰" label={`المحصّل (${periodLabels[effectivePeriod]})`} value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
-        {!isAssist && <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" gradeBreakdown={dd.gradeDebts} formatValue={fmtM} />}
+        {!isAssist && <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" gradeBreakdown={dd.gradeDebts} formatValue={fmtM} namesBreakdown={dd.gradeDebtStudents} namesLabel="الطلاب المتأخرين من شهور سابقة" />}
       </div>
       <ProblemSection data={dd.expensesSection} idRef={refs.expenses} extra={{ onSaveDueDate: handleSaveDueDate }} />
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
