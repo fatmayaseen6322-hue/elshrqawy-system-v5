@@ -507,12 +507,52 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             📅 فتح سجل المصاريف
           </button>
         </div>
+      ) : financeMode === "past" ? (
+        !selGrade ? (
+          // ── مفيش صف متاختار: اختيار الشهر/السنة أولاً، بعدين 6 مستطيلات للصفوف (زي الشهر الحالي بالظبط) ──
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+            <div className="text-xs text-slate-400 font-bold mb-1">🗓️ تسجيل الشهور الماضية — اختر الشهر والسنة</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="الشهر">
+                <select value={regMonth} onChange={e => setRegMonth(parseInt(e.target.value))}
+                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+                  {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
+                </select>
+              </Field>
+              <Field label="السنة">
+                <input type="number" value={regYear} onChange={e => setRegYear(e.target.value ? parseInt(e.target.value) : curYear)}
+                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+              </Field>
+            </div>
+            <div className="text-xs text-slate-400 font-bold mb-1 pt-1">اختر الصف</div>
+            <div className="grid grid-cols-2 gap-2">
+              {GRADES_LIST.map(g => (
+                <button key={g}
+                  onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
+                  className="py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          // ── صف متاختار: زرارين بس فوق (رجوع / تسجيل شهر كذا — الصف) بدون عرض سجل المصاريف ──
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); }}
+                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+                ⬅️ رجوع
+              </button>
+              <div className="flex-1 px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center">
+                🗓️ تسجيل شهر {MONTHS_AR[regMonth - 1]} {regYear} — {selGrade}
+              </div>
+            </div>
+          </div>
+        )
       ) : (
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between mb-1">
-            <div className="text-xs text-slate-400 font-bold">
-              {financeMode === "late" ? "⏰ المتأخرين في السداد" : "🗓️ تسجيل الشهور الماضية"}
-            </div>
+            <div className="text-xs text-slate-400 font-bold">⏰ المتأخرين في السداد</div>
             <button onClick={() => setDayReportOpen(true)} className="text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1 hover:bg-blue-500/20">
               📅 عرض سجل المصاريف
             </button>
@@ -540,21 +580,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
               </button>
             </Field>
           </div>
-
-          {financeMode === "past" && (
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <Field label="الشهر">
-                <select value={regMonth} onChange={e => setRegMonth(parseInt(e.target.value))}
-                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
-                  {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
-                </select>
-              </Field>
-              <Field label="السنة">
-                <input type="number" value={regYear} onChange={e => setRegYear(e.target.value ? parseInt(e.target.value) : curYear)}
-                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
-              </Field>
-            </div>
-          )}
         </div>
       )}
 
@@ -638,8 +663,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           }
         </>
       )}
-      {financeMode !== "current" && !tableOpen && selGrade && <div className="text-center py-6 text-slate-600 text-sm">اضغط "عرض السجل" لفتح الجدول</div>}
-      {financeMode !== "current" && !selGrade && <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">💰</div><div className="text-sm">اختر الصف للبدء</div></div>}
+      {financeMode === "late" && !tableOpen && selGrade && <div className="text-center py-6 text-slate-600 text-sm">اضغط "عرض السجل" لفتح الجدول</div>}
+      {financeMode === "late" && !selGrade && <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">💰</div><div className="text-sm">اختر الصف للبدء</div></div>}
 
       {dayReportOpen && (
         <Modal title="📅 سجل المصاريف اليومي" onClose={() => setDayReportOpen(false)} maxW="max-w-2xl">
