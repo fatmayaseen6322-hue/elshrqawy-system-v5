@@ -1,8 +1,13 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, MONTHS_AR, TODAY } from "../../constants";
-import { pct, fmt, fmtM, scC, speak, isBlocked } from "../../utils";
+import { pct, scC, speak, isBlocked } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Bar } from "../ui";
+
+// أرقام برج المراقبة بالإنجليزي (Latin digits) بدل الأرقام العربية (١٢٣) —
+// طلب صريح: هنا بس، باقي الموديولات (المصاريف مثلاً) لسه بتستخدم fmt/fmtM العادية
+const fmt  = n => (n || 0).toLocaleString("en-US") + " ج";
+const fmtM = n => (n || 0).toLocaleString("en-US");
 
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD DATA BUILDER
