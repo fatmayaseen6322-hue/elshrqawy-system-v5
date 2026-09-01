@@ -277,25 +277,6 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
   );
 }
 
-// ── زرار تراجع بسيط لصف واحد (مستخدم في تبويب "المصاريف" بتاع Assist) ──
-function UndoCell({ canUndo, undoPassword, onConfirm }) {
-  const [show, setShow] = useState(false);
-  return (
-    <>
-      <button
-        onClick={() => setShow(true)}
-        disabled={!canUndo}
-        title={canUndo ? "تراجع عن تسجيل الطالب" : "لسه ما اتسجلش"}
-        className="w-9 h-8 rounded-lg bg-red-700/20 border border-red-600/30 text-red-400 text-sm disabled:opacity-30 hover:bg-red-700/40">
-        ↩️
-      </button>
-      {show && (
-        <UndoPasswordGate undoHash={undoPassword} onUnlock={() => { setShow(false); onConfirm(); }} onCancel={() => setShow(false)} />
-      )}
-    </>
-  );
-}
-
 export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone, financeMode = null, setFinanceMode }) {
   const safeStudents = (students || []).filter(s => !isBlocked(s));
   const safeSettings = settings   || {};
@@ -312,6 +293,135 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const effYear  = financeMode === "past" ? regYear  : curYear;
   const activeReceivers = (safeSettings.receivers || []).filter(r => r.active !== false);
   // (Assist بقى بياخد نفس شاشة/عملية المستر بالكامل بدل الشاشة المبسطة اللي كانت بتاعته لوحده)
+
+  // ══════════════ فلاتر الصف/المجموعة/السجل + حالة الجدول ══════════════
+  const [selGrade,         setSelGrade]         = useState("");
+  const [selGroup,         setSelGroup]         = useState("");
+  const [tableOpen,        setTableOpen]        = useState(false);
+  const [globalReceiverId, setGlobalReceiverId] = useState(null);
+  const [toast,            setToast]            = useState(null);
+  const [highlightId,      setHighlightId]      = useState(null); // تمييز طالب جاي من بحث التوبار
+
+  // ══════════════ "عرض سجل المصاريف" — تقرير كل المعاملات في يوم معيّن (كل الصفوف) ══════════════
+  const [dayReportOpen, setDayReportOpen] = useState(false);
+  const [dSelDay,       setDSelDay]       = useState(curDay);
+  const [dSelMonth,     setDSelMonth]     = useState(curMonth);
+  const [dSelYear,      setDSelYear]      = useState(curYear);
+
+  // تصفح إلكتروني بين الأيام (زي صفحات كتاب) — يوم قبل / يوم بعد
+  const goDay = (delta) => {
+    const d = new Date(dSelYear, dSelMonth - 1, dSelDay);
+    d.setDate(d.getDate() + delta);
+    setDSelDay(d.getDate());
+    setDSelMonth(d.getMonth() + 1);
+    setDSelYear(d.getFullYear());
+  };
+
+  const dayRecords = useMemo(() => {
+    if (!dSelDay || !dSelMonth || !dSelYear) return [];
+    const dayStr = `${dSelYear}-${String(dSelMonth).padStart(2, "0")}-${String(dSelDay).padStart(2, "0")}`;
+    return safeRecords.filter(r => r && r.timestamp?.startsWith(dayStr));
+  }, [safeRecords, dSelDay, dSelMonth, dSelYear]);
+
+  const dayTotal = dayRecords.reduce((a, r) => a + (r.amount || 0), 0);
+
+  // ══════════════ "سجل المعاملات" (financeMode === "log"): يفتح تقرير اليوم مباشرة ══════════════
+  useEffect(() => {
+    if (financeMode === "log") setDayReportOpen(true);
+  }, [financeMode]);
+
+  // بحث التوبار العلوي: افتحلها صف وصف الطالب وافتح السجل تلقائي
+  useEffect(() => {
+    if (!jumpTo) return;
+    const target = safeStudents.find(st => st.id === jumpTo);
+    if (target) {
+      setSelGrade(target.grade);
+      setSelGroup(target.group);
+      setTableOpen(true);
+      setHighlightId(target.id);
+      setTimeout(() => setHighlightId(null), 2500);
+    }
+    onJumpDone?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo]);
+
+  const grpList = selGrade ? (GROUPS_MAP[selGrade] || ["A"]) : [];
+
+  const tableStudents = useMemo(() => {
+    if (!selGrade) return [];
+    let list = safeStudents.filter(s => s && s.grade === selGrade);
+    if (selGroup) list = list.filter(s => s.group === selGroup);
+    return list.map(s => ({ ...s, _defaultFee: Math.max(0, (safeSettings.gradeFees?.[s.grade] || 0) - (s.discount || 0)), _month: effMonth, _year: effYear }));
+  }, [safeStudents, selGrade, selGroup, safeSettings.gradeFees, effMonth, effYear]);
+
+  const monthRecords = useMemo(() =>
+    safeRecords.filter(r =>
+      r && r.grade === selGrade &&
+      (!selGroup || r.group === selGroup) &&
+      r.month === effMonth &&
+      r.year  === effYear
+    ),
+  [safeRecords, selGrade, selGroup, effMonth, effYear]);
+
+  const getRecord = studentId => monthRecords.find(r => r.studentId === studentId) || null;
+
+  // ══════════════ "متأخرين" — قائمة الطلاب المتأخرين في السداد بنفس فلاتر الصف/المجموعة ══════════════
+  const adminLateStudents = useMemo(() => {
+    if (!selGrade) return [];
+    let list = safeStudents.filter(s => s && s.grade === selGrade);
+    if (selGroup) list = list.filter(s => s.group === selGroup);
+    return list
+      .map(s => ({ student: s, ...getOverdueInfo(s, safeRecords) }))
+      .filter(x => x.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [safeStudents, safeRecords, selGrade, selGroup]);
+
+  const handleSave = rec => {
+    const existing = (finRecords || []).find(r => r.id === rec.id);
+    const amountDiff = rec.amount - (existing?.amount || 0);
+
+    setFinRecords(prev => {
+      const list = prev || [];
+      const idx = list.findIndex(r => r.id === rec.id);
+      if (idx >= 0) { const n = [...list]; n[idx] = rec; return n; }
+      return [...list, rec];
+    });
+
+    if (amountDiff !== 0) {
+      setStudents(prev => (prev || []).map(s =>
+        s.id === rec.studentId
+          ? { ...s, paid: Math.max(0, (s.paid || 0) + amountDiff) }
+          : s
+      ));
+    }
+
+    addActivity?.("دفعة مالية", `${rec.studentName} — ${rec.amount} ج`);
+    setToast({ msg: `✓ تم حفظ دفعة ${rec.studentName}`, type: "success" });
+
+    // ── المستلم اللي اتسجل يبقى تلقائي لباقي الطلاب اللي لسه ما اتسجلوش (اللي جايين بعده) ──
+    // الطلاب اللي اتسجلوا قبل كده مش بيتغيروا، لأنهم already saved.
+    if (rec.receiverId && rec.receiverId !== globalReceiverId) {
+      setGlobalReceiverId(rec.receiverId);
+    }
+  };
+
+  // ── تراجع عن تسجيل طالب (بعد التحقق من كلمة سر التراجع في FinRow) ──
+  // بيمسح السجل خالص ويرجّع مبلغ الطالب المدفوع (paid) للحالة اللي قبل التسجيل ده.
+  const handleUndo = rec => {
+    setFinRecords(prev => (prev || []).filter(r => r.id !== rec.id));
+    setStudents(prev => (prev || []).map(s =>
+      s.id === rec.studentId
+        ? { ...s, paid: Math.max(0, (s.paid || 0) - (rec.amount || 0)) }
+        : s
+    ));
+    addActivity?.("تراجع عن دفعة", `${rec.studentName} — ${rec.amount} ج`);
+    setToast({ msg: `↩️ تم التراجع عن دفعة ${rec.studentName}`, type: "success" });
+    if (rec.studentId === highlightId) setHighlightId(null);
+  };
+
+  const globalReceiver = activeReceivers.find(r => r.id === globalReceiverId) || null;
+  const paidCount      = monthRecords.length;
+  const lateCount      = Math.max(0, tableStudents.length - paidCount);
 
   // ══════════════════════════ ADMIN VIEW ══════════════════════════
 
