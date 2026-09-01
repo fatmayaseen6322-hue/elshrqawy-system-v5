@@ -347,7 +347,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
   const grpList = selGrade ? (GROUPS_MAP[selGrade] || ["A"]) : [];
 
-  const tableStudents = useMemo(() => {
+  const baseTableStudents = useMemo(() => {
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
@@ -362,6 +362,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       r.year  === effYear
     ),
   [safeRecords, selGrade, selGroup, effMonth, effYear]);
+
+  // ── "تسجيل الشهور الماضية": الجدول يعرض المتأخرين عن الشهر/السنة المختارين بس (مش كل الطلاب) ──
+  const tableStudents = useMemo(() => {
+    if (financeMode !== "past") return baseTableStudents;
+    return baseTableStudents.filter(s =>
+      !isMonthBlocked(s, effMonth, effYear) &&
+      !monthRecords.some(r => r.studentId === s.id)
+    );
+  }, [baseTableStudents, financeMode, effMonth, effYear, monthRecords]);
 
   const getRecord = studentId => monthRecords.find(r => r.studentId === studentId) || null;
 
@@ -421,7 +430,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
   const globalReceiver = activeReceivers.find(r => r.id === globalReceiverId) || null;
   const paidCount      = monthRecords.length;
-  const lateCount      = Math.max(0, tableStudents.length - paidCount);
+  const lateCount      = Math.max(0, baseTableStudents.length - paidCount);
 
   // ══════════════════════════ ADMIN VIEW ══════════════════════════
 
@@ -592,13 +601,13 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       {tableOpen && selGrade && financeMode !== "late" && (
         <>
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{tableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>
+            <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{baseTableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>
             <div className="bg-emerald-900/20 border border-emerald-700/20 rounded-xl p-3 text-center"><div className="text-emerald-400 font-black text-lg">{paidCount}</div><div className="text-xs text-slate-500">دفعوا</div></div>
             <div className="bg-red-900/20 border border-red-700/20 rounded-xl p-3 text-center"><div className="text-red-400 font-black text-lg">{lateCount}</div><div className="text-xs text-slate-500">متأخر</div></div>
           </div>
 
           {tableStudents.length === 0
-            ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب لهذا الاختيار</div></div>
+            ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">{financeMode === "past" ? "🎉" : "📭"}</div><div className="text-sm">{financeMode === "past" ? "مفيش طلاب متأخرين عن الشهر ده" : "لا يوجد طلاب لهذا الاختيار"}</div></div>
             : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
