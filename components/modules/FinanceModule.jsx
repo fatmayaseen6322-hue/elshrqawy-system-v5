@@ -132,12 +132,12 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
 
   const receiverName = (activeReceivers || []).find(r => r.id === receiverId)?.name || "—";
 
-  const buildRec = (recvId, recvName) => ({
+  const buildRec = (recvId, recvName, amt = amount) => ({
     id: record?.id || localRecord?.id || genFinId(),
     studentId: student.id, studentName: student.name,
     grade: student.grade, group: student.group,
     month: student._month, year: student._year,
-    amount: parseInt(amount) || 0,
+    amount: parseInt(amt) || 0,
     receiverId: recvId, receiverName: recvName,
     timestamp: nowStr(), note: "",
   });
@@ -149,6 +149,18 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
     setLocalRecord(rec);
     setSaved(true);
     setEditing(false);
+  };
+
+  // ── حفظ تلقائي فوري لحظة تعديل المبلغ (بدون انتظار الخروج من الخانة) ──
+  // بيضمن إن أي تعديل في مصاريف الطالب يفضل ثابت حتى لو قفلت الجدول أو غيّرت الصف وردّي تاني.
+  const autoSaveAmount = val => {
+    setAmount(val);
+    if (receiverId && val !== "" && (parseInt(val) || 0) > 0) {
+      const rec = buildRec(receiverId, receiverName, val);
+      onSave(rec);
+      setLocalRecord(rec);
+      setSaved(true);
+    }
   };
 
   // ── اختيار المستلم من القائمة: يسجّل الدفعة أوتوماتيك فورًا (لو المبلغ موجود) ──
@@ -230,8 +242,8 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
         </td>
         <td className="px-2 py-3">
           {editing || !saved
-            ? <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
-                onBlur={() => { if (receiverId && amount) doSave(); }}
+            ? <input type="number" value={amount} onChange={e => autoSaveAmount(e.target.value)}
+                onBlur={() => setEditing(false)}
                 className="w-16 bg-slate-700 border border-blue-500/40 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
             : <span className="text-amber-400 font-black text-sm">{amount}</span>
           }
