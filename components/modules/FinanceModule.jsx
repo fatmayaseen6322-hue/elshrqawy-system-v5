@@ -200,7 +200,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
   );
 }
 
-export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone, financeMode = "current" }) {
+export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone, financeMode = null, setFinanceMode }) {
   const isAssist     = role === "assist";
   const safeStudents = (students || []).filter(s => !isBlocked(s));
   const safeSettings = settings   || {};
@@ -572,8 +572,39 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   }
 
   // ══════════════════════════ ADMIN VIEW ══════════════════════════
+
+  // ── لسه محددتش قسم: اعرض 4 مستطيلات كبيرة تملا الشاشة (بدل قائمة منسدلة) ──
+  if (!financeMode) {
+    const sections = [
+      { key: "current", icon: "💰", label: "الشهر الحالي",        desc: "تسجيل مصاريف الشهر الحالي" },
+      { key: "late",    icon: "⏰", label: "متأخر",                desc: "الطلاب المتأخرين في السداد" },
+      { key: "past",    icon: "🗓️", label: "تسجيل الشهور الماضية", desc: "تسجيل دفعة لشهر سابق" },
+      { key: "log",     icon: "📒", label: "سجل المعاملات",        desc: "كل المعاملات في يوم معيّن" },
+    ];
+    return (
+      <div className="min-h-[70vh] flex flex-col justify-center gap-3">
+        <div className="text-center text-slate-400 text-sm font-bold mb-2">💰 المصاريف — اختر القسم</div>
+        <div className="grid grid-cols-2 gap-3">
+          {sections.map(s => (
+            <button key={s.key}
+              onClick={() => setFinanceMode?.(s.key)}
+              className="flex flex-col items-center justify-center gap-2 py-10 rounded-3xl font-bold bg-slate-800/60 border border-slate-700/40 hover:bg-emerald-600/20 hover:border-emerald-500/40 text-slate-200 hover:text-white transition-all">
+              <span className="text-4xl">{s.icon}</span>
+              <span className="text-base">{s.label}</span>
+              <span className="text-xs text-slate-500 font-normal">{s.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      <button onClick={() => setFinanceMode?.(null)}
+        className="text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 border border-slate-700/40 rounded-lg px-3 py-1.5 transition-all">
+        ☰ تغيير القسم
+      </button>
       {financeMode === "current" ? (
         !selGrade ? (
           // ── مفيش صف متاختار: اعرض 6 مستطيلات للصفوف ──
