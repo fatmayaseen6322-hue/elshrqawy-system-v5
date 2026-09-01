@@ -591,6 +591,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   // Assist: كارت المحصّل ثابت على "اليوم" فقط (مفيش أسبوع/شهر) — المستر مش بيتأثر وفاضل زي ما هو
   const effectivePeriod = isAssist ? "today" : period;
   const revVal = effectivePeriod === "today" ? dd.stats.revToday : effectivePeriod === "week" ? dd.stats.revWeek : dd.stats.revMonth;
+  const oldDebtorsCount = dd.gradeDebtStudents.reduce((a, g) => a + g.list.length, 0);
 
   // ── صفحة "الطلاب المتأخرين من شهور سابقة" — منفصلة عن برج المراقبة، بتتفتح
   // من زرار 👤▾ بجوار كارت إجمالي الديون، وترجع لبرج المراقبة بزرار الرجوع فوق
@@ -652,12 +653,23 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
           <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" gradeBreakdown={dd.gradeDebts} formatValue={fmtM} onNamesClick={() => setShowOldDebtors(true)} namesLabel="الطلاب المتأخرين من شهور سابقة" />
         </div>
       )}
+      {isAssist && (
+        <div className="grid gap-3 grid-cols-2">
+          <KPICard icon="💰" label="المحصّل (اليوم)" value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
+          <button onClick={() => setShowOldDebtors(true)}
+            className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
+            <span className="text-2xl">🟠</span>
+            <div className="text-2xl font-bold text-amber-400">{oldDebtorsCount}</div>
+            <div className="text-slate-400 text-xs">متأخرين من شهور سابقة</div>
+          </button>
+        </div>
+      )}
       <ProblemSection data={dd.expensesSection} idRef={refs.expenses} extra={{ onSaveDueDate: handleSaveDueDate }} />
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
       {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
       <ProblemSection data={dd.noPhoneSection} idRef={refs.noPhone} />
-      <MonthlyChart finRecords={finRecords} />
+      {!isAssist && <MonthlyChart finRecords={finRecords} />}
       <ReportButtons students={students} finRecords={finRecords} settings={settings} />
       <AsalAI sectionRefs={refs} students={students} finRecords={finRecords} />
     </div>
