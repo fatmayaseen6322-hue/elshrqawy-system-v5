@@ -492,6 +492,8 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [showLog, setShowLog] = useState(false);
   const [logCategory, setLogCategory] = useState(null);
   const [logPickedDate, setLogPickedDate] = useState("");
+  const [showExams, setShowExams] = useState(false);
+  const [examsGrade, setExamsGrade] = useState(null);
 
   // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
   // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
@@ -681,6 +683,65 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     );
   }
 
+  // ── صفحة "الامتحانات" — مستطيلات صفوف، وبالضغط على صف يظهر جدول
+  // الطلاب الضعاف بنفس طريقة العمل الحالية (نفس الأعمدة والبيانات القديمة)
+  if (showExams) {
+    const gradeList = examsGrade ? dd.examsSection.grades.find(g => g.grade === examsGrade)?.students || [] : [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setShowExams(false); setExamsGrade(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <h2 className="text-white font-bold text-sm">الامتحانات</h2>
+          <span className="w-10" />
+        </div>
+        {!examsGrade ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {dd.examsSection.grades.map((g, i) => (
+              <button key={i} onClick={() => setExamsGrade(g.grade)}
+                className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 text-center hover:bg-slate-800 transition-colors">
+                <div className="text-white font-bold text-sm">{g.grade}</div>
+                <div className={`text-xs mt-1 ${g.students.length ? "text-red-400 font-bold" : "text-slate-500"}`}>
+                  {g.students.length ? `${g.students.length} طالب` : "لا يوجد"}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setExamsGrade(null)} className="text-slate-400 hover:text-white text-xs flex items-center gap-1">← كل الصفوف</button>
+              <span className="text-white font-bold text-sm">{examsGrade}</span>
+            </div>
+            {gradeList.length === 0 ? (
+              <div className="text-center text-slate-500 text-xs py-8">مفيش طلاب ضعاف في الصف ده</div>
+            ) : (
+              <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs min-w-max">
+                    <thead>
+                      <tr className="led-thead text-slate-400">
+                        {dd.examsSection.cols.map((c, ci) => <th key={ci} className="px-2 py-1.5 text-right font-medium whitespace-nowrap">{c}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gradeList.map((s, si) => (
+                        <tr key={si} className="border-t border-slate-700/30">
+                          {renderProblemRow(dd.examsSection.title, s).map((cell, ci) => (
+                            <td key={ci} className="px-2 py-2 text-slate-300 whitespace-nowrap">{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── صفحة "الطلاب بدون أرقام" — نفس آلية "الطلاب المتأخرين من شهور سابقة"
   // بالظبط: مستطيل واحد، وبالضغط عليه بيفتح شاشة صفوف ثم أسماء
   if (showNoPhone) {
@@ -754,7 +815,6 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       )}
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
-      {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
       {!isAssist && (
         <button onClick={() => setShowLog(true)}
           className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
@@ -776,6 +836,18 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
           </div>
           <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
             {dd.noPhoneSection.grades.reduce((a, g) => a + g.students.length, 0)} طالب
+          </span>
+        </button>
+      )}
+      {!isAssist && (
+        <button ref={refs.exams} onClick={() => setShowExams(true)}
+          className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📝</span>
+            <span className="text-white font-bold text-sm">الامتحانات</span>
+          </div>
+          <span className="bg-red-500/15 text-red-400 text-xs font-bold px-2 py-0.5 rounded-full">
+            {dd.examsSection.grades.reduce((a, g) => a + g.students.length, 0)} طالب
           </span>
         </button>
       )}
