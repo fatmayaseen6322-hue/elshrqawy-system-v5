@@ -491,6 +491,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [noPhoneGrade, setNoPhoneGrade] = useState(null);
   const [showLog, setShowLog] = useState(false);
   const [logCategory, setLogCategory] = useState(null);
+  const [logPickedDate, setLogPickedDate] = useState("");
 
   // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
   // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
@@ -597,13 +598,30 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     ...c,
     entries: safeLog.filter(e => categorize(e).key === c.key),
   }));
+  const YESTERDAY = (() => { const d = new Date(TODAY); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; })();
+  const entryDate = e => (e.ts || "").split(" ")[0];
 
   if (showLog) {
     const cat = logCategory ? logByCategory.find(c => c.key === logCategory) : null;
+    const catToday     = cat ? cat.entries.filter(e => entryDate(e) === TODAY) : [];
+    const catYesterday = cat ? cat.entries.filter(e => entryDate(e) === YESTERDAY) : [];
+    const otherDates = cat
+      ? [...new Set(cat.entries.filter(e => entryDate(e) !== TODAY && entryDate(e) !== YESTERDAY).map(entryDate))].sort((a, b) => b.localeCompare(a))
+      : [];
+    const pickedEntries = cat && logPickedDate ? cat.entries.filter(e => entryDate(e) === logPickedDate) : [];
+    const renderEntryCard = (e, i) => (
+      <div key={e.id || i} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-white text-sm font-bold">{e.action}</span>
+          <span className="text-slate-500 text-xs shrink-0">{e.ts}</span>
+        </div>
+        {e.detail && <div className="text-slate-400 text-xs mt-1">{e.detail}</div>}
+      </div>
+    );
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => { setShowLog(false); setLogCategory(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <button onClick={() => { setShowLog(false); setLogCategory(null); setLogPickedDate(""); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
           <h2 className="text-white font-bold text-sm">السجل</h2>
           <span className="w-10" />
         </div>
@@ -621,26 +639,42 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
             ))}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <button onClick={() => setLogCategory(null)} className="text-slate-400 hover:text-white text-xs flex items-center gap-1">← كل الأقسام</button>
+              <button onClick={() => { setLogCategory(null); setLogPickedDate(""); }} className="text-slate-400 hover:text-white text-xs flex items-center gap-1">← كل الأقسام</button>
               <span className="text-white font-bold text-sm">{cat.icon} {cat.label}</span>
             </div>
-            {cat.entries.length === 0 ? (
-              <div className="text-center text-slate-500 text-xs py-8">مفيش أنشطة في القسم ده</div>
-            ) : (
-              <div className="space-y-2">
-                {cat.entries.map((e, i) => (
-                  <div key={e.id || i} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-white text-sm font-bold">{e.action}</span>
-                      <span className="text-slate-500 text-xs shrink-0">{e.ts}</span>
-                    </div>
-                    {e.detail && <div className="text-slate-400 text-xs mt-1">{e.detail}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
+
+            <div>
+              <div className="text-xs text-slate-400 font-bold mb-2">📅 تعديل اليوم</div>
+              {catToday.length === 0
+                ? <div className="text-center text-slate-500 text-xs py-4">لا يوجد تعديلات اليوم</div>
+                : <div className="space-y-2">{catToday.map(renderEntryCard)}</div>}
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-400 font-bold mb-2">📅 أمس</div>
+              {catYesterday.length === 0
+                ? <div className="text-center text-slate-500 text-xs py-4">لا يوجد تعديلات أمس</div>
+                : <div className="space-y-2">{catYesterday.map(renderEntryCard)}</div>}
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-400 font-bold mb-2">🗓️ تواريخ أقدم</div>
+              <select value={logPickedDate} onChange={e => setLogPickedDate(e.target.value)}
+                disabled={otherDates.length === 0}
+                className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none disabled:opacity-40">
+                <option value="">{otherDates.length === 0 ? "— مفيش تواريخ تانية —" : "— اختر تاريخ —"}</option>
+                {otherDates.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              {logPickedDate && (
+                <div className="space-y-2 mt-2">
+                  {pickedEntries.length === 0
+                    ? <div className="text-center text-slate-500 text-xs py-4">مفيش تعديلات في التاريخ ده</div>
+                    : pickedEntries.map(renderEntryCard)}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
