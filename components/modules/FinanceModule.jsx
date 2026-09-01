@@ -14,6 +14,25 @@ import { Av, Toast, Modal, Field, Btn } from "../ui";
 // finRecords يجيلها من App.jsx (single source of truth)
 // ══════════════════════════════════════════════════════════════
 
+// ── حساب "الرسوم المطلوبة" لطالب في شهر/سنة معينين ──
+// القاعدة: لو الطالب اتسجّل (joinDate) في نفس الشهر/السنة اللي بنحسب
+// عليهم، وبعد يوم 15 من الشهر، فالمطلوب في هذا الشهر بالذات هو نص
+// الرسوم الشهرية المسجلة لصفه (مقربة لأقرب رقم صحيح) — وبعد كده أي شهر
+// تاني (بما فيه الشهر اللي بعده) بيتحاسب عادي بالرسوم الكاملة.
+// لو اتسجّل يوم 15 نفسه أو قبله، الشهر ده بيتحاسب كامل زي العادي.
+function getExpectedFeeForMonth(student, month, year, gradeFees) {
+  const base = Math.max(0, (gradeFees?.[student?.grade] || 0) - (student?.discount || 0));
+  const parts = (student?.joinDate || "").split("-");
+  if (parts.length !== 3) return base;
+  const joinYear  = parseInt(parts[0], 10);
+  const joinMonth = parseInt(parts[1], 10);
+  const joinDay   = parseInt(parts[2], 10);
+  if (joinYear === year && joinMonth === month && joinDay > 15) {
+    return Math.round(base / 2);
+  }
+  return base;
+}
+
 // ── حساب الشهور المتأخرة لطالب واحد (نفس منطق ملف الطالب والداشبورد) ──
 function getOverdueInfo(student, finRecords) {
   const [curYearStr, curMonthStr] = TODAY.split("-");
@@ -351,7 +370,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
-    return list.map(s => ({ ...s, _defaultFee: Math.max(0, (safeSettings.gradeFees?.[s.grade] || 0) - (s.discount || 0)), _month: effMonth, _year: effYear }));
+    return list.map(s => ({ ...s, _defaultFee: getExpectedFeeForMonth(s, effMonth, effYear, safeSettings.gradeFees), _month: effMonth, _year: effYear }));
   }, [safeStudents, selGrade, selGroup, safeSettings.gradeFees, effMonth, effYear]);
 
   const monthRecords = useMemo(() =>

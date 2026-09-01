@@ -48,16 +48,22 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     const [curYearStr, curMonthStr] = TODAY.split("-");
     const currentYearNum  = parseInt(curYearStr, 10);
     const currentMonthNum = parseInt(curMonthStr, 10);
-    const [joinYearStr, joinMonthStr] = (s.joinDate || TODAY).split("-");
+    const [joinYearStr, joinMonthStr, joinDayStr] = (s.joinDate || TODAY).split("-");
     const joinYearNum  = parseInt(joinYearStr, 10);
     const joinMonthNum = parseInt(joinMonthStr, 10);
+    const joinDayNum   = parseInt(joinDayStr, 10);
     const studentFinRecords = finRecords.filter(r => r.studentId === s.id);
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
     const fee = Math.max(0, (gradeFees?.[s.grade] || 0) - (s.discount || 0));
-    let owedMonths = 0;
-    for (let m = startMonth; m <= currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) owedMonths++;
-    return owedMonths * fee;
+    // لو اتسجّل بعد يوم 15 من شهر الانضمام، الشهر ده بس بيتحاسب بنص
+    // الرسوم — نفس منطق صفحة المصاريف (getExpectedFeeForMonth).
+    const feeForMonth = m => (joinYearNum === currentYearNum && m === joinMonthNum && joinDayNum > 15)
+      ? Math.round(fee / 2)
+      : fee;
+    let total = 0;
+    for (let m = startMonth; m <= currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) total += feeForMonth(m);
+    return total;
   };
 
   const totalDebt = students.reduce((a, s) => a + getRealDue(s), 0);
