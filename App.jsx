@@ -447,7 +447,7 @@ export default function App() {
                     <div className="fixed inset-0 z-40" onClick={() => setFinanceMenuOpen(false)} />
                     <div className="absolute z-50 flex flex-col gap-1 p-1.5"
                       style={{
-                        top: 0, left: "100%", marginLeft: "8px", width: "180px",
+                        top: 0, right: "100%", marginRight: "8px", width: "180px",
                         background: "var(--sidebar-bg)", border: "1px solid var(--border)",
                         borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-md)",
                       }}>
