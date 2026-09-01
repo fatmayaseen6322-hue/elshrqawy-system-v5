@@ -543,6 +543,8 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [period, setPeriod] = useState("today");
   const [showOldDebtors, setShowOldDebtors] = useState(false);
   const [oldDebtorsGrade, setOldDebtorsGrade] = useState(null);
+  const [showNoPhone, setShowNoPhone] = useState(false);
+  const [noPhoneGrade, setNoPhoneGrade] = useState(null);
 
   // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
   // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
@@ -566,7 +568,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     addActivity?.("ميعاد تسديد", `تم تحديد ميعاد ${dateStr} لطالب`);
   };
   const periodLabels = { today: "اليوم", week: "الأسبوع", month: "الشهر" };
-  const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null), todayAtt: useRef(null), noPhone: useRef(null) };
+  const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null), todayAtt: useRef(null) };
 
   // زرار الإشعارات في التوب بار → قسم "حالة حرجة" هنا. بيوصل لآخر مكان
   // فيه بيانات فعلية (المصروفات المتأخرة أولاً، وإلا الغياب) بدل مكان تايه.
@@ -640,6 +642,53 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     );
   }
 
+  // ── صفحة "الطلاب بدون أرقام" — نفس آلية "الطلاب المتأخرين من شهور سابقة"
+  // بالظبط: مستطيل واحد، وبالضغط عليه بيفتح شاشة صفوف ثم أسماء
+  if (showNoPhone) {
+    const gradeList = noPhoneGrade ? dd.noPhoneSection.grades.find(g => g.grade === noPhoneGrade)?.students || [] : [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setShowNoPhone(false); setNoPhoneGrade(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <h2 className="text-white font-bold text-sm">الطلاب بدون أرقام</h2>
+          <span className="w-10" />
+        </div>
+        {!noPhoneGrade ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {dd.noPhoneSection.grades.map((g, i) => (
+              <button key={i} onClick={() => setNoPhoneGrade(g.grade)}
+                className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 text-center hover:bg-slate-800 transition-colors">
+                <div className="text-white font-bold text-sm">{g.grade}</div>
+                <div className={`text-xs mt-1 ${g.students.length ? "text-amber-400 font-bold" : "text-slate-500"}`}>
+                  {g.students.length ? `${g.students.length} طالب` : "لا يوجد"}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setNoPhoneGrade(null)} className="text-slate-400 hover:text-white text-xs flex items-center gap-1">← كل الصفوف</button>
+              <span className="text-white font-bold text-sm">{noPhoneGrade}</span>
+            </div>
+            {gradeList.length === 0 ? (
+              <div className="text-center text-slate-500 text-xs py-8">مفيش طلاب بدون أرقام في الصف ده</div>
+            ) : (
+              <div className="space-y-2">
+                {gradeList.map((s, i) => (
+                  <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center justify-between">
+                    <span className="text-white text-sm font-bold">{s.name}</span>
+                    <span className="text-amber-400 text-xs font-bold shrink-0">مجموعة {s.group}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -668,7 +717,18 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
       {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
-      <ProblemSection data={dd.noPhoneSection} idRef={refs.noPhone} />
+      {dd.noPhoneSection.grades.length > 0 && (
+        <button onClick={() => setShowNoPhone(true)}
+          className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📵</span>
+            <span className="text-white font-bold text-sm">الطلاب بدون أرقام</span>
+          </div>
+          <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
+            {dd.noPhoneSection.grades.reduce((a, g) => a + g.students.length, 0)} طالب
+          </span>
+        </button>
+      )}
       {!isAssist && <MonthlyChart finRecords={finRecords} />}
       <ReportButtons students={students} finRecords={finRecords} settings={settings} />
       <AsalAI sectionRefs={refs} students={students} finRecords={finRecords} />
