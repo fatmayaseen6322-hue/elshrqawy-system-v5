@@ -3,11 +3,6 @@ import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
 import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked, sortStudentsList } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
-import { exportStudentsWord } from "../../utils/exportStudentsWord";
-
-// تطبيع الألف بأشكال الهمزة المختلفة عشان البحث ما يفرقش بين
-// "احمد" و"أحمد" و"إحمد" و"آحمد" — نفس آلية البحث في صفحة الحضور
-const normalizeAr = (str = "") => str.replace(/[أإآء]/g, "ا");
 
 // المستوى الحقيقي للطالب: مبني على حاجتين مع بعض —
 //  1) دقة الامتحانات الحقيقية (100% ناقص نسبة النقط الغلط من إجمالي نقط
@@ -81,43 +76,7 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
   const [confirmDel, setConfirmDel] = useState(null);
   const [blockReason, setBlockReason] = useState("");
   const [showImport, setShowImport] = useState(false);
-  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
-  const [deleteAllInput, setDeleteAllInput] = useState("");
-  const [search, setSearch] = useState("");
   const [openErrKey, setOpenErrKey] = useState(null);
-  const [exporting, setExporting] = useState(false);
-  const [showNoPhone, setShowNoPhone] = useState(false);
-
-  const noPhoneStudents = useMemo(
-    () => (students || []).filter(s => s && !isBlocked(s) && !(s.parentPhone && s.parentPhone.trim()) && !(s.phone && s.phone.trim())),
-    [students]
-  );
-
-  const doExportWord = useCallback(async () => {
-    if (exporting) return;
-    setExporting(true);
-    try {
-      const ok = await exportStudentsWord(students || []);
-      setToast({ msg: ok ? "✓ تم تجهيز ملف Word للتحميل" : "مفيش طلاب لتصديرهم", type: ok ? "success" : "error" });
-    } catch {
-      setToast({ msg: "حصل خطأ أثناء إنشاء الملف", type: "error" });
-    } finally {
-      setExporting(false);
-    }
-  }, [students, exporting]);
-
-  // بحث عن طالب بالاسم في كل المجاميع والصفوف — بيوديك على طول لملفه
-  const searchResults = useMemo(() => {
-    if (!search.trim()) return null;
-    const q = normalizeAr(search.trim());
-    return sortStudentsList((students || []).filter(s => s && !isBlocked(s) && normalizeAr(s.name || "").includes(q)));
-  }, [students, search]);
-
-  const goToStudentDirect = s => {
-    setSel(s);
-    setStep("profile");
-    setSearch("");
-  };
 
   useEffect(() => {
     if (jumpTo) {
@@ -142,46 +101,10 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
     const ready = grade && group && date;
     return (
       <div className="space-y-5">
-        <div className="text-center space-y-1 relative">
+        <div className="text-center space-y-1">
           <div className="text-2xl">📋</div>
           <div className="text-white font-black text-base">اختر الصف والمجموعة والتاريخ</div>
           <div className="text-slate-500 text-xs">يجب اختيار الثلاثة لتفعيل الأقسام</div>
-          <button onClick={doExportWord} disabled={exporting}
-            className="absolute left-0 top-0 flex items-center gap-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-50">
-            {exporting ? "⏳ جاري التجهيز..." : "📄 تصدير كشف Word"}
-          </button>
-          <button onClick={() => setConfirmDeleteAll(true)} disabled={!(students || []).length}
-            className="absolute right-0 top-0 flex items-center gap-1.5 bg-red-600/20 border border-red-500/30 text-red-300 text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-40">
-            🗑️ حذف كل الطلاب
-          </button>
-          <button onClick={() => setShowNoPhone(true)}
-            className="absolute right-0 top-9 flex items-center gap-1.5 bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold px-3 py-1.5 rounded-xl">
-            📵 الطلاب بدون أرقام{noPhoneStudents.length > 0 ? ` (${noPhoneStudents.length})` : ""}
-          </button>
-        </div>
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="🔍 دوّر على طالب بالاسم (في كل المجاميع)..."
-            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
-          {searchResults && (
-            searchResults.length === 0
-              ? <div className="text-center text-slate-500 text-xs py-3">مفيش طالب بهذا الاسم</div>
-              : <div className="max-h-56 overflow-y-auto space-y-1">
-                  {searchResults.map(s => (
-                    <button key={s.id} onClick={() => goToStudentDirect(s)}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-700/50 text-right">
-                      <Av name={s.name} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-white text-sm font-bold whitespace-normal break-words">{s.name}</span>
-                        </div>
-                        <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-          )}
         </div>
 
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
@@ -201,65 +124,6 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
           </div>
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
-        {showNoPhone && (
-          <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center p-4" onClick={() => setShowNoPhone(false)}>
-            <div className="bg-slate-900 border border-amber-700/50 rounded-2xl p-5 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between">
-                <div className="text-white text-sm font-bold">📵 الطلاب بدون أرقام ({noPhoneStudents.length})</div>
-                <button onClick={() => setShowNoPhone(false)} className="text-slate-400 text-lg">✕</button>
-              </div>
-              {noPhoneStudents.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-xs">✓ كل الطلاب عندهم رقم هاتف ولي أمر مسجَّل</div>
-              ) : (
-                <div className="max-h-80 overflow-y-auto space-y-1.5">
-                  {noPhoneStudents.map(st => (
-                    <button key={st.id} onClick={() => { setShowNoPhone(false); goToStudentDirect(st); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/60 border border-amber-500/15 hover:bg-slate-800 text-right">
-                      <Av name={st.name} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-xs font-bold whitespace-normal break-words">{st.name}</div>
-                        <div className="text-slate-500 text-xs">{st.grade} — مجموعة {st.group}</div>
-                      </div>
-                      <span className="text-amber-400 text-xs shrink-0">إضافة الرقم ›</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        {confirmDeleteAll && (
-          <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-red-700/50 rounded-2xl p-5 w-full max-w-xs space-y-4">
-              <div className="text-red-400 text-3xl text-center">⚠️</div>
-              <div className="text-white text-sm text-center font-bold">حذف كل الطلاب نهائيًا؟</div>
-              <div className="text-slate-400 text-xs text-center">
-                هيتم حذف <b className="text-white">{(students || []).length}</b> طالب نهائيًا من النظام (كل الصفوف والمجاميع)، والخطوة دي مش هترجع.
-                <br />اكتبي كلمة <b className="text-red-300">حذف</b> تحت للتأكيد.
-              </div>
-              <input value={deleteAllInput} onChange={e => setDeleteAllInput(e.target.value)}
-                placeholder='اكتبي "حذف"'
-                className="w-full bg-slate-800/80 border border-red-700/40 rounded-xl px-3 py-2.5 text-white text-sm text-center focus:outline-none" />
-              <div className="flex gap-2">
-                <button onClick={() => { setConfirmDeleteAll(false); setDeleteAllInput(""); }}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm">إلغاء</button>
-                <button
-                  disabled={deleteAllInput.trim() !== "حذف"}
-                  onClick={() => {
-                    const count = (students || []).length;
-                    setStudents([]);
-                    addActivity?.("حذف كل الطلاب", `تم حذف ${count} طالب نهائيًا دفعة واحدة`);
-                    setConfirmDeleteAll(false);
-                    setDeleteAllInput("");
-                    setToast({ msg: `✓ تم حذف ${count} طالب نهائيًا`, type: "success" });
-                  }}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-40">
-                  ✗ حذف نهائي
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -275,18 +139,6 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
           <div className="flex justify-between items-center mb-3">
             <span className="text-slate-400 text-xs font-medium">طلاب {grade} — مجموعة {group} ({grpStudents.length})</span>
             <div className="flex gap-2">
-              <Btn size="sm" variant="ghost" onClick={async () => {
-                if (exporting) return;
-                setExporting(true);
-                try {
-                  const ok = await exportStudentsWord(grpStudents);
-                  setToast({ msg: ok ? "✓ تم تجهيز ملف Word للتحميل" : "مفيش طلاب لتصديرهم", type: ok ? "success" : "error" });
-                } catch {
-                  setToast({ msg: "حصل خطأ أثناء إنشاء الملف", type: "error" });
-                } finally {
-                  setExporting(false);
-                }
-              }}>📄 تصدير Word</Btn>
               <Btn size="sm" variant="ghost" onClick={() => setShowImport(true)}>📥 استيراد من ملف</Btn>
               <Btn size="sm" variant="ghost" onClick={() => setStep("add")}>+ طالب</Btn>
             </div>
