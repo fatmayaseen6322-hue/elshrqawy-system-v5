@@ -15,12 +15,10 @@ import { Av, Toast, Modal, Field, Btn } from "../ui";
 // ══════════════════════════════════════════════════════════════
 
 // ── حساب الشهور المتأخرة لطالب واحد (نفس منطق ملف الطالب والداشبورد) ──
-// asOfMonth/asOfYear اختياريين: لو اتبعتوا، الحساب بيكون "لغاية الشهر ده" بدل الشهر الحالي فعليًا
-// (ده اللي بيسمح بفلترة الديون بشهر معيّن من قائمة "اختر الشهر" في تبويب المتأخر)
-function getOverdueInfo(student, finRecords, asOfMonth, asOfYear) {
+function getOverdueInfo(student, finRecords) {
   const [curYearStr, curMonthStr] = TODAY.split("-");
-  const currentYearNum  = asOfYear  || parseInt(curYearStr, 10);
-  const currentMonthNum = asOfMonth || parseInt(curMonthStr, 10);
+  const currentYearNum  = parseInt(curYearStr, 10);
+  const currentMonthNum = parseInt(curMonthStr, 10);
   const [joinYearStr, joinMonthStr] = (student.joinDate || TODAY).split("-");
   const joinYearNum  = parseInt(joinYearStr, 10);
   const joinMonthNum = parseInt(joinMonthStr, 10);
@@ -339,17 +337,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const getRecord = studentId => monthRecords.find(r => r.studentId === studentId) || null;
 
   // ══════════════ زر "متأخرين" — قائمة الطلاب المتأخرين في السداد بنفس فلاتر الصف/المجموعة ══════════════
-  // + فلتر "اختر الشهر": لو مختار شهر معيّن، الديون بتتحسب "لغاية الشهر ده" بدل الشهر الحالي
-  const [lateAsOfMonth, setLateAsOfMonth] = useState(curMonth);
   const adminLateStudents = useMemo(() => {
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
     return list
-      .map(s => ({ student: s, ...getOverdueInfo(s, safeRecords, lateAsOfMonth, curYear) }))
+      .map(s => ({ student: s, ...getOverdueInfo(s, safeRecords) }))
       .filter(x => x.count > 0)
       .sort((a, b) => b.count - a.count);
-  }, [safeStudents, safeRecords, selGrade, selGroup, lateAsOfMonth, curYear]);
+  }, [safeStudents, safeRecords, selGrade, selGroup]);
 
   const handleSave = rec => {
     const existing = (finRecords || []).find(r => r.id === rec.id);
@@ -595,17 +591,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             </button>
           </Field>
         </div>
-
-        {financeMode === "late" && (
-          <div className="pt-1">
-            <Field label="حتى شهر">
-              <select value={lateAsOfMonth} onChange={e => setLateAsOfMonth(parseInt(e.target.value))}
-                className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
-                {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
-              </select>
-            </Field>
-          </div>
-        )}
 
         {financeMode === "past" && (
           <div className="grid grid-cols-2 gap-2 pt-1">
