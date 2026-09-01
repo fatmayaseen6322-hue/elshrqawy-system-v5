@@ -42,21 +42,6 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     return Object.entries(map).filter(([, v]) => v.length > 0).map(([grade, students]) => ({ grade, students }));
   };
 
-  // الشهور المستحقة (غير المدفوعة) لكل طالب — من finRecords، بنفس منطق صفحة "ملف الطالب"
-  const getOwedMonthsLabel = s => {
-    const [curYearStr, curMonthStr] = TODAY.split("-");
-    const currentYearNum  = parseInt(curYearStr, 10);
-    const currentMonthNum = parseInt(curMonthStr, 10);
-    const [joinYearStr, joinMonthStr] = (s.joinDate || TODAY).split("-");
-    const joinYearNum  = parseInt(joinYearStr, 10);
-    const joinMonthNum = parseInt(joinMonthStr, 10);
-    const studentFinRecords = finRecords.filter(r => r.studentId === s.id);
-    const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
-    const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
-    const owed = [];
-    for (let m = startMonth; m <= currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) owed.push(MONTHS_AR[m - 1]);
-    return owed.length ? owed.join("، ") : "—";
-  };
 
   // المتبقي الحقيقي لكل طالب = عدد الشهور المتأخرة × رسم الصف (من الإعدادات) — بنفس منطق صفحة المصاريف "المتأخر"
   const getRealDue = s => {
@@ -74,12 +59,6 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     for (let m = startMonth; m <= currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) owedMonths++;
     return owedMonths * fee;
   };
-
-  const expensesStudents = students
-    .map(s => ({ ...s, _realDue: getRealDue(s) }))
-    .filter(s => s._realDue > 0)
-    .sort((a, b) => b._realDue - a._realDue)
-    .map(s => ({ id: s.id, name: s.name, due: fmt(s._realDue), owedMonths: getOwedMonthsLabel(s), dueDate: s.paymentDueDate || "", _due: s._realDue, grade: s.grade }));
 
   const totalDebt = students.reduce((a, s) => a + getRealDue(s), 0);
   const gradeDebts = GRADES_LIST.map(g => ({ grade: g, count: students.filter(s => s.grade === g).reduce((a, s) => a + getRealDue(s), 0) }));
@@ -105,12 +84,6 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     .sort((a, b) => a.oldest - b.oldest)
     .map(x => ({ name: x.s.name, grade: x.s.grade, monthNum: x.oldest, monthLabel: MONTHS_AR[x.oldest - 1] }));
   const gradeDebtStudents = GRADES_LIST.map(g => ({ grade: g, list: prevDebtorsList.filter(x => x.grade === g) }));
-
-  const expensesSection = {
-    title: "حالة حرجة - المصروفات", icon: "🔴",
-    cols: ["اسم الطالب","المتبقي","الشهور المستحقة","آخر ميعاد للتسديد"],
-    grades: groupByGrade(expensesStudents),
-  };
 
   const absenceStudents = students
     .filter(s => s.absent > 3 || pct(s.absent, s.total || 1) > 15)
@@ -142,7 +115,7 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     grades: groupByGrade(noPhoneStudents),
   };
 
-  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, expensesSection, absenceSection, examsSection, noPhoneSection };
+  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, absenceSection, examsSection, noPhoneSection };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -193,44 +166,8 @@ function KPICard({ icon, label, value, sub, color, trend, gradeBreakdown, format
   );
 }
 
-// ── خلية "آخر ميعاد للتسديد" — تسجيل/تعديل ميعاد يحدده الطالب ──
-function DueDateCell({ studentId, initialDate, onSave }) {
-  const [value,   setValue]   = useState(initialDate || "");
-  const [saved,   setSaved]   = useState(!!initialDate);
-  const [editing, setEditing] = useState(!initialDate);
-
-  useEffect(() => { setValue(initialDate || ""); setSaved(!!initialDate); setEditing(!initialDate); }, [initialDate]);
-
-  const doSave = () => {
-    if (!value) return;
-    onSave?.(studentId, value);
-    setSaved(true);
-    setEditing(false);
-  };
-
-  return (
-    <div className="flex items-center gap-1.5">
-      {editing || !saved
-        ? <input type="date" value={value} onChange={e => setValue(e.target.value)}
-            className="bg-slate-700 border border-blue-500/40 rounded-lg px-2 py-1 text-white text-xs focus:outline-none" />
-        : <span className="text-slate-300 text-xs whitespace-nowrap">{value}</span>
-      }
-      {saved && !editing
-        ? <button onClick={() => setEditing(true)} className="w-7 h-7 shrink-0 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-xs hover:bg-blue-700/40">✏️</button>
-        : <button onClick={doSave} disabled={!value} className="w-7 h-7 shrink-0 rounded-lg bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-xs disabled:opacity-30 hover:bg-emerald-700/50">💾</button>
-      }
-    </div>
-  );
-}
-
 function renderProblemRow(title, s, extra) {
   switch (title) {
-    case "حالة حرجة - المصروفات": return [
-      s.name,
-      <span className="text-red-400 font-bold">{s.due}</span>,
-      <span className="text-amber-400 text-xs">{s.owedMonths}</span>,
-      <DueDateCell studentId={s.id} initialDate={s.dueDate} onSave={extra?.onSaveDueDate} />,
-    ];
     case "الغياب": return [s.name, <span className="text-red-400 font-bold">{s.absentDays}</span>, s.lateCount, s.absentPct];
     case "غياب اليوم": return [s.name, <span className={s.statusLabel === "غائب" ? "text-red-400 font-bold" : "text-amber-400 font-bold"}>{s.statusLabel}</span>, s.reason];
     case "الامتحانات": return [s.name, s.score, <span className="text-red-400 font-bold">{s.pct}</span>, s.lessons];
@@ -378,7 +315,8 @@ function buildCtxSummary(students, finRecords) {
   lines.push(`إجمالي الطلاب: ${dd.stats.total} (نشط: ${dd.stats.active}، مؤقت: ${dd.stats.temp})`);
   lines.push(`إجمالي الإيرادات المحصّلة: ${dd.stats.totalRevenue} ج.م`);
   lines.push(`إيرادات الشهر الأخير: ${dd.stats.revMonth} ج.م`);
-  [dd.expensesSection, dd.absenceSection, dd.examsSection].forEach(sec => {
+  lines.push(`إجمالي الديون المتأخرة: ${dd.stats.totalDebt} ج.م`);
+  [dd.absenceSection, dd.examsSection].forEach(sec => {
     sec.grades.forEach(g => {
       g.students.forEach(s => {
         const fields = Object.entries(s).filter(([k]) => !["grade","_due","_grade"].includes(k)).map(([k, v]) => `${k}:${v}`).join(", ");
@@ -436,7 +374,7 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
     setMessages(m => [...m, { role: "user", text }]);
     setInput("");
     setLoading(true);
-    const sys = `أنت "asal.ai"، مساعد ذكاء اصطناعي مدمج في نظام Elshrqawy. أجب عن أي سؤال — عن النظام أو عام. كن مفيداً ومختصراً.\nبيانات النظام:\n${buildCtxSummary(students, finRecords)}\n\nفي نهاية كل رد أضف:\nCONFIDENCE: <0-100>\nACTION: expenses أو absence أو exams أو none`;
+    const sys = `أنت "asal.ai"، مساعد ذكاء اصطناعي مدمج في نظام Elshrqawy. أجب عن أي سؤال — عن النظام أو عام. كن مفيداً ومختصراً.\nبيانات النظام:\n${buildCtxSummary(students, finRecords)}\n\nفي نهاية كل رد أضف:\nCONFIDENCE: <0-100>\nACTION: absence أو exams أو none`;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -464,9 +402,9 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
       }
       const data = await res.json();
       let full = (data.content || []).map(c => c.text || "").join("\n").trim() || "معلش، لم أستطع الرد الآن.\nCONFIDENCE: 0\nACTION: none";
-      const action = (full.match(/ACTION:\s*(expenses|absence|exams|none)/) || [])[1] || null;
+      const action = (full.match(/ACTION:\s*(absence|exams|none)/) || [])[1] || null;
       const confidence = Math.min(100, parseInt((full.match(/CONFIDENCE:\s*(\d{1,3})/) || [])[1] || 0));
-      const clean = full.replace(/CONFIDENCE:\s*\d{1,3}/, "").replace(/ACTION:\s*(expenses|absence|exams|none)/, "").trim();
+      const clean = full.replace(/CONFIDENCE:\s*\d{1,3}/, "").replace(/ACTION:\s*(absence|exams|none)/, "").trim();
       setMessages(m => [...m, { role: "ai", text: clean, confidence }]);
       speak(clean);
       performAction(action);
@@ -563,18 +501,13 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpTo]);
 
-  const handleSaveDueDate = (studentId, dateStr) => {
-    setStudents?.(prev => (prev || []).map(s => s.id === studentId ? { ...s, paymentDueDate: dateStr } : s));
-    addActivity?.("ميعاد تسديد", `تم تحديد ميعاد ${dateStr} لطالب`);
-  };
   const periodLabels = { today: "اليوم", week: "الأسبوع", month: "الشهر" };
-  const refs = { expenses: useRef(null), absence: useRef(null), exams: useRef(null), todayAtt: useRef(null) };
+  const refs = { absence: useRef(null), exams: useRef(null), todayAtt: useRef(null) };
 
-  // زرار الإشعارات في التوب بار → قسم "حالة حرجة" هنا. بيوصل لآخر مكان
-  // فيه بيانات فعلية (المصروفات المتأخرة أولاً، وإلا الغياب) بدل مكان تايه.
+  // زرار الإشعارات في التوب بار → بيوصل لآخر مكان فيه بيانات فعلية (الغياب).
   useEffect(() => {
     if (!sectionJump) return;
-    const target = refs.expenses.current || refs.absence.current;
+    const target = refs.absence.current;
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "center" });
       target.style.outline = "2px solid #f87171";
@@ -713,7 +646,6 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
           </button>
         </div>
       )}
-      <ProblemSection data={dd.expensesSection} idRef={refs.expenses} extra={{ onSaveDueDate: handleSaveDueDate }} />
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
       {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
