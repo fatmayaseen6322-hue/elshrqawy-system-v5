@@ -480,7 +480,7 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
-export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone }) {
+export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity, activityLog, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone }) {
   const students   = (studentsProp || []).filter(s => !isBlocked(s));
   const finRecords = finRecordsProp || [];
   const attRecords = attRecordsProp || [];
@@ -489,6 +489,8 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [oldDebtorsGrade, setOldDebtorsGrade] = useState(null);
   const [showNoPhone, setShowNoPhone] = useState(false);
   const [noPhoneGrade, setNoPhoneGrade] = useState(null);
+  const [showLog, setShowLog] = useState(false);
+  const [logCategory, setLogCategory] = useState(null);
 
   // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
   // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
@@ -581,6 +583,70 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     );
   }
 
+  // ── تصنيف "السجل" (كل التعديلات في البرنامج) لمستطيلات حسب نوع النشاط ──
+  const LOG_CATS = [
+    { key: "finance",  icon: "💰", label: "المصروفات", match: a => ["دفعة مالية", "تراجع عن دفعة", "رسوم صف"].includes(a) },
+    { key: "students", icon: "👥", label: "الطلاب / الإضافة", match: a => a === "إضافة طالب" || a === "تعديل طالب" || a.startsWith("استيراد") },
+    { key: "block",    icon: "🚫", label: "البلوك", match: a => ["نقل لبلوك", "استرجاع من بلوك", "حذف نهائي"].includes(a) },
+    { key: "edit",     icon: "✏️", label: "تعديلات وأخطاء الامتحانات", match: a => ["خطأ سؤال", "إلغاء خطأ سؤال", "سبب غياب/تأخير"].includes(a) },
+    { key: "other",    icon: "📌", label: "أنشطة أخرى", match: () => true },
+  ];
+  const safeLog = activityLog || [];
+  const categorize = entry => LOG_CATS.find(c => c.key !== "other" && c.match(entry.action)) || LOG_CATS.find(c => c.key === "other");
+  const logByCategory = LOG_CATS.map(c => ({
+    ...c,
+    entries: safeLog.filter(e => categorize(e).key === c.key),
+  }));
+
+  if (showLog) {
+    const cat = logCategory ? logByCategory.find(c => c.key === logCategory) : null;
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setShowLog(false); setLogCategory(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <h2 className="text-white font-bold text-sm">السجل</h2>
+          <span className="w-10" />
+        </div>
+        {!logCategory ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {logByCategory.map((c, i) => (
+              <button key={i} onClick={() => setLogCategory(c.key)}
+                className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 text-center hover:bg-slate-800 transition-colors">
+                <div className="text-2xl mb-1">{c.icon}</div>
+                <div className="text-white font-bold text-sm">{c.label}</div>
+                <div className={`text-xs mt-1 ${c.entries.length ? "text-amber-400 font-bold" : "text-slate-500"}`}>
+                  {c.entries.length ? `${c.entries.length} نشاط` : "لا يوجد"}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setLogCategory(null)} className="text-slate-400 hover:text-white text-xs flex items-center gap-1">← كل الأقسام</button>
+              <span className="text-white font-bold text-sm">{cat.icon} {cat.label}</span>
+            </div>
+            {cat.entries.length === 0 ? (
+              <div className="text-center text-slate-500 text-xs py-8">مفيش أنشطة في القسم ده</div>
+            ) : (
+              <div className="space-y-2">
+                {cat.entries.map((e, i) => (
+                  <div key={e.id || i} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white text-sm font-bold">{e.action}</span>
+                      <span className="text-slate-500 text-xs shrink-0">{e.ts}</span>
+                    </div>
+                    {e.detail && <div className="text-slate-400 text-xs mt-1">{e.detail}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── صفحة "الطلاب بدون أرقام" — نفس آلية "الطلاب المتأخرين من شهور سابقة"
   // بالظبط: مستطيل واحد، وبالضغط عليه بيفتح شاشة صفوف ثم أسماء
   if (showNoPhone) {
@@ -655,6 +721,18 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
       <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
       {!isAssist && <ProblemSection data={dd.examsSection} idRef={refs.exams} />}
+      {!isAssist && (
+        <button onClick={() => setShowLog(true)}
+          className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📜</span>
+            <span className="text-white font-bold text-sm">السجل</span>
+          </div>
+          <span className="bg-blue-500/15 text-blue-400 text-xs font-bold px-2 py-0.5 rounded-full">
+            {safeLog.length} نشاط
+          </span>
+        </button>
+      )}
       {dd.noPhoneSection.grades.length > 0 && (
         <button onClick={() => setShowNoPhone(true)}
           className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
