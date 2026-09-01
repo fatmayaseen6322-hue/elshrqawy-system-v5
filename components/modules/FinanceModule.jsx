@@ -178,7 +178,7 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
   );
 }
 
-export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone }) {
+export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone, financeMode = "current" }) {
   const isAssist     = role === "assist";
   const safeStudents = (students || []).filter(s => !isBlocked(s));
   const safeSettings = settings   || {};
@@ -187,6 +187,12 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const curMonth = new Date().getMonth() + 1;
   const curYear  = new Date().getFullYear();
   const curDay   = new Date().getDate();
+
+  // ══════════════ زر "تسجيل الشهور الماضية" — اختيار الشهر/السنة المطلوب تسجيله ══════════════
+  const [regMonth, setRegMonth] = useState(curMonth);
+  const [regYear,  setRegYear]  = useState(curYear);
+  const effMonth = financeMode === "past" ? regMonth : curMonth;
+  const effYear  = financeMode === "past" ? regYear  : curYear;
 
   // ══════════════ Assist: تبويب "المصاريف" (تسجيل دفعة) ══════════════
   const [aTab,       setATab]       = useState(null); // "pay" | "late" | null
@@ -316,19 +322,30 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
-    return list.map(s => ({ ...s, _defaultFee: Math.max(0, (safeSettings.gradeFees?.[s.grade] || 0) - (s.discount || 0)), _month: curMonth, _year: curYear }));
-  }, [safeStudents, selGrade, selGroup, safeSettings.gradeFees, curMonth, curYear]);
+    return list.map(s => ({ ...s, _defaultFee: Math.max(0, (safeSettings.gradeFees?.[s.grade] || 0) - (s.discount || 0)), _month: effMonth, _year: effYear }));
+  }, [safeStudents, selGrade, selGroup, safeSettings.gradeFees, effMonth, effYear]);
 
   const monthRecords = useMemo(() =>
     safeRecords.filter(r =>
       r && r.grade === selGrade &&
       (!selGroup || r.group === selGroup) &&
-      r.month === curMonth &&
-      r.year  === curYear
+      r.month === effMonth &&
+      r.year  === effYear
     ),
-  [safeRecords, selGrade, selGroup, curMonth, curYear]);
+  [safeRecords, selGrade, selGroup, effMonth, effYear]);
 
   const getRecord = studentId => monthRecords.find(r => r.studentId === studentId) || null;
+
+  // ══════════════ زر "متأخرين" — قائمة الطلاب المتأخرين في السداد بنفس فلاتر الصف/المجموعة ══════════════
+  const adminLateStudents = useMemo(() => {
+    if (!selGrade) return [];
+    let list = safeStudents.filter(s => s && s.grade === selGrade);
+    if (selGroup) list = list.filter(s => s.group === selGroup);
+    return list
+      .map(s => ({ student: s, ...getOverdueInfo(s, safeRecords) }))
+      .filter(x => x.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [safeStudents, safeRecords, selGrade, selGroup]);
 
   const handleSave = rec => {
     const existing = (finRecords || []).find(r => r.id === rec.id);
@@ -544,7 +561,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     <div className="space-y-4">
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between mb-1">
-          <div className="text-xs text-slate-400 font-bold">🔍 فلاتر البحث</div>
+          <div className="text-xs text-slate-400 font-bold">
+            {financeMode === "late" ? "⏰ المتأخرين في السداد" : financeMode === "past" ? "🗓️ تسجيل الشهور الماضية" : "🔍 فلاتر البحث"}
+          </div>
           <button onClick={() => setDayReportOpen(true)} className="text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1 hover:bg-blue-500/20">
             📅 عرض سجل المصاريف
           </button>
@@ -572,9 +591,64 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             </button>
           </Field>
         </div>
+
+        {financeMode === "past" && (
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Field label="الشهر">
+              <select value={regMonth} onChange={e => setRegMonth(parseInt(e.target.value))}
+                className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+                {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
+              </select>
+            </Field>
+            <Field label="السنة">
+              <input type="number" value={regYear} onChange={e => setRegYear(e.target.value ? parseInt(e.target.value) : curYear)}
+                className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+            </Field>
+          </div>
+        )}
       </div>
 
-      {tableOpen && selGrade && (
+      {tableOpen && selGrade && financeMode === "late" && (
+        adminLateStudents.length === 0
+          ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">🎉</div><div className="text-sm">مفيش طلاب متأخرين بالفلتر ده</div></div>
+          : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
+                  <thead>
+                    <tr className="bg-slate-900/80 border-b border-slate-700/60">
+                      {["اسم الطالب","الصف / المجموعة","عدد الشهور المتأخرة","الشهر الحالي"].map(h => (
+                        <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminLateStudents.map(({ student, count, currentMonthOverdue, overdueMonths }) => (
+                      <tr key={student.id} className="border-b border-slate-700/20">
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Av name={student.name} size="sm" />
+                            <span className="text-white text-xs font-bold whitespace-normal break-words">{student.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{student.grade} — {student.group}</td>
+                        <td className="px-3 py-2.5" title={overdueMonths.join("، ")}>
+                          <span className="text-red-400 font-black text-sm">{count}</span>
+                          <span className="text-slate-500 text-xs"> شهر</span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {currentMonthOverdue
+                            ? <span className="px-2 py-1 rounded-lg bg-red-500/15 text-red-400 text-xs font-bold">متأخر</span>
+                            : <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 text-xs font-bold">مدفوع</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+      )}
+
+      {tableOpen && selGrade && financeMode !== "late" && (
         <>
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{tableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>

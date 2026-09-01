@@ -226,6 +226,8 @@ export default function App() {
   // على طالب وانتي واقفة في صفحة معينة، ييجيلك في نفس الصفحة مش يوديكي
   // لصفحة الطلاب دايمًا.
   const [financeJump,    setFinanceJump]    = useState(null);
+  const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
+  const [financeMode,     setFinanceMode]     = useState("current"); // "late" | "current" | "past"
   const [attendanceJump, setAttendanceJump] = useState(null);
   const [dashboardJump,  setDashboardJump]  = useState(null);
   const [dashboardSectionJump, setDashboardSectionJump] = useState(null); // 🔔 زرار الإشعارات → قسم "حالة حرجة"
@@ -416,26 +418,61 @@ export default function App() {
         <nav className="flex-1 flex flex-col items-center justify-around py-3">
           {SIDEBAR_NAV.filter(n => allowedPages.includes(n.key)).map(n => {
             const active = page === n.key;
+            const isFinance = n.key === "finance";
             return (
-              <button key={n.key} onClick={() => setPage(n.key)}
-                className="relative flex flex-col items-center justify-center gap-1 transition-all duration-200"
-                style={{
-                  width: "56px", height: "56px",
-                  borderRadius: "var(--radius-lg)",
-                  background: active ? "var(--accent)" : "transparent",
-                  color: active ? "#fff" : "var(--text-muted)",
-                  transform: active ? "scale(1.05)" : "scale(1)",
-                  boxShadow: active ? "var(--shadow-accent)" : "none",
-                }}
-                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = "var(--card-bg)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
-                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}}
-              >
-                {n.key === "dashboard" && alerts.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center font-black z-10 animate-pulse" style={{ fontSize: "11px" }}>{alerts.length}</span>
+              <div key={n.key} className="relative">
+                <button
+                  onClick={() => { if (isFinance) setFinanceMenuOpen(v => !v); else setPage(n.key); }}
+                  className="relative flex flex-col items-center justify-center gap-1 transition-all duration-200"
+                  style={{
+                    width: "56px", height: "56px",
+                    borderRadius: "var(--radius-lg)",
+                    background: (active || (isFinance && financeMenuOpen)) ? "var(--accent)" : "transparent",
+                    color: (active || (isFinance && financeMenuOpen)) ? "#fff" : "var(--text-muted)",
+                    transform: active ? "scale(1.05)" : "scale(1)",
+                    boxShadow: active ? "var(--shadow-accent)" : "none",
+                  }}
+                  onMouseEnter={e => { if (!active && !(isFinance && financeMenuOpen)) { e.currentTarget.style.background = "var(--card-bg)"; e.currentTarget.style.color = "var(--text-primary)"; }}}
+                  onMouseLeave={e => { if (!active && !(isFinance && financeMenuOpen)) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}}
+                >
+                  {n.key === "dashboard" && alerts.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center font-black z-10 animate-pulse" style={{ fontSize: "11px" }}>{alerts.length}</span>
+                  )}
+                  <span className="text-xl leading-none">{n.icon}</span>
+                  <span className="font-medium leading-none" style={{ fontSize: "11px" }}>{n.label}</span>
+                </button>
+
+                {isFinance && financeMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setFinanceMenuOpen(false)} />
+                    <div className="absolute z-50 flex flex-col gap-1 p-1.5"
+                      style={{
+                        top: 0, left: "100%", marginLeft: "8px", width: "180px",
+                        background: "var(--sidebar-bg)", border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-md)",
+                      }}>
+                      <button
+                        onClick={() => { setFinanceMode("late"); setPage("finance"); setFinanceMenuOpen(false); }}
+                        className="text-right px-3 py-2.5 rounded-lg text-xs font-bold transition-colors"
+                        style={{ background: (page === "finance" && financeMode === "late") ? "var(--accent)" : "var(--card-bg)", color: (page === "finance" && financeMode === "late") ? "#fff" : "var(--text-primary)" }}>
+                        ⏰ متأخرين
+                      </button>
+                      <button
+                        onClick={() => { setFinanceMode("current"); setPage("finance"); setFinanceMenuOpen(false); }}
+                        className="text-right px-3 py-2.5 rounded-lg text-xs font-bold transition-colors"
+                        style={{ background: (page === "finance" && financeMode === "current") ? "var(--accent)" : "var(--card-bg)", color: (page === "finance" && financeMode === "current") ? "#fff" : "var(--text-primary)" }}>
+                        💰 دفع الشهر الحالي
+                      </button>
+                      <button
+                        onClick={() => { setFinanceMode("past"); setPage("finance"); setFinanceMenuOpen(false); }}
+                        className="text-right px-3 py-2.5 rounded-lg text-xs font-bold transition-colors"
+                        style={{ background: (page === "finance" && financeMode === "past") ? "var(--accent)" : "var(--card-bg)", color: (page === "finance" && financeMode === "past") ? "#fff" : "var(--text-primary)" }}>
+                        🗓️ تسجيل الشهور الماضية
+                      </button>
+                    </div>
+                  </>
                 )}
-                <span className="text-xl leading-none">{n.icon}</span>
-                <span className="font-medium leading-none" style={{ fontSize: "11px" }}>{n.label}</span>
-              </button>
+              </div>
             );
           })}
         </nav>
@@ -625,7 +662,7 @@ export default function App() {
             {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} addActivity={addActivity} jumpTo={attendanceJump} onJumpDone={() => setAttendanceJump(null)} />}
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} centerExams={centerExams || []} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
             {safePage === "addStudent" && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} addActivity={addActivity} startAdd onDone={() => setPage("students")} />}
-            {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} jumpTo={financeJump} onJumpDone={() => setFinanceJump(null)} />}
+            {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} jumpTo={financeJump} onJumpDone={() => setFinanceJump(null)} financeMode={financeMode} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} setStudents={setStudents} addActivity={addActivity} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}
             {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} jumpTo={dashboardJump} onJumpDone={() => setDashboardJump(null)} showToast={showToast} sectionJump={dashboardSectionJump} onSectionJumpDone={() => setDashboardSectionJump(null)} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} />}
