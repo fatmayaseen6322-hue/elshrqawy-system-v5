@@ -474,16 +474,17 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const paidCount      = monthRecords.length;
   const lateCount      = Math.max(0, baseTableStudents.length - paidCount);
 
-  // ── "تسجيل الشهور الماضية": الشهور اللي لسه فيها طلاب (أي صف) لم
-  // يدفعوا، للسنة المختارة بس — بدل ما تظهر كل شهور السنة الـ12 ──
+  // ── "تسجيل الشهور الماضية": الشهور "الماضية فقط" (مش الشهر الحالي)
+  // اللي لسه فيها طلاب (أي صف) لم يدفعوا، للسنة المختارة، وبداية من
+  // شهر أغسطس (بداية السنة الدراسية) — مش من يناير ──
   const pastLateMonths = useMemo(() => {
     if (financeMode !== "past") return [];
-    // مفيش معنى لشهر "لسه ما جاش" يبقى متأخر فيه حد — نوقف عند الشهر
-    // الحالي لو نفس السنة الحالية، أو آخر السنة لو سنة قديمة، ومفيش
-    // شهور خالص لو السنة مستقبلية.
-    const maxMonth = regYear === curYear ? curMonth : (regYear < curYear ? 12 : 0);
+    const startMonth = 8; // أغسطس
+    // نوقف عند الشهر اللي قبل الحالي (ماضي فعلاً) لو نفس السنة الحالية،
+    // أو آخر السنة (ديسمبر) لو سنة قديمة، ومفيش شهور خالص لو سنة مستقبلية.
+    const maxMonth = regYear === curYear ? curMonth - 1 : (regYear < curYear ? 12 : 0);
     const months = [];
-    for (let m = 1; m <= maxMonth; m++) {
+    for (let m = startMonth; m <= maxMonth; m++) {
       const hasLate = safeStudents.some(s =>
         !isMonthBlocked(s, m, regYear) &&
         !safeRecords.some(r => r.studentId === s.id && r.month === m && r.year === regYear)
