@@ -357,13 +357,19 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </Modal>
       )}
 
-      {/* زرار غياب سريع */}
+      {/* زرار غياب سريع + إجمالي الطلاب (المستر بس) */}
       <div className="flex gap-2 items-stretch">
         <button onClick={openReport}
           className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3 hover:bg-slate-700/50 transition-colors">
           <span className="text-xl leading-none">🚫</span>
           <span className="text-sm font-bold text-red-400">غياب</span>
         </button>
+        {role === "admin" && (
+          <div className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3">
+            <span className="text-xl leading-none">👥</span>
+            <span className="text-sm font-bold text-blue-400">إجمالي الطلاب: {(students || []).filter(s => s && !isBlocked(s)).length}</span>
+          </div>
+        )}
       </div>
 
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
