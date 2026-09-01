@@ -40,6 +40,8 @@ export const INIT_SETTINGS = {
   },
   financePassword: "1234",
   financePasswordEnabled: true,
+  // كلمة سر "تراجع في المصاريف" — لازم تُحدَّد من الإعدادات (كلمة السر) قبل ما زرار التراجع يشتغل
+  financeUndoPassword: null,
   receivers: [
     {id:1,name:"أ. محمود",active:true},
     {id:2,name:"أ. سارة", active:true},

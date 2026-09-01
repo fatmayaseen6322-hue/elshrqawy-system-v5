@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR, TODAY } from "../../constants";
-import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked } from "../../utils";
+import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, checkPwd } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn } from "../ui";
 
@@ -70,15 +70,55 @@ function FinancePasswordGate({ onUnlock, onCancel }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// FINANCE ROW (نفس آلية العرض القديمة: اسم / مبلغ / مستلم / وقت / تعديل / طباعة)
+// UNDO PASSWORD GATE (كلمة سر "تراجع في المصاريف" — من الإعدادات، مشفّرة)
 // ══════════════════════════════════════════════════════════════
-function FinRow({ student, index, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, centerName, highlighted }) {
+function UndoPasswordGate({ undoHash, onUnlock, onCancel }) {
+  const [pw, setPw]     = useState("");
+  const [err, setErr]   = useState("");
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef(null);
+  useEffect(() => inputRef.current?.focus(), []);
+  const submit = async () => {
+    if (busy) return;
+    if (!undoHash) { setErr("لازم تحددي كلمة سر التراجع الأول من الإعدادات ⚙️ ← كلمة السر ← تراجع في المصاريف"); return; }
+    setBusy(true);
+    const ok = await checkPwd(pw, undoHash);
+    setBusy(false);
+    if (ok) onUnlock();
+    else setErr("كلمة المرور غير صحيحة");
+  };
+  return (
+    <Modal title="↩️ تراجع عن تسجيل الطالب" onClose={onCancel}>
+      <div className="space-y-4">
+        <div className="text-slate-400 text-sm text-center">هيتم مسح دفعة اليوم لهذا الطالب وترجع بياناته فاضية — أدخل كلمة سر التراجع للمتابعة</div>
+        <Field label="كلمة السر" error={err}>
+          <input
+            ref={inputRef} type="password" value={pw}
+            onChange={e => { setPw(e.target.value); setErr(""); }}
+            onKeyDown={e => { if (e.key === "Enter") submit(); }}
+            className={`w-full bg-slate-800/80 border ${err ? "border-red-500" : "border-slate-700/50"} rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center tracking-widest text-lg`}
+            placeholder="••••" />
+        </Field>
+        <div className="flex gap-2">
+          <Btn variant="ghost" className="flex-1" onClick={onCancel}>إلغاء</Btn>
+          <Btn variant="danger" className="flex-1" disabled={busy} onClick={submit}>{busy ? "جارٍ التحقق…" : "↩️ تأكيد التراجع"}</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// FINANCE ROW (نفس آلية العرض القديمة: اسم / مبلغ / مستلم / وقت / تعديل / طباعة / تراجع)
+// ══════════════════════════════════════════════════════════════
+function FinRow({ student, index, record, globalReceiver, activeReceivers, onSave, onUndo, passwordEnabled, financePassword, undoPassword, centerName, highlighted }) {
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
   const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
   const [pickTime,    setPickTime]    = useState(""); // ⏱ وقت اختيار المستلم (قبل الحفظ)
   const [saved,       setSaved]       = useState(!!record);
   const [editing,     setEditing]     = useState(false);
   const [showPw,      setShowPw]      = useState(false);
+  const [showUndoPw,  setShowUndoPw]  = useState(false);
   const [localRecord, setLocalRecord] = useState(record || null);
   const rowRef = useRef(null);
 
@@ -137,6 +177,19 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
     else setErr("كلمة المرور غير صحيحة");
   };
 
+  // ── تراجع عن تسجيل الطالب: يمسح دفعة اليوم/الشهر ده ويرجّع الصف فاضي كأنه لسه ما اتسجلش ──
+  const requestUndo = () => setShowUndoPw(true);
+  const confirmUndo = () => {
+    setShowUndoPw(false);
+    if (localRecord) onUndo?.(localRecord);
+    setLocalRecord(null);
+    setSaved(false);
+    setEditing(false);
+    setAmount(student._defaultFee || 0);
+    setReceiverId(globalReceiver?.id || null);
+    setPickTime("");
+  };
+
   const canPrint = saved && localRecord !== null;
   const bgCls = saved
     ? "bg-emerald-500/5 border-emerald-500/20"
@@ -146,6 +199,9 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
     <>
       {showPw && (
         <FinancePasswordGate onUnlock={unlockEdit} onCancel={() => setShowPw(false)} />
+      )}
+      {showUndoPw && (
+        <UndoPasswordGate undoHash={undoPassword} onUnlock={confirmUndo} onCancel={() => setShowUndoPw(false)} />
       )}
       <tr ref={rowRef} className={`border-b transition-colors ${bgCls} ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}>
         <td className="px-3 py-3">
@@ -195,7 +251,35 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
             🖨️
           </button>
         </td>
+        <td className="px-2 py-3 text-center">
+          <button
+            onClick={requestUndo}
+            disabled={!saved}
+            title={saved ? "تراجع عن تسجيل الطالب" : "لسه ما اتسجلش"}
+            className="w-9 h-8 rounded-lg bg-red-700/20 border border-red-600/30 text-red-400 text-sm disabled:opacity-30 hover:bg-red-700/40">
+            ↩️
+          </button>
+        </td>
       </tr>
+    </>
+  );
+}
+
+// ── زرار تراجع بسيط لصف واحد (مستخدم في تبويب "المصاريف" بتاع Assist) ──
+function UndoCell({ canUndo, undoPassword, onConfirm }) {
+  const [show, setShow] = useState(false);
+  return (
+    <>
+      <button
+        onClick={() => setShow(true)}
+        disabled={!canUndo}
+        title={canUndo ? "تراجع عن تسجيل الطالب" : "لسه ما اتسجلش"}
+        className="w-9 h-8 rounded-lg bg-red-700/20 border border-red-600/30 text-red-400 text-sm disabled:opacity-30 hover:bg-red-700/40">
+        ↩️
+      </button>
+      {show && (
+        <UndoPasswordGate undoHash={undoPassword} onUnlock={() => { setShow(false); onConfirm(); }} onCancel={() => setShow(false)} />
+      )}
     </>
   );
 }
@@ -271,6 +355,22 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     }
     addActivity?.("دفعة مالية", `${rec.studentName} — ${rec.amount} ج`);
     setToastP({ msg: `✓ اتسجلت دفعة ${rec.studentName}`, type: "success" });
+  };
+
+  // ── تراجع عن دفعة طالب (تبويب المصاريف بتاع Assist) — بعد كلمة سر التراجع ──
+  const undoPaymentAssist = student => {
+    const existing = monthRecordsMap[student.id];
+    if (!existing) return;
+    setFinRecords(prev => (prev || []).filter(r => r.id !== existing.id));
+    setStudents(prev => (prev || []).map(s =>
+      s.id === existing.studentId
+        ? { ...s, paid: Math.max(0, (s.paid || 0) - (existing.amount || 0)) }
+        : s
+    ));
+    setRowAmounts(prev => { const n = { ...prev }; delete n[student.id]; return n; });
+    setRowReceivers(prev => { const n = { ...prev }; delete n[student.id]; return n; });
+    addActivity?.("تراجع عن دفعة", `${existing.studentName} — ${existing.amount} ج`);
+    setToastP({ msg: `↩️ تم التراجع عن دفعة ${existing.studentName}`, type: "success" });
   };
 
   // ══════════════ Assist: تبويب "المتأخر" ══════════════
@@ -402,6 +502,20 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     }
   };
 
+  // ── تراجع عن تسجيل طالب (بعد التحقق من كلمة سر التراجع في FinRow) ──
+  // بيمسح السجل خالص ويرجّع مبلغ الطالب المدفوع (paid) للحالة اللي قبل التسجيل ده.
+  const handleUndo = rec => {
+    setFinRecords(prev => (prev || []).filter(r => r.id !== rec.id));
+    setStudents(prev => (prev || []).map(s =>
+      s.id === rec.studentId
+        ? { ...s, paid: Math.max(0, (s.paid || 0) - (rec.amount || 0)) }
+        : s
+    ));
+    addActivity?.("تراجع عن دفعة", `${rec.studentName} — ${rec.amount} ج`);
+    setToast({ msg: `↩️ تم التراجع عن دفعة ${rec.studentName}`, type: "success" });
+    if (rec.studentId === highlightId) setHighlightId(null);
+  };
+
   const globalReceiver = activeReceivers.find(r => r.id === globalReceiverId) || null;
   const paidCount      = monthRecords.length;
   const lateCount      = Math.max(0, tableStudents.length - paidCount);
@@ -452,7 +566,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                       <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
                         <thead>
                           <tr className="bg-slate-900/80 border-b border-slate-700/60">
-                            {["اسم الطالب","المبلغ (ج)","المستلم","حفظ"].map(h => (
+                            {["اسم الطالب","المبلغ (ج)","المستلم","حفظ","تراجع"].map(h => (
                               <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>{h}</th>
                             ))}
                           </tr>
@@ -487,6 +601,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                                 </td>
                                 <td className="px-2 py-2.5 text-center">
                                   <button onClick={() => savePayment(s)} className="w-9 h-8 rounded-lg bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm hover:bg-emerald-700/50">💾</button>
+                                </td>
+                                <td className="px-2 py-2.5 text-center">
+                                  <UndoCell canUndo={!!existing} undoPassword={safeSettings.financeUndoPassword} onConfirm={() => undoPaymentAssist(s)} />
                                 </td>
                               </tr>
                             );
@@ -752,7 +869,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
                     <thead>
                       <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
-                        {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة"].map(h => (
+                        {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
                           <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
                         ))}
                       </tr>
@@ -762,9 +879,10 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                         <FinRow
                           key={s.id} student={s} index={i} record={getRecord(s.id)}
                           globalReceiver={globalReceiver} activeReceivers={activeReceivers}
-                          onSave={handleSave}
+                          onSave={handleSave} onUndo={handleUndo}
                           passwordEnabled={safeSettings.financePasswordEnabled}
                           financePassword={safeSettings.financePassword}
+                          undoPassword={safeSettings.financeUndoPassword}
                           centerName={safeSettings.centerName || "مركز تعليمي"}
                           highlighted={highlightId === s.id}
                         />

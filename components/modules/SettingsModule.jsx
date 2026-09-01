@@ -149,6 +149,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
   const [ap, setAp] = useState(settings.adminPhone);
   const [oldP, setOldP] = useState(""); const [newP, setNewP] = useState(""); const [confP, setConfP] = useState(""); const [pErr, setPErr] = useState("");
   const [caP, setCaP] = useState(""); const [caConfP, setCaConfP] = useState(""); const [caErr, setCaErr] = useState("");
+  const [unP, setUnP] = useState(""); const [unConfP, setUnConfP] = useState(""); const [unErr, setUnErr] = useState("");
   const [notifs, setNotifs] = useState({ ...settings.notifs });
   const [waList, setWaList] = useState([...settings.waNumbers]);
   const [newNum, setNewNum] = useState(""); const [newType, setNewType] = useState("admin"); const [newLabel, setNewLabel] = useState("");
@@ -212,11 +213,13 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     const hashed = await hashPwdStored(newP);
     save("password", hashed, "✓ تم تغيير كلمة المرور"); setOldP(""); setNewP(""); setConfP(""); setPErr(""); setView("main");
   };
-  const changeRolePwd = async (roleKey, pwdKey, newVal, confirmVal, setErrFn) => {
+  const changeRolePwd = async (roleKey, pwdKey, newVal, confirmVal, setErrFn, resetFns = []) => {
     if (newVal.length < 4) { setErrFn("4 أحرف على الأقل"); return; }
     if (newVal !== confirmVal) { setErrFn("غير متطابقة"); return; }
     const hashed = await hashPwdStored(newVal);
-    save(pwdKey, hashed, `✓ تم تغيير كلمة مرور ${roleKey}`); setErrFn(""); setCaP(""); setCaConfP(""); setView("main");
+    save(pwdKey, hashed, `✓ تم تغيير كلمة مرور ${roleKey}`); setErrFn("");
+    resetFns.forEach(fn => fn(""));
+    setView("main");
   };
   const addWa = () => {
     if (!newNum || newNum.length < 11) { setToast({ msg: "رقم غير صحيح", type: "error" }); return; }
@@ -271,7 +274,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     }; r.readAsText(f); e.target.value = "";
   };
   const Back = ({ to = "main" }) => <button onClick={() => setView(to)} className="text-slate-400 hover:text-white text-sm flex items-center gap-1 mb-5">← رجوع</button>;
-  const viewTitles = { passwords: "كلمة السر", password: "كلمة سر المستر", cashierpwd: "كلمة سر الاسيست", receivers: "أسماء المستلمين (التحصيل)" };
+  const viewTitles = { passwords: "كلمة السر", password: "كلمة سر المستر", cashierpwd: "كلمة سر الاسيست", undopwd: "كلمة سر تراجع المصاريف", receivers: "أسماء المستلمين (التحصيل)" };
   const menu = [
     { i: "🏫", l: "اسم السنتر",         d: settings.centerName,              v: "center"        },
     { i: "🔑", l: "كلمة السر",           d: "المستر · الاسيست",              v: "passwords"     },
@@ -325,11 +328,20 @@ export default function SettingsModule({ settings, setSettings, students, setStu
                   </div>
                   <span className="text-slate-600 shrink-0">←</span>
                 </button>
+                <button onClick={() => setView("undopwd")} className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-800 transition-colors text-right">
+                  <span className="text-2xl w-8 text-center shrink-0">↩️</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-slate-100 text-sm font-medium">كلمة سر تراجع المصاريف</div>
+                    <div className="text-slate-500 text-xs">{settings.financeUndoPassword ? "✓ مُعيَّنة — دخول لتعديل كلمة السر" : "⚠️ غير مُعيَّنة — لازم تتحدد الأول عشان زرار التراجع يشتغل"}</div>
+                  </div>
+                  <span className="text-slate-600 shrink-0">←</span>
+                </button>
               </div>
             </>
           )}
           {view === "password" && <><Back to="passwords" /><div className="space-y-4"><Field label="الجديدة"><Inp type="password" value={newP} onChange={e => { setNewP(e.target.value); setPErr(""); }} /></Field><Field label="تأكيد"><Inp type="password" value={confP} onChange={e => { setConfP(e.target.value); setPErr(""); }} /></Field>{pErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {pErr}</div>}<Btn variant="primary" size="lg" className="w-full" onClick={changePwd}>🔑 تغيير كلمة سر المستر</Btn></div></>}
-          {view === "cashierpwd" && <><Back to="passwords" /><div className="space-y-4"><div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-400 text-xs">💼 كلمة سر الاسيست — تُستخدم عند دخول دور Assist</div><Field label="كلمة المرور الجديدة"><Inp type="password" value={caP} onChange={e => { setCaP(e.target.value); setCaErr(""); }} /></Field><Field label="تأكيد"><Inp type="password" value={caConfP} onChange={e => { setCaConfP(e.target.value); setCaErr(""); }} /></Field>{caErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {caErr}</div>}<Btn variant="primary" size="lg" className="w-full" onClick={() => changeRolePwd("الاسيست","cashierPassword",caP,caConfP,setCaErr)}>💾 حفظ كلمة سر الاسيست</Btn></div></>}
+          {view === "cashierpwd" && <><Back to="passwords" /><div className="space-y-4"><div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-400 text-xs">💼 كلمة سر الاسيست — تُستخدم عند دخول دور Assist</div><Field label="كلمة المرور الجديدة"><Inp type="password" value={caP} onChange={e => { setCaP(e.target.value); setCaErr(""); }} /></Field><Field label="تأكيد"><Inp type="password" value={caConfP} onChange={e => { setCaConfP(e.target.value); setCaErr(""); }} /></Field>{caErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {caErr}</div>}<Btn variant="primary" size="lg" className="w-full" onClick={() => changeRolePwd("الاسيست","cashierPassword",caP,caConfP,setCaErr,[setCaP,setCaConfP])}>💾 حفظ كلمة سر الاسيست</Btn></div></>}
+          {view === "undopwd" && <><Back to="passwords" /><div className="space-y-4"><div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-red-400 text-xs">↩️ كلمة سر تراجع المصاريف — لازم تتكتب في عمود "تراجع" بجدول المصاريف عشان تلغي تسجيل دفعة طالب في نفس اليوم</div><Field label="كلمة المرور الجديدة"><Inp type="password" value={unP} onChange={e => { setUnP(e.target.value); setUnErr(""); }} /></Field><Field label="تأكيد"><Inp type="password" value={unConfP} onChange={e => { setUnConfP(e.target.value); setUnErr(""); }} /></Field>{unErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {unErr}</div>}<Btn variant="primary" size="lg" className="w-full" onClick={() => changeRolePwd("تراجع المصاريف","financeUndoPassword",unP,unConfP,setUnErr,[setUnP,setUnConfP])}>💾 حفظ كلمة سر التراجع</Btn></div></>}
           {view === "logo" && <><Back /><div className="space-y-4">{settings.logo ? <div className="text-center space-y-3"><img src={settings.logo} alt="logo" className="w-28 h-28 rounded-2xl object-cover mx-auto border-2 border-blue-500/30" /><div className="text-slate-400 text-xs">الشعار الحالي</div></div> : <div className="border-2 border-dashed border-slate-700/60 rounded-2xl p-10 text-center"><div className="text-5xl mb-3">🏫</div><div className="text-slate-500 text-sm">لم يُرفع شعار بعد</div></div>}<input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={e => handleImg(e, "logo", "الشعار")} /><Btn variant="primary" size="lg" className="w-full" onClick={() => logoRef.current?.click()}>📤 {settings.logo ? "استبدال" : "رفع شعار"}</Btn>{settings.logo && <Btn variant="danger" size="lg" className="w-full" onClick={() => save("logo", null, "تم حذف الشعار")}>🗑 حذف</Btn>}</div></>}
           {view === "bg" && <><Back /><div className="space-y-4">{settings.bg && settings.bg.startsWith("data:") ? <div className="text-center space-y-2"><img src={settings.bg} alt="bg" className="w-full h-36 rounded-2xl object-cover border border-slate-700/50" /><div className="text-slate-400 text-xs">الخلفية الحالية</div></div> : <div className="border-2 border-dashed border-slate-700/60 rounded-2xl p-8 text-center"><div className="text-4xl mb-2">🎨</div><div className="text-slate-500 text-sm">لم تُرفع صورة</div></div>}<div className="space-y-2"><div className="text-xs text-slate-400 font-medium">ألوان جاهزة</div><div className="grid grid-cols-5 gap-2">{["#0f172a","#1e1b4b","#0c4a6e","#14532d","#1c1917"].map(c => <button key={c} onClick={() => save("bg", c, "✓ تم تغيير اللون")} className={`h-10 rounded-xl border-2 transition-colors ${settings.bg === c ? "border-white/60" : "border-slate-700/50 hover:border-white/20"}`} style={{ backgroundColor: c }} />)}</div></div><input ref={bgRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => handleImg(e, "bg", "الخلفية")} /><Btn variant="primary" size="lg" className="w-full" onClick={() => bgRef.current?.click()}>📤 رفع صورة خلفية</Btn>{settings.bg && <Btn variant="ghost" size="lg" className="w-full" onClick={() => save("bg", null, "تمت الإزالة")}>↩ إزالة</Btn>}</div></>}
           {view === "receivers" && (
