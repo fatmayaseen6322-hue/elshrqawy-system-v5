@@ -212,7 +212,7 @@ export default function App() {
 
   const [theme, setTheme]             = useTheme();
   const [showTheme, setShowTheme]     = useState(false);
-  const [page, setPage]               = useState("dashboard");
+  const [page, setPage]               = useState("attendance");
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifs, setShowNotifs]     = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false); // #4
