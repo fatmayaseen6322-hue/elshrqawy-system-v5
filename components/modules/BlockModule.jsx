@@ -13,7 +13,7 @@ const isBlocked = s => s && (s.blocked === true || s.status === "inactive");
 // الطالب هنا لسه موجود في البيانات بس متشال من القوائم النشطة.
 // زرار ✗ هنا هو اللي بيحذفه نهائيًا من النظام.
 // ══════════════════════════════════════════════════════════════
-export default function BlockModule({ students: studentsProp, setStudents, addActivity }) {
+export default function BlockModule({ students: studentsProp, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, setWebExams, addActivity }) {
   const students = studentsProp || [];
   const [search, setSearch] = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
@@ -50,10 +50,20 @@ export default function BlockModule({ students: studentsProp, setStudents, addAc
     setToast({ msg: `✓ تم استرجاع ${s.name}`, type: "success" });
   };
 
+  // الحذف النهائي بيمسح الطالب + كل سجلاته المرتبطة في الأقسام التانية
+  // (الحضور، المصاريف، ونتايج امتحانات البوابة) عشان مايفضلش أثر يتيم
+  // لطالب مش موجود أصلاً.
   const hardDelete = s => {
     setStudents(p => p.filter(x => x.id !== s.id));
-    addActivity?.("حذف نهائي", s.name);
-    setToast({ msg: `✓ تم حذف ${s.name} نهائيًا`, type: "success" });
+    setFinRecords?.(p => (p || []).filter(r => r.studentId !== s.id));
+    setAttRecords?.(p => (p || []).filter(r => r.studentId !== s.id));
+    setWebExams?.(p => (p || []).map(e => ({
+      ...e,
+      results:  (e.results  || []).filter(r => r.studentId !== s.id),
+      cheating: (e.cheating || []).filter(r => r.studentId !== s.id),
+    })));
+    addActivity?.("حذف نهائي", `${s.name} — وتم مسح سجلاته في الحضور والمصاريف والامتحانات كمان`);
+    setToast({ msg: `✓ تم حذف ${s.name} نهائيًا مع كل سجلاته`, type: "success" });
     setConfirmDel(null);
   };
 

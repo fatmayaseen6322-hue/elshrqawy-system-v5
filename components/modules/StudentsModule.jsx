@@ -71,7 +71,7 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, finRecords, webExams, centerExams, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
+export default function StudentsModule({ students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, centerExams, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
   const [step, setStep] = useState(startAdd ? "add" : "select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
@@ -571,6 +571,8 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
         defaultGroup={group}
         students={students}
         setStudents={setStudents}
+        setFinRecords={setFinRecords}
+        setAttRecords={setAttRecords}
         setSel={setSel}
         setToast={setToast}
         setStep={setStep}
@@ -601,7 +603,7 @@ export default function StudentsModule({ students, setStudents, finRecords, webE
 // BUG FIX: removed local toast state — parent's setToast is used directly
 // so Toast renders in the parent scope and actually shows.
 // ══════════════════════════════════════════════════════════════
-function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, students, setStudents, setSel, setToast, setStep, addActivity, onDoneAdd }) {
+function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, students, setStudents, setFinRecords, setAttRecords, setSel, setToast, setStep, addActivity, onDoneAdd }) {
   const [name,   setName]   = useState(s.name        || "");
   const [sg,     setSg]     = useState(s.grade        || defaultGrade || "");
   const [sgp,    setSgp]    = useState(s.group        || defaultGroup);
@@ -654,8 +656,18 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
       weak: s.weak || [],
     };
 
-    if (mode === "add") setStudents(p => [st, ...p]);
-    else                setStudents(p => p.map(x => x.id === st.id ? st : x));
+    if (mode === "add") {
+      setStudents(p => [st, ...p]);
+    } else {
+      setStudents(p => p.map(x => x.id === st.id ? st : x));
+      // لو اتغيّر الصف أو المجموعة، حدّث كل سجلات الحضور والمصاريف
+      // القديمة بتاعة نفس الطالب تلقائي عشان تفضل تظهر صح لما حد
+      // يفتح مجموعته/صفه الجديد (مش تبقى "تايهة" على المجموعة القديمة).
+      if (s.id && (s.grade !== st.grade || s.group !== st.group)) {
+        setFinRecords?.(p => (p || []).map(r => r.studentId === st.id ? { ...r, grade: st.grade, group: st.group } : r));
+        setAttRecords?.(p => (p || []).map(r => r.studentId === st.id ? { ...r, grade: st.grade, group: st.group } : r));
+      }
+    }
     if (mode === "edit") setSel(st);
 
     // لو اتسجّل من غير رقم هاتف ولي أمر، بننبّه فورًا هنا + الطالب هيظهر
