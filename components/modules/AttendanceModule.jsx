@@ -357,39 +357,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </Modal>
       )}
 
-      {/* بحث عن طالب في كل المجاميع/الصفوف + زرار غياب سريع في نفس الخط */}
+      {/* زرار غياب سريع */}
       <div className="flex gap-2 items-stretch">
-        <div className="flex-1 bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-2">
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="🔍 دوّر على طالب بالاسم (في كل المجاميع)..."
-            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
-          {searchResults && (
-            searchResults.length === 0
-              ? <div className="text-center text-slate-500 text-xs py-3">مفيش طالب بهذا الاسم</div>
-              : <div className="max-h-56 overflow-y-auto space-y-1">
-                  {searchResults.map(s => (
-                    <button key={s.id} onClick={() => goToStudent(s)}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-700/50 text-right">
-                      <Av name={s.name} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-white text-sm font-bold whitespace-normal break-words">{s.name}</span>
-                          {s.status === "inactive" && (
-                            <span className="shrink-0 text-[12px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">موقوف</span>
-                          )}
-                        </div>
-                        <div className="text-slate-500 text-xs">{s.grade} — مجموعة {s.group}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-          )}
-        </div>
         <button onClick={openReport}
-          className="shrink-0 w-24 bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-slate-700/50 transition-colors">
+          className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3 hover:bg-slate-700/50 transition-colors">
           <span className="text-xl leading-none">🚫</span>
-          <span className="text-xs font-bold text-red-400">غياب</span>
+          <span className="text-sm font-bold text-red-400">غياب</span>
         </button>
       </div>
 
