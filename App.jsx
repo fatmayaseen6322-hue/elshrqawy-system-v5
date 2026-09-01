@@ -227,7 +227,7 @@ export default function App() {
   // لصفحة الطلاب دايمًا.
   const [financeJump,    setFinanceJump]    = useState(null);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
-  const [financeMode,     setFinanceMode]     = useState("current"); // "late" | "current" | "past"
+  const [financeMode,     setFinanceMode]     = useState("current"); // "late" | "current" | "past" | "log"
   const [attendanceJump, setAttendanceJump] = useState(null);
   const [dashboardJump,  setDashboardJump]  = useState(null);
   const [dashboardSectionJump, setDashboardSectionJump] = useState(null); // 🔔 زرار الإشعارات → قسم "حالة حرجة"
@@ -468,6 +468,12 @@ export default function App() {
                         className="text-right px-3 py-2.5 rounded-lg text-xs font-bold transition-colors"
                         style={{ background: (page === "finance" && financeMode === "past") ? "var(--accent)" : "var(--card-bg)", color: (page === "finance" && financeMode === "past") ? "#fff" : "var(--text-primary)" }}>
                         🗓️ تسجيل الشهور الماضية
+                      </button>
+                      <button
+                        onClick={() => { setFinanceMode("log"); setPage("finance"); setFinanceMenuOpen(false); }}
+                        className="text-right px-3 py-2.5 rounded-lg text-xs font-bold transition-colors"
+                        style={{ background: (page === "finance" && financeMode === "log") ? "var(--accent)" : "var(--card-bg)", color: (page === "finance" && financeMode === "log") ? "#fff" : "var(--text-primary)" }}>
+                        📒 سجل المعاملات
                       </button>
                     </div>
                   </>

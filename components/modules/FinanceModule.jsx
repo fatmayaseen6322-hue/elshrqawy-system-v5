@@ -72,7 +72,7 @@ function FinancePasswordGate({ onUnlock, onCancel }) {
 // ══════════════════════════════════════════════════════════════
 // FINANCE ROW (نفس آلية العرض القديمة: اسم / مبلغ / مستلم / وقت / تعديل / طباعة)
 // ══════════════════════════════════════════════════════════════
-function FinRow({ student, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, centerName, highlighted }) {
+function FinRow({ student, index, record, globalReceiver, activeReceivers, onSave, passwordEnabled, financePassword, centerName, highlighted }) {
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
   const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
   const [pickTime,    setPickTime]    = useState(""); // ⏱ وقت اختيار المستلم (قبل الحفظ)
@@ -92,21 +92,40 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
 
   const receiverName = (activeReceivers || []).find(r => r.id === receiverId)?.name || "—";
 
+  const buildRec = (recvId, recvName) => ({
+    id: record?.id || localRecord?.id || genFinId(),
+    studentId: student.id, studentName: student.name,
+    grade: student.grade, group: student.group,
+    month: student._month, year: student._year,
+    amount: parseInt(amount) || 0,
+    receiverId: recvId, receiverName: recvName,
+    timestamp: nowStr(), note: "",
+  });
+
   const doSave = () => {
     if (!receiverId || !amount) return;
-    const rec = {
-      id: record?.id || localRecord?.id || genFinId(),
-      studentId: student.id, studentName: student.name,
-      grade: student.grade, group: student.group,
-      month: student._month, year: student._year,
-      amount: parseInt(amount) || 0,
-      receiverId, receiverName,
-      timestamp: nowStr(), note: "",
-    };
+    const rec = buildRec(receiverId, receiverName);
     onSave(rec);
     setLocalRecord(rec);
     setSaved(true);
     setEditing(false);
+  };
+
+  // ── اختيار المستلم من القائمة: يسجّل الدفعة أوتوماتيك فورًا (لو المبلغ موجود) ──
+  // وبيبلّغ الأب إن المستلم ده يبقى الافتراضي للطلاب اللي جايين بعد كده (اللي لسه ما اتسجلوش)
+  const pickReceiver = id => {
+    const numId = id ? parseInt(id) : null;
+    setReceiverId(numId);
+    const time = nowStr();
+    setPickTime(time);
+    if (numId && amount) {
+      const recvName = (activeReceivers || []).find(r => r.id === numId)?.name || "—";
+      const rec = buildRec(numId, recvName);
+      onSave(rec);
+      setLocalRecord(rec);
+      setSaved(true);
+      setEditing(false);
+    }
   };
 
   const requestEdit = () => {
@@ -131,6 +150,9 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
       <tr ref={rowRef} className={`border-b transition-colors ${bgCls} ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}>
         <td className="px-3 py-3">
           <div className="flex items-center gap-2 min-w-0">
+            {typeof index === "number" && (
+              <span className="text-slate-500 font-bold text-xs shrink-0">{index + 1}.</span>
+            )}
             <Av name={student.name} size="sm" />
             <div className="min-w-0">
               <div className="text-white text-xs font-bold whitespace-normal break-words">{student.name}</div>
@@ -138,17 +160,9 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
             </div>
           </div>
         </td>
-        <td className="px-2 py-3">
-          {editing || !saved
-            ? <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
-                onBlur={() => { if (receiverId && amount) doSave(); }}
-                className="w-16 bg-slate-700 border border-blue-500/40 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
-            : <span className="text-amber-400 font-black text-sm">{amount}</span>
-          }
-        </td>
         <td className="px-2 py-3" style={{ minWidth: "100px" }}>
           {editing || !saved
-            ? <select value={receiverId || ""} onChange={e => { setReceiverId(parseInt(e.target.value)); setPickTime(nowStr()); }} className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+            ? <select value={receiverId || ""} onChange={e => pickReceiver(e.target.value)} className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
                 <option value="">اختر</option>
                 {(activeReceivers || []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
@@ -157,6 +171,14 @@ function FinRow({ student, record, globalReceiver, activeReceivers, onSave, pass
         </td>
         <td className="px-2 py-3">
           <span className="text-slate-500 text-xs whitespace-nowrap">{(editing || !saved) ? (pickTime || "—") : (localRecord?.timestamp || "—")}</span>
+        </td>
+        <td className="px-2 py-3">
+          {editing || !saved
+            ? <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
+                onBlur={() => { if (receiverId && amount) doSave(); }}
+                className="w-16 bg-slate-700 border border-blue-500/40 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
+            : <span className="text-amber-400 font-black text-sm">{amount}</span>
+          }
         </td>
         <td className="px-2 py-3 text-center">
           {saved && !editing
@@ -276,7 +298,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const [globalReceiverId, setGlobalReceiverId] = useState(null);
   const [toast,            setToast]            = useState(null);
   const [highlightId,      setHighlightId]      = useState(null); // تمييز طالب جاي من بحث التوبار
-  const [receiverStreak,   setReceiverStreak]   = useState({ id: null, count: 0 });
 
   // ══════════════ المستر: "عرض سجل المصاريف" — تقرير كل المعاملات في يوم معيّن (كل الصفوف) ══════════════
   const [dayReportOpen, setDayReportOpen] = useState(false);
@@ -300,6 +321,11 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   }, [safeRecords, dSelDay, dSelMonth, dSelYear]);
 
   const dayTotal = dayRecords.reduce((a, r) => a + (r.amount || 0), 0);
+
+  // ══════════════ "سجل المعاملات" (financeMode === "log"): يفتح تقرير اليوم مباشرة ══════════════
+  useEffect(() => {
+    if (financeMode === "log") setDayReportOpen(true);
+  }, [financeMode]);
 
   // بحث التوبار العلوي: افتحلها صف وصف الطالب وافتح السجل تلقائي
   useEffect(() => {
@@ -369,21 +395,10 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     addActivity?.("دفعة مالية", `${rec.studentName} — ${rec.amount} ج`);
     setToast({ msg: `✓ تم حفظ دفعة ${rec.studentName}`, type: "success" });
 
-    // ── منطق "المستلم الافتراضي التلقائي": لو تكرر اختيار نفس المستلم البديل مرتين، يبقى هو الافتراضي ──
+    // ── المستلم اللي اتسجل يبقى تلقائي لباقي الطلاب اللي لسه ما اتسجلوش (اللي جايين بعده) ──
+    // الطلاب اللي اتسجلوا قبل كده مش بيتغيروا، لأنهم already saved.
     if (rec.receiverId && rec.receiverId !== globalReceiverId) {
-      setReceiverStreak(prev => {
-        if (prev.id === rec.receiverId) {
-          const nextCount = prev.count + 1;
-          if (nextCount >= 2) {
-            setGlobalReceiverId(rec.receiverId);
-            return { id: null, count: 0 };
-          }
-          return { id: rec.receiverId, count: nextCount };
-        }
-        return { id: rec.receiverId, count: 1 };
-      });
-    } else if (rec.receiverId === globalReceiverId) {
-      setReceiverStreak({ id: null, count: 0 });
+      setGlobalReceiverId(rec.receiverId);
     }
   };
 
@@ -556,57 +571,100 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     );
   }
 
-  // ══════════════════════════ ADMIN VIEW (فلاتر الصف/المجموعة/السجل فقط — بنفس آلية العرض القديمة) ══════════════════════════
+  // ══════════════════════════ ADMIN VIEW ══════════════════════════
   return (
     <div className="space-y-4">
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-xs text-slate-400 font-bold">
-            {financeMode === "late" ? "⏰ المتأخرين في السداد" : financeMode === "past" ? "🗓️ تسجيل الشهور الماضية" : "🔍 فلاتر البحث"}
+      {financeMode === "current" ? (
+        !selGrade ? (
+          // ── مفيش صف متاختار: اعرض 6 مستطيلات للصفوف ──
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+            <div className="text-xs text-slate-400 font-bold mb-1">💰 الشهر الحالي — اختر الصف</div>
+            <div className="grid grid-cols-2 gap-2">
+              {GRADES_LIST.map(g => (
+                <button key={g}
+                  onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
+                  className="py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
+                  {g}
+                </button>
+              ))}
+            </div>
           </div>
-          <button onClick={() => setDayReportOpen(true)} className="text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1 hover:bg-blue-500/20">
-            📅 عرض سجل المصاريف
+        ) : (
+          // ── صف متاختار: تلات ازرار فوق (رجوع / مصاريف اليوم / عرض سجل المصاريف) ──
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); }}
+                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+                ⬅️ رجوع
+              </button>
+              <div className="flex-1 px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center">
+                💰 مصاريف اليوم — {selGrade}
+              </div>
+              <button onClick={() => setDayReportOpen(true)}
+                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-blue-500/15 border border-blue-500/25 text-blue-300 hover:bg-blue-500/25 transition-all whitespace-nowrap">
+                📅 عرض سجل المصاريف
+              </button>
+            </div>
+          </div>
+        )
+      ) : financeMode === "log" ? (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-8 text-center space-y-2">
+          <div className="text-4xl mb-1">📒</div>
+          <div className="text-sm text-slate-400">سجل المعاملات — اختر اليوم من النافذة اللي فتحت</div>
+          <button onClick={() => setDayReportOpen(true)} className="text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-1.5 hover:bg-blue-500/20">
+            📅 فتح سجل المصاريف
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          <Field label="الصف">
-            <select value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(""); setTableOpen(false); }}
-              className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
-              <option value="">— اختر الصف —</option>
-              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-            </select>
-          </Field>
-          <Field label="المجموعة">
-            <select value={selGroup} onChange={e => setSelGroup(e.target.value)} disabled={!selGrade}
-              className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none disabled:opacity-40">
-              <option value="">— الكل —</option>
-              {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
-            </select>
-          </Field>
-          <Field label="السجل">
-            <button
-              onClick={() => { if (selGrade) setTableOpen(true); else setToast({ msg: "اختر الصف أولاً", type: "error" }); }}
-              className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${tableOpen && selGrade ? "bg-amber-600 text-white" : "bg-slate-700 hover:bg-amber-600/70 text-slate-300 hover:text-white"}`}>
-              {tableOpen && selGrade ? "📋 السجل مفتوح" : "📋 عرض السجل"}
+      ) : (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-slate-400 font-bold">
+              {financeMode === "late" ? "⏰ المتأخرين في السداد" : "🗓️ تسجيل الشهور الماضية"}
+            </div>
+            <button onClick={() => setDayReportOpen(true)} className="text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg px-2.5 py-1 hover:bg-blue-500/20">
+              📅 عرض سجل المصاريف
             </button>
-          </Field>
-        </div>
-
-        {financeMode === "past" && (
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <Field label="الشهر">
-              <select value={regMonth} onChange={e => setRegMonth(parseInt(e.target.value))}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="الصف">
+              <select value={selGrade} onChange={e => { setSelGrade(e.target.value); setSelGroup(""); setTableOpen(false); }}
                 className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
-                {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
+                <option value="">— اختر الصف —</option>
+                {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
               </select>
             </Field>
-            <Field label="السنة">
-              <input type="number" value={regYear} onChange={e => setRegYear(e.target.value ? parseInt(e.target.value) : curYear)}
-                className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+            <Field label="المجموعة">
+              <select value={selGroup} onChange={e => setSelGroup(e.target.value)} disabled={!selGrade}
+                className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none disabled:opacity-40">
+                <option value="">— الكل —</option>
+                {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
+              </select>
+            </Field>
+            <Field label="السجل">
+              <button
+                onClick={() => { if (selGrade) setTableOpen(true); else setToast({ msg: "اختر الصف أولاً", type: "error" }); }}
+                className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${tableOpen && selGrade ? "bg-amber-600 text-white" : "bg-slate-700 hover:bg-amber-600/70 text-slate-300 hover:text-white"}`}>
+                {tableOpen && selGrade ? "📋 السجل مفتوح" : "📋 عرض السجل"}
+              </button>
             </Field>
           </div>
-        )}
-      </div>
+
+          {financeMode === "past" && (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Field label="الشهر">
+                <select value={regMonth} onChange={e => setRegMonth(parseInt(e.target.value))}
+                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+                  {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
+                </select>
+              </Field>
+              <Field label="السنة">
+                <input type="number" value={regYear} onChange={e => setRegYear(e.target.value ? parseInt(e.target.value) : curYear)}
+                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+              </Field>
+            </div>
+          )}
+        </div>
+      )}
 
       {tableOpen && selGrade && financeMode === "late" && (
         adminLateStudents.length === 0
@@ -663,15 +721,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
                     <thead>
                       <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
-                        {["اسم الطالب","المبلغ (ج)","المستلم","وقت التسجيل","تعديل","طباعة"].map(h => (
+                        {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة"].map(h => (
                           <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {tableStudents.map(s => (
+                      {tableStudents.map((s, i) => (
                         <FinRow
-                          key={s.id} student={s} record={getRecord(s.id)}
+                          key={s.id} student={s} index={i} record={getRecord(s.id)}
                           globalReceiver={globalReceiver} activeReceivers={activeReceivers}
                           onSave={handleSave}
                           passwordEnabled={safeSettings.financePasswordEnabled}
@@ -687,8 +745,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           }
         </>
       )}
-      {!tableOpen && selGrade && <div className="text-center py-6 text-slate-600 text-sm">اضغط "عرض السجل" لفتح الجدول</div>}
-      {!selGrade && <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">💰</div><div className="text-sm">اختر الصف للبدء</div></div>}
+      {financeMode !== "current" && !tableOpen && selGrade && <div className="text-center py-6 text-slate-600 text-sm">اضغط "عرض السجل" لفتح الجدول</div>}
+      {financeMode !== "current" && !selGrade && <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">💰</div><div className="text-sm">اختر الصف للبدء</div></div>}
 
       {dayReportOpen && (
         <Modal title="📅 سجل المصاريف اليومي" onClose={() => setDayReportOpen(false)} maxW="max-w-2xl">
