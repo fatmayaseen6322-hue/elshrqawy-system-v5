@@ -68,6 +68,45 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [highlightId, setHighlightId] = useState(null); // تمييز الطالب لما نيجي من بحث التوبار
 
   // ══════════════════════════════════════════════════════════════
+  // 📔 دفتر / سجل الغياب — صفحة عرض منفصلة (الصف/المجموعة/التاريخ)
+  // بتفتح تلقائي على آخر صف/مجموعة اتسجّل لها غياب (نفس الصف/المجموعة
+  // المختارين حاليًا فوق)، وأي تغيير يدوي للصف أو المجموعة من الفلتر
+  // بيرجّع التاريخ لليوم الحالي تلقائي.
+  // ══════════════════════════════════════════════════════════════
+  const [logOpen,  setLogOpen]  = useState(false);
+  const [logGrade, setLogGrade] = useState(grade);
+  const [logGroup, setLogGroup] = useState(group);
+  const [logDate,  setLogDate]  = useState(TODAY);
+
+  const openLog = () => {
+    setLogGrade(grade);
+    setLogGroup(group);
+    setLogDate(date);
+    setLogOpen(true);
+  };
+
+  const handleLogGradeChange = (g) => {
+    setLogGrade(g);
+    setLogGroup(GROUPS_MAP[g]?.[0] || "A");
+    setLogDate(TODAY);
+  };
+
+  const handleLogGroupChange = (g) => {
+    setLogGroup(g);
+    setLogDate(TODAY);
+  };
+
+  const logGrpList = GROUPS_MAP[logGrade] || ["A"];
+  const logStudents = useMemo(
+    () => (students || []).filter(s => s && s.grade === logGrade && s.group === logGroup && !isBlocked(s)),
+    [students, logGrade, logGroup]
+  );
+  const logRecordsMap = useMemo(() => {
+    const recs = (attRecords || []).filter(r => r.grade === logGrade && r.group === logGroup && r.date === logDate);
+    return Object.fromEntries(recs.map(r => [r.studentId, r]));
+  }, [attRecords, logGrade, logGroup, logDate]);
+
+  // ══════════════════════════════════════════════════════════════
   // 🚫 تقرير الغياب السريع (زرار "غياب" جنب البحث)
   // اختيار صف → بيفتح أوتوماتيك آخر تاريخ اتسجل فيه غياب لهذا الصف
   // (أي مجموعة)، وممكن يغيّر التاريخ يدويًا بعد كده.
@@ -76,22 +115,40 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [reportGrade, setReportGrade] = useState(grade);
   const [reportDate,  setReportDate]  = useState(TODAY);
 
-  const lastSessionDate = (g) => {
-    const dates = (attRecords || []).filter(r => r.grade === g).map(r => r.date);
-    if (!dates.length) return TODAY;
-    return dates.reduce((max, d) => (d > max ? d : max), dates[0]);
+  // الصفوف اللي اتسجّل لها غياب فعليًا في تاريخ معيّن — عشان قائمة الصفوف
+  // في مودال "غياب" تعرض بس الصفوف اللي فيها سجلات، مش كل الصفوف.
+  const gradesWithAttendanceOn = (d) => {
+    const set = new Set((attRecords || []).filter(r => r.date === d).map(r => r.grade));
+    return GRADES_LIST.filter(g => set.has(g));
   };
 
+  const reportGradeOptions = useMemo(() => {
+    const list = gradesWithAttendanceOn(reportDate);
+    return list.length ? list : GRADES_LIST; // فallback: لو مفيش أي سجل خالص، اعرض كل الصفوف
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attRecords, reportDate]);
+
+  // زرار "غياب": يفتح دايمًا على اليوم الحالي، والصف اللي معروض هو أول
+  // صف من الصفوف اللي اتسجّل لها غياب النهاردة (لو الصف المختار حاليًا
+  // مش من ضمنهم).
   const openReport = () => {
-    const g = reportGrade || grade;
+    setReportDate(TODAY);
+    const options = gradesWithAttendanceOn(TODAY);
+    const g = options.includes(grade) ? grade : (options[0] || grade);
     setReportGrade(g);
-    setReportDate(lastSessionDate(g));
     setReportOpen(true);
   };
 
   const handleReportGradeChange = (g) => {
     setReportGrade(g);
-    setReportDate(lastSessionDate(g));
+  };
+
+  const handleReportDateChange = (d) => {
+    setReportDate(d);
+    const options = gradesWithAttendanceOn(d);
+    if (options.length && !options.includes(reportGrade)) {
+      setReportGrade(options[0]);
+    }
   };
 
   const reportRows = useMemo(() => {
@@ -304,6 +361,69 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
 
   const isEditable = !isOldDate || editUnlocked;
 
+  // ══════════════════════════════════════════════════════════════
+  // صفحة "سجل الغياب" (الدفتر) — عرض فقط، بفلاتر صف/مجموعة/تاريخ
+  // ══════════════════════════════════════════════════════════════
+  if (logOpen) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setLogOpen(false)}
+            className="w-9 h-9 shrink-0 rounded-xl bg-slate-800/60 border border-slate-700/40 text-slate-300 flex items-center justify-center">
+            ›
+          </button>
+          <div className="text-white font-black text-sm">📔 سجل الغياب</div>
+        </div>
+
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
+          <div className="grid grid-cols-3 gap-2 items-stretch">
+            <Sel value={logGrade} onChange={e => handleLogGradeChange(e.target.value)}>
+              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+            </Sel>
+            <Sel value={logGroup} onChange={e => handleLogGroupChange(e.target.value)}>
+              {logGrpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
+            </Sel>
+            <DatePicker value={logDate} onChange={setLogDate} max={TODAY} />
+          </div>
+        </div>
+
+        {logStudents.length === 0 ? (
+          <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">👥</div>لا يوجد طلاب</div>
+        ) : (
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="led-thead text-slate-400 text-xs border-b border-slate-700/40">
+                  <th className="text-right px-3 py-2.5">الطالب</th>
+                  <th className="text-center px-3 py-2.5">الحالة</th>
+                  <th className="text-right px-3 py-2.5">السبب</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logStudents.map((s, i) => {
+                  const rec = logRecordsMap[s.id];
+                  return (
+                    <tr key={s.id} className={i % 2 === 0 ? "bg-slate-900/20" : ""}>
+                      <td className="px-3 py-2.5 text-white text-sm font-bold break-words">{s.name}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        {rec?.status
+                          ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[rec.status].color}/20 border ${stCfg[rec.status].border}/40 ${stCfg[rec.status].text}`}>
+                              <span>{stCfg[rec.status].icon}</span><span>{stCfg[rec.status].label}</span>
+                            </span>
+                          : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.reason || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {pendingGate && (
@@ -318,9 +438,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <Sel value={reportGrade} onChange={e => handleReportGradeChange(e.target.value)}>
-                {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+                {reportGradeOptions.map(g => <option key={g}>{g}</option>)}
               </Sel>
-              <DatePicker value={reportDate} onChange={setReportDate} max={TODAY} />
+              <DatePicker value={reportDate} onChange={handleReportDateChange} max={TODAY} />
             </div>
             <div className="border border-slate-700/40 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
@@ -365,10 +485,11 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           <span className="text-sm font-bold text-red-400">غياب</span>
         </button>
         {role === "admin" && (
-          <div className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3">
-            <span className="text-xl leading-none">👥</span>
-            <span className="text-sm font-bold text-blue-400">إجمالي الطلاب: {(students || []).filter(s => s && !isBlocked(s)).length}</span>
-          </div>
+          <button onClick={openLog}
+            className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3 hover:bg-slate-700/50 transition-colors">
+            <span className="text-xl leading-none">📔</span>
+            <span className="text-sm font-bold text-blue-400">سجل الغياب</span>
+          </button>
         )}
       </div>
 
