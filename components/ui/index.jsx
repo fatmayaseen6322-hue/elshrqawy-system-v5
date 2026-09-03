@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { pct, scC } from "../../utils/index.js";
+import { pct, scC, isBlocked } from "../../utils/index.js";
 import { MONTHS_AR, GROUPS_MAP, GRADES_LIST, addCustomGrade } from "../../constants/index.js";
 
 // ══════════════════════════════════════════════════════════════
@@ -416,9 +416,11 @@ export function TopSearchBar({ students, onSelect }) {
     return () => document.removeEventListener("mousedown", h);
   }, []);
   const res = q.length === 0 ? [] : students.filter(s =>
-    s.name?.toLowerCase().includes(q.toLowerCase()) ||
-    s.id?.toLowerCase().includes(q.toLowerCase()) ||
-    String(s.phone || "").includes(q)
+    !isBlocked(s) && (
+      s.name?.toLowerCase().includes(q.toLowerCase()) ||
+      s.id?.toLowerCase().includes(q.toLowerCase()) ||
+      String(s.phone || "").includes(q)
+    )
   );
   return (
     <div ref={ref} className="relative flex-1">

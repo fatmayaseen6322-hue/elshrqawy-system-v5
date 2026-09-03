@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY } from "../../constants";
-import { pct, scC, scL, genExamId } from "../../utils";
+import { pct, scC, scL, genExamId, isBlocked } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, Modal } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
@@ -223,7 +223,7 @@ function ExamPanelQuickCreate({ questions, webExams, setWebExams, students }) {
     topicFilter ? questions.filter(q => q.topic === topicFilter) : questions,
     [questions, topicFilter]
   );
-  const grpStudents = useMemo(() => students.filter(s => s.grade === grade && s.group === group), [students, grade, group]);
+  const grpStudents = useMemo(() => students.filter(s => s.grade === grade && s.group === group && !isBlocked(s)), [students, grade, group]);
 
   const reset = () => { setStep(1); setName(""); setSelQ([]); setAnswers({}); setDone(false); setScore(0); setPreview(false); setTopicFilter(""); setTakerId(""); };
 
@@ -719,7 +719,7 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
   const [editNumPts, setEditNumPts] = useState(4);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
-  const gradeStudents = useMemo(() => students.filter(s => s.grade === grade), [students, grade]);
+  const gradeStudents = useMemo(() => students.filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
 
   const examsForLesson = useMemo(() =>
     (centerExams || [])
@@ -1503,7 +1503,7 @@ function ExamMistakesReport({ students, centerExams }) {
 
   const linkedExam = (centerExams || []).find(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson)) || null;
 
-  const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade), [students, grade]);
+  const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
 
   // وصف السؤال: من questionMeta اللي اتسجّل وقت رفع الامتحان لو موجود، وإلا رقم السؤال زي ما هو
   const descFor = q => {

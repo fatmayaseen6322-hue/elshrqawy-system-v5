@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GRADES_LIST } from "../../constants";
-import { fmt, waLink } from "../../utils";
+import { fmt, waLink, isBlocked } from "../../utils";
 import { Av, Sel, Btn, Toast } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
@@ -19,7 +19,7 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
 
   // فلتر الطلاب — لازم صف مختار الأول، وإلا القائمة فاضية
   const filtered = !selGrade ? [] : students.filter(s =>
-    s.grade === selGrade && s.status !== "inactive"
+    s.grade === selGrade && !isBlocked(s)
   );
 
   const tpls = {
