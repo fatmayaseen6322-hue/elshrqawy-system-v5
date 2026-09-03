@@ -610,25 +610,28 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
               </Sel>
             </Field>
           </div>
-          <div className="flex-1 min-w-0">
-            <Field label="الرسوم الشهرية (ج)"><Inp type="number" value={fees} onChange={e => setFees(e.target.value)} /></Field>
-          </div>
         </div>
       </div>
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="النوع *" error={err.gender}>
-            <Sel value={gender} err={!!err.gender} onChange={e => setGender(e.target.value)}>
-              <option value="">اختر النوع</option>
-              <option value="بنت">بنت</option>
-              <option value="ولد">ولد</option>
-            </Sel>
-          </Field>
-          <div />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="هاتف ولي الأمر" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} placeholder="اختياري — لو فاضي هيظهر تنبيه" /></Field>
-          <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
+        <div className="flex gap-3 items-start">
+          <div className="shrink-0">
+            <div className={`text-xs font-medium mb-1.5 ${err.gender ? "text-red-400" : "text-slate-400"}`}>النوع *</div>
+            <div className="flex gap-3">
+              {[["ولد"], ["بنت"]].map(([g]) => (
+                <button key={g} type="button" onClick={() => setGender(g)}
+                  className="flex flex-col items-center gap-1">
+                  <span className={`text-[11px] font-bold ${gender === g ? "text-blue-400" : "text-slate-500"}`}>{g}</span>
+                  <span className={`w-9 h-9 rounded-full border-2 transition-colors ${gender === g ? "bg-blue-600 border-blue-400" : "bg-slate-800 border-slate-600"}`} />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <Field label="هاتف ولي الأمر" error={err.pPhone}><Inp value={pPhone} onChange={e => setPPhone(e.target.value)} err={!!err.pPhone} placeholder="اختياري — لو فاضي هيظهر تنبيه" /></Field>
+          </div>
+          <div className="flex-1 min-w-0">
+            <Field label="هاتف الطالب"><Inp value={sPhone} onChange={e => setSPhone(e.target.value)} /></Field>
+          </div>
         </div>
       </div>
       {mode === "edit" && (
