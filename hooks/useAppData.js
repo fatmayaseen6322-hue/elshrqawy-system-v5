@@ -334,6 +334,24 @@ export default function useAppData() {
     }
   }, []);
 
+  // بتطبّق نسخة سحابية (جاية من getDoc أو من onSnapshot) على البيانات
+  // المحلية — بتاخد بالها من كل أنواع البيانات (طلاب/مصاريف/غياب/امتحانات)
+  // مش الطلاب والإعدادات بس زي أول نسخة من الميزة دي.
+  const applyCloudSnapshot = useCallback((cloud) => {
+    if (!cloud) return;
+    const localTs = lsGet(KEYS.liveSyncTs, 0);
+    if (!cloud.updatedAt || cloud.updatedAt <= localTs) return;
+    isApplyingRemote.current = true;
+    setStudents(cloud.students || []);
+    setSettings(prev => ({ ...prev, ...(cloud.settings || {}) }));
+    setFinRecords(cloud.finRecords || []);
+    setAttRecords(cloud.attRecords || []);
+    setWebExams(cloud.webExams || []);
+    setCenterExams(cloud.centerExams || []);
+    lsSet(KEYS.liveSyncTs, cloud.updatedAt);
+    setLiveSyncState({ status: "success", message: "تم تحديث البيانات من جهاز تاني تلقائيًا ✓" });
+  }, [setStudents, setSettings, setFinRecords, setAttRecords, setWebExams, setCenterExams]);
+
   const pullLiveState = useCallback(async () => {
     if (!navigator.onLine) return;
     try {
@@ -341,26 +359,36 @@ export default function useAppData() {
       const { db } = await import("../src/firebase");
       const snap = await getDoc(doc(db, "elshrqawy_live_state", "main"));
       if (!snap.exists()) return;
-      const cloud = snap.data();
-      const localTs = lsGet(KEYS.liveSyncTs, 0);
-      if (cloud.updatedAt && cloud.updatedAt > localTs) {
-        isApplyingRemote.current = true;
-        setStudents(cloud.students || []);
-        setSettings(prev => ({ ...prev, ...(cloud.settings || {}) }));
-        lsSet(KEYS.liveSyncTs, cloud.updatedAt);
-        setLiveSyncState({ status: "success", message: "تم تحديث البيانات من جهاز تاني تلقائيًا ✓" });
-      }
+      applyCloudSnapshot(snap.data());
     } catch (e) {
       setLiveSyncState({ status: "error", message: "تعذّر سحب التحديثات (تأكد من النت)" });
     }
-  }, [setStudents, setSettings]);
+  }, [applyCloudSnapshot]);
 
-  // أول ما الصفحة تتفتح، وكل مرة الجهاز يرجع أونلاين: اسحب أحدث نسخة
+  // أول ما الصفحة تتفتح: اسحب أحدث نسخة فورًا (لو النت شغال)، وبعدين
+  // فضّل "مستمع" (onSnapshot) شغال طول الوقت — أي جهاز تاني يغيّر حاجة
+  // على السحابة، الجهاز ده بيستلم التحديث لحظيًا من غير ما يحتاج refresh
+  // أو ينتظر رجوع النت. ده اللي بيخلي التليفون واللاب توب "متزامنين أونلاين".
   useEffect(() => {
+    let unsub = null;
+    let cancelled = false;
     pullLiveState();
-    window.addEventListener("online", pullLiveState);
-    return () => window.removeEventListener("online", pullLiveState);
-  }, [pullLiveState]);
+    (async () => {
+      try {
+        const { doc, onSnapshot } = await import("firebase/firestore");
+        const { db } = await import("../src/firebase");
+        if (cancelled) return;
+        unsub = onSnapshot(
+          doc(db, "elshrqawy_live_state", "main"),
+          snap => { if (snap.exists()) applyCloudSnapshot(snap.data()); },
+          () => setLiveSyncState({ status: "error", message: "تعذّرت المزامنة اللحظية (تأكد من النت وصلاحيات Firestore)" })
+        );
+      } catch (e) {
+        setLiveSyncState({ status: "error", message: "تعذّر تفعيل المزامنة اللحظية" });
+      }
+    })();
+    return () => { cancelled = true; if (unsub) unsub(); };
+  }, [pullLiveState, applyCloudSnapshot]);
 
   // أي تغيير حقيقي (من المستخدم) في الطلاب أو الإعدادات → ارفع نسخة جديدة
   // (بعد 3 ثواني هدوء عشان ميرفعش مرة لكل حرف بيتكتب)
