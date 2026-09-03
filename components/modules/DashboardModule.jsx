@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, MONTHS_AR, TODAY } from "../../constants";
-import { pct, scC, speak, isBlocked } from "../../utils";
+import { pct, scC, speak, isBlocked, normalizeAr } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Bar } from "../ui";
 
@@ -313,73 +313,98 @@ function ReportButtons({ students, finRecords, settings }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// خانة سؤال سريع فوق برج المراقبة — للمستر بس (مش Assist)
-// بترد على أي سؤال عن الطلاب/المصاريف/الغياب باستخدام Claude API
+// asal.ai — محرك بحث محلي 100% (بدون أي API أو إنترنت)
+// بيدوّر في بيانات النظام نفسها (طلاب / مصاريف / غياب) ويرد بالحساب المباشر
 // ══════════════════════════════════════════════════════════════
-function buildQuickAskCtx(students, finRecords, attRecords) {
+function localAsalAnswer(question, { students, finRecords, attRecords } = {}) {
+  students   = students   || [];
+  finRecords = finRecords || [];
+  attRecords = attRecords || [];
   const dateOf = r => r.date || (r.timestamp || "").slice(0, 10);
-  const todayFin = (finRecords || []).filter(r => dateOf(r) === TODAY);
-  const paidLines = todayFin.length
-    ? todayFin.map(r => `${r.studentName} (${r.grade}) دفع ${r.amount} ج`).join("\n")
-    : "محدش دفع النهاردة لسه";
-  const todayAtt = buildTodayAttendance(attRecords, students);
-  const absentLines = todayAtt.grades.length
-    ? todayAtt.grades.flatMap(g => g.students.map(s => `${s.name} (${g.grade}) — ${s.statusLabel}`)).join("\n")
-    : "محدش غاب النهاردة لسه";
-  const debts = students.map(s => ({ s, due: (s.totalFees || 0) - (s.paid || 0) })).filter(x => x.due > 0);
-  const lines = [
-    `تاريخ النهاردة: ${TODAY}`,
-    `إجمالي الطلاب: ${students.length}`,
-    `── مين دفع النهاردة (${todayFin.length} دفعة) ──`,
-    paidLines,
-    `إجمالي المحصّل النهاردة: ${todayFin.reduce((a, r) => a + (r.amount || 0), 0)} ج`,
-    `── مين غاب/اتأخر النهاردة (${absentLines === "محدش غاب النهاردة لسه" ? 0 : todayAtt.grades.reduce((a, g) => a + g.students.length, 0)}) ──`,
-    absentLines,
-    `── طلاب عليهم متأخرات (${debts.length}) ──`,
-    debts.length ? debts.map(x => `${x.s.name} (${x.s.grade}) — متأخر ${x.due} ج`).join("\n") : "مفيش حد متأخر",
-  ];
-  return lines.join("\n");
+  const qn = normalizeAr(question || "").toLowerCase();
+  if (!qn.trim()) return "اكتب سؤالك الأول.";
+
+  // لو السؤال بيدّي على اسم طالب معيّن، جاوب بكل بياناته المتاحة
+  const student = students.find(s => s?.name && qn.includes(normalizeAr(s.name).toLowerCase()));
+  if (student) {
+    const due = (student.totalFees || 0) - (student.paid || 0);
+    const myAtt = attRecords.filter(r => r.studentId === student.id);
+    const absCount = myAtt.filter(r => r.status === "a").length;
+    const lateCount = myAtt.filter(r => r.status === "l").length;
+    const myPayments = finRecords.filter(r => r.studentId === student.id || r.studentName === student.name);
+    const lines = [
+      `👤 ${student.name} (${student.grade || "—"})`,
+      `المصاريف: دفع ${student.paid || 0} من ${student.totalFees || 0} ج${due > 0 ? ` — متأخر عليه ${due} ج` : " — مفيش متأخرات"}`,
+      `الغياب: ${absCount} يوم غياب، ${lateCount} يوم تأخير (من إجمالي سجلات: ${myAtt.length})`,
+      myPayments.length ? `آخر دفعة: ${myPayments[myPayments.length - 1].amount} ج بتاريخ ${dateOf(myPayments[myPayments.length - 1])}` : "لسه ما دفعش أي حاجة",
+    ];
+    return lines.join("\n");
+  }
+
+  // عدد الطلاب الكلي
+  if (/(كام|عدد).*(طالب|طلاب|طلبه)/.test(qn)) {
+    return `إجمالي عدد الطلاب: ${students.length}`;
+  }
+
+  // مين دفع النهاردة
+  if (/مين دفع|حد دفع|دفع مين/.test(qn)) {
+    const todayFin = finRecords.filter(r => dateOf(r) === TODAY);
+    if (!todayFin.length) return "محدش دفع النهاردة لسه.";
+    return todayFin.map(r => `${r.studentName} (${r.grade}) دفع ${r.amount} ج`).join("\n")
+      + `\nإجمالي المحصّل النهاردة: ${todayFin.reduce((a, r) => a + (r.amount || 0), 0)} ج`;
+  }
+
+  // إجمالي الإيرادات / المحصّل (كل الوقت)
+  if (/(اجمالي|كام).*(ايرادات|فلوس|محصل|دخل)/.test(qn)) {
+    const total = finRecords.reduce((a, r) => a + (r.amount || 0), 0);
+    return `إجمالي المحصّل من كل الطلاب: ${total} ج`;
+  }
+
+  // مين متأخر في الفلوس / مين عليه ديون
+  if (/(مين|حد).*(متأخر|مدين|عليه فلوس|عليه فلوس)|ديون/.test(qn)) {
+    const debts = students.map(s => ({ s, due: (s.totalFees || 0) - (s.paid || 0) })).filter(x => x.due > 0);
+    if (!debts.length) return "مفيش حد متأخر في المصاريف 🎉";
+    return `طلاب متأخرين في المصاريف (${debts.length}):\n` + debts.map(x => `${x.s.name} (${x.s.grade}) — متأخر ${x.due} ج`).join("\n");
+  }
+
+  // مين غاب / اتأخر النهاردة
+  if (/(مين|حد).*(غاب|غايب|اتأخر|متاخر)|غياب النهارده|غياب اليوم/.test(qn)) {
+    const todayAtt = buildTodayAttendance(attRecords, students);
+    const rows = todayAtt.grades.flatMap(g => g.students.map(s => `${s.name} (${g.grade}) — ${s.statusLabel}`));
+    if (!rows.length) return "محدش غاب أو اتأخر النهاردة لسه.";
+    return `غياب/تأخير النهاردة (${rows.length}):\n` + rows.join("\n");
+  }
+
+  // مين حاضر النهاردة
+  if (/(مين|حد).*(حضر|حاضر)/.test(qn)) {
+    const absentIds = new Set(attRecords.filter(r => r.date === TODAY && (r.status === "a" || r.status === "l")).map(r => r.studentId));
+    const present = students.filter(s => !absentIds.has(s.id));
+    return `عدد الحاضرين النهاردة: ${present.length} من ${students.length}`;
+  }
+
+  return "معرفش أجاوب على السؤال ده. جرب تسأل عن: عدد الطلاب، مين دفع النهاردة، مين غاب النهاردة، مين متأخر في المصاريف، إجمالي الإيرادات، أو اكتب اسم طالب معيّن.";
 }
+
+// ══════════════════════════════════════════════════════════════
+// خانة سؤال سريع فوق برج المراقبة — للمستر بس (مش Assist)
+// بترد بالبحث المحلي في بيانات الطلاب/المصاريف/الغياب — بدون إنترنت خالص
+// ══════════════════════════════════════════════════════════════
 
 function TowerAskBox({ students, finRecords, attRecords }) {
   const [q,       setQ]       = useState("");
   const [answer,  setAnswer]  = useState("");
   const [loading, setLoading] = useState(false);
   const [err,     setErr]     = useState("");
-  const [apiKey]  = useState(() => { try { return localStorage.getItem("asal_api_key") || ""; } catch { return ""; } });
 
-  const ask = async () => {
+  const ask = () => {
     if (!q.trim() || loading) return;
-    if (!apiKey) { setErr("محتاجة تفعّلي asal.ai الأول (زرار ✨ تحت) وتضيفي مفتاح API عشان الخانة دي تشتغل."); return; }
     setLoading(true);
     setErr("");
     setAnswer("");
-    try {
-      const sys = `أنت مساعد نظام Elshrqawy التعليمي. جاوب على سؤال المستر بخصوص الطلاب أو المصاريف أو الغياب، اعتمادًا فقط على البيانات دي، بإيجاز ووضوح:\n${buildQuickAskCtx(students, finRecords, attRecords)}`;
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 400,
-          system: sys,
-          messages: [{ role: "user", content: q }],
-        }),
-      });
-      if (res.status === 401) { setErr("مفتاح API غير صحيح."); setLoading(false); return; }
-      const data = await res.json();
-      const text = (data.content || []).map(c => c.text || "").join("\n").trim() || "معلش، مش قادر أجاوب دلوقتي.";
-      setAnswer(text);
-    } catch {
-      setErr("حصل خطأ في الاتصال، حاول تاني.");
-    } finally {
-      setLoading(false);
-    }
+    // بحث محلي فوري — مفيش أي اتصال بالإنترنت
+    const text = localAsalAnswer(q, { students, finRecords, attRecords });
+    setAnswer(text);
+    setLoading(false);
   };
 
   return (
@@ -410,32 +435,11 @@ function TowerAskBox({ students, finRecords, attRecords }) {
 // ══════════════════════════════════════════════════════════════
 // ASAL AI CHAT WIDGET
 // ══════════════════════════════════════════════════════════════
-function buildCtxSummary(students, finRecords) {
-  const dd = buildDashboardData(students, finRecords);
-  const lines = [];
-  lines.push(`إجمالي الطلاب: ${dd.stats.total} (نشط: ${dd.stats.active}، مؤقت: ${dd.stats.temp})`);
-  lines.push(`إجمالي الإيرادات المحصّلة: ${dd.stats.totalRevenue} ج.م`);
-  lines.push(`إيرادات الشهر الأخير: ${dd.stats.revMonth} ج.م`);
-  lines.push(`إجمالي الديون المتأخرة: ${dd.stats.totalDebt} ج.م`);
-  [dd.absenceSection, dd.examsSection].forEach(sec => {
-    sec.grades.forEach(g => {
-      g.students.forEach(s => {
-        const fields = Object.entries(s).filter(([k]) => !["grade","_due","_grade"].includes(k)).map(([k, v]) => `${k}:${v}`).join(", ");
-        lines.push(`[${sec.title} | ${g.grade}] ${fields}`);
-      });
-    });
-  });
-  students.forEach(s => lines.push(`[طالب] ${s.name} | ${s.grade} | غياب:${s.absent} | درجة:${s.score}% | مدفوع:${s.paid}/${s.totalFees}`));
-  return lines.join("\n");
-}
-
-export function AsalAI({ sectionRefs, students, finRecords }) {
+export function AsalAI({ sectionRefs, students, finRecords, attRecords }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [apiKey, setApiKey] = useState(() => { try { return localStorage.getItem("asal_api_key") || ""; } catch { return ""; } });
-  const [showKeyInput, setShowKeyInput] = useState(false);
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -444,11 +448,6 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
     }
     return () => { try { window.speechSynthesis?.cancel(); } catch { /* ignore */ } };
   }, [open]);
-
-  const saveApiKey = (k) => {
-    setApiKey(k);
-    try { localStorage.setItem("asal_api_key", k); } catch { /* ignore */ }
-  };
 
   const performAction = action => {
     if (!action || action === "none") return;
@@ -463,59 +462,25 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
   const activate = () => {
     setOpen(true);
     if (messages.length === 0) {
-      const greet = "أهلاً بيك مستر، أنا asal.ai. اسألني عن أي شيء في النظام أو أي سؤال عام، وهرد عليك مع نسبة تقدير لدقة الإجابة.";
+      const greet = "أهلاً بيك مستر، أنا asal.ai. اسألني عن الطلاب أو المصاريف أو الغياب، وهجاوبك من بيانات النظام مباشرة — من غير أي إنترنت.";
       setMessages(m => [...m, { role: "ai", text: greet }]);
       speak(greet);
     }
   };
 
-  const handleCommand = async text => {
+  // بحث محلي 100% — بدون أي API أو اتصال بالإنترنت
+  const handleCommand = text => {
     if (!text.trim()) return;
-    if (!apiKey) { setShowKeyInput(true); return; }
     setMessages(m => [...m, { role: "user", text }]);
     setInput("");
     setLoading(true);
-    const sys = `أنت "asal.ai"، مساعد ذكاء اصطناعي مدمج في نظام Elshrqawy. أجب عن أي سؤال — عن النظام أو عام. كن مفيداً ومختصراً.\nبيانات النظام:\n${buildCtxSummary(students, finRecords)}\n\nفي نهاية كل رد أضف:\nCONFIDENCE: <0-100>\nACTION: absence أو exams أو none`;
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 600,
-          system: sys,
-          messages: [...messages.map(m => ({
-            role: m.role === "ai" ? "assistant" : "user",
-            content: (m.text || "").replace(/\nCONFIDENCE:.*\nACTION:.*/s, "").trim()
-          })), { role: "user", content: text }]
-        })
-      });
-      if (res.status === 401) {
-        setMessages(m => [...m, { role: "ai", text: "❌ مفتاح API غير صحيح — اضغط ⚙ لتحديثه.", confidence: 0 }]);
-        setShowKeyInput(true);
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
-      let full = (data.content || []).map(c => c.text || "").join("\n").trim() || "معلش، لم أستطع الرد الآن.\nCONFIDENCE: 0\nACTION: none";
-      const action = (full.match(/ACTION:\s*(absence|exams|none)/) || [])[1] || null;
-      const confidence = Math.min(100, parseInt((full.match(/CONFIDENCE:\s*(\d{1,3})/) || [])[1] || 0));
-      const clean = full.replace(/CONFIDENCE:\s*\d{1,3}/, "").replace(/ACTION:\s*(absence|exams|none)/, "").trim();
-      setMessages(m => [...m, { role: "ai", text: clean, confidence }]);
-      speak(clean);
-      performAction(action);
-    } catch {
-      const e = "حصل خطأ في الاتصال، حاول تاني.";
-      setMessages(m => [...m, { role: "ai", text: e, confidence: 0 }]);
-      speak(e);
-    } finally {
-      setLoading(false);
-    }
+    const qn = normalizeAr(text).toLowerCase();
+    const reply = localAsalAnswer(text, { students, finRecords, attRecords });
+    const action = /غياب|غاب|حضر/.test(qn) ? "absence" : /امتحان|درجة|درجات/.test(qn) ? "exams" : "none";
+    setMessages(m => [...m, { role: "ai", text: reply }]);
+    speak(reply);
+    performAction(action);
+    setLoading(false);
   };
 
   return (
@@ -525,35 +490,14 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setOpen(false)}>
           <div className="bg-slate-900 border border-slate-700/60 rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-slate-700/40 flex items-center justify-between">
-              <div className="flex items-center gap-2"><span className="text-xl">✨</span><div><div className="text-white font-bold text-sm">asal.ai</div><div className={`text-xs ${loading ? "text-amber-400" : "text-emerald-400"}`}>{loading ? "⏳ بيفكر..." : "🟢 جاهز"}</div></div></div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setShowKeyInput(v => !v)} title="إعداد API Key" className="text-slate-400 hover:text-slate-200 text-sm px-2">⚙</button>
-                <button onClick={() => setOpen(false)} className="text-slate-400 text-sm">✕</button>
-              </div>
+              <div className="flex items-center gap-2"><span className="text-xl">✨</span><div><div className="text-white font-bold text-sm">asal.ai</div><div className="text-xs text-emerald-400">🟢 جاهز (بحث محلي، بدون إنترنت)</div></div></div>
+              <button onClick={() => setOpen(false)} className="text-slate-400 text-sm">✕</button>
             </div>
-            {/* API Key input panel */}
-            {showKeyInput && (
-              <div className="px-4 py-3 border-b border-slate-700/40 bg-slate-800/60 space-y-2">
-                <div className="text-xs text-amber-400 font-bold">🔑 Anthropic API Key</div>
-                <div className="text-xs text-slate-500">احصل على مفتاحك من console.anthropic.com — يُحفظ محلياً فقط</div>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    defaultValue={apiKey}
-                    placeholder="sk-ant-..."
-                    onBlur={e => saveApiKey(e.target.value.trim())}
-                    className="flex-1 bg-slate-700 border border-slate-600 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
-                  />
-                  <button onClick={() => setShowKeyInput(false)} className="bg-violet-600 text-white text-xs px-3 rounded-xl">حفظ</button>
-                </div>
-              </div>
-            )}
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs whitespace-pre-line ${m.role === "user" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-200"}`}>
                     {m.text}
-                    {m.role === "ai" && m.confidence != null && <div className={`mt-1.5 pt-1.5 border-t border-slate-700/50 text-xs flex items-center gap-1.5 ${m.confidence >= 80 ? "text-emerald-400" : m.confidence >= 50 ? "text-amber-400" : "text-red-400"}`}><span>📊 ثقة:</span><span className="font-bold">{m.confidence}%</span></div>}
                   </div>
                 </div>
               ))}
@@ -561,7 +505,7 @@ export function AsalAI({ sectionRefs, students, finRecords }) {
               <div ref={endRef} />
             </div>
             <div className="p-3 border-t border-slate-700/40 flex gap-2">
-              <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !loading) handleCommand(input); }} placeholder={apiKey ? "اسأل أي سؤال..." : "⚙ أدخل API Key أولاً..."} disabled={loading} className="flex-1 bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/60 disabled:opacity-50" />
+              <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !loading) handleCommand(input); }} placeholder="اسأل أي سؤال عن الطلاب/المصاريف/الغياب..." disabled={loading} className="flex-1 bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/60 disabled:opacity-50" />
               <button onClick={() => !loading && handleCommand(input)} disabled={loading} className="bg-blue-600 text-white px-3 rounded-xl text-sm disabled:opacity-50">إرسال</button>
             </div>
           </div>
@@ -949,7 +893,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       )}
       {!isAssist && <MonthlyChart finRecords={finRecords} />}
       <ReportButtons students={students} finRecords={finRecords} settings={settings} />
-      <AsalAI sectionRefs={refs} students={students} finRecords={finRecords} />
+      <AsalAI sectionRefs={refs} students={students} finRecords={finRecords} attRecords={attRecords} />
     </div>
   );
 }
