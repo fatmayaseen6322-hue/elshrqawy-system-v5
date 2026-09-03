@@ -386,8 +386,55 @@ function localAsalAnswer(question, { students, finRecords, attRecords } = {}) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// إدخال صوتي (تحويل كلام لنص) — عبر ميزة المتصفح المدمجة Web Speech API
+// ملحوظة: التعرف الصوتي نفسه ميزة متصفح (كروم) وبيحتاج نت وقت الكلام
+// عشان يترجم الصوت لنص، لكن بمجرد ما يتحول لنص، asal.ai بيرد عليه محليًا
+// ══════════════════════════════════════════════════════════════
+function useVoiceInput(onResult) {
+  const recRef = useRef(null);
+  const [listening, setListening] = useState(false);
+  const Rec = typeof window !== "undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+
+  const start = () => {
+    if (!Rec || listening) return;
+    const rec = new Rec();
+    rec.lang = "ar-EG";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = e => {
+      const text = e.results?.[0]?.[0]?.transcript || "";
+      if (text.trim()) onResult(text.trim());
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    recRef.current = rec;
+    setListening(true);
+    try { rec.start(); } catch { setListening(false); }
+  };
+  const stop = () => { try { recRef.current?.stop(); } catch { /* ignore */ } setListening(false); };
+
+  return { start, stop, listening, supported: !!Rec };
+}
+
+function MicButton({ onResult, className = "" }) {
+  const { start, stop, listening, supported } = useVoiceInput(onResult);
+  if (!supported) return null;
+  return (
+    <button
+      type="button"
+      title={listening ? "جاري الاستماع... اضغط للإيقاف" : "اسأل بصوتك"}
+      onClick={() => (listening ? stop() : start())}
+      className={`shrink-0 rounded-xl px-2 py-1.5 text-sm ${listening ? "bg-red-500/20 text-red-400 animate-pulse" : "text-slate-400 hover:text-slate-200"} ${className}`}
+    >
+      🎤
+    </button>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // خانة سؤال سريع فوق برج المراقبة — للمستر بس (مش Assist)
 // بترد بالبحث المحلي في بيانات الطلاب/المصاريف/الغياب — بدون إنترنت خالص
+// يدعم الكتابة اليدوية أو السؤال بالصوت (زرار 🎤)
 // ══════════════════════════════════════════════════════════════
 
 function TowerAskBox({ students, finRecords, attRecords }) {
@@ -407,6 +454,16 @@ function TowerAskBox({ students, finRecords, attRecords }) {
     setLoading(false);
   };
 
+  const askVoice = text => {
+    setQ(text);
+    setLoading(true);
+    setErr("");
+    setAnswer("");
+    const reply = localAsalAnswer(text, { students, finRecords, attRecords });
+    setAnswer(reply);
+    setLoading(false);
+  };
+
   return (
     <div className="flex-1 min-w-[220px]">
       <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2">
@@ -417,6 +474,7 @@ function TowerAskBox({ students, finRecords, attRecords }) {
           placeholder="اسأل عن أي حاجة… زي: مين دفع النهاردة؟"
           className="flex-1 bg-transparent text-white text-xs focus:outline-none min-w-0"
         />
+        <MicButton onResult={askVoice} />
         <button onClick={ask} disabled={loading || !q.trim()}
           className="shrink-0 text-xs font-bold text-blue-400 disabled:opacity-40 px-2">
           {loading ? "⏳" : "اسأل"}
@@ -506,6 +564,7 @@ export function AsalAI({ sectionRefs, students, finRecords, attRecords }) {
             </div>
             <div className="p-3 border-t border-slate-700/40 flex gap-2">
               <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !loading) handleCommand(input); }} placeholder="اسأل أي سؤال عن الطلاب/المصاريف/الغياب..." disabled={loading} className="flex-1 bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/60 disabled:opacity-50" />
+              <MicButton onResult={text => handleCommand(text)} className="bg-slate-800 border border-slate-700/50" />
               <button onClick={() => !loading && handleCommand(input)} disabled={loading} className="bg-blue-600 text-white px-3 rounded-xl text-sm disabled:opacity-50">إرسال</button>
             </div>
           </div>
