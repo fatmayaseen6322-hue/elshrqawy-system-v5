@@ -901,7 +901,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                     <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
                       <thead className="sticky top-0">
                         <tr className="led-thead bg-slate-900 border-b border-slate-700/60">
-                          {["اسم الطالب","الصف","المبلغ (ج)","المستلم"].map(h => (
+                          {["اسم الطالب","الصف","المبلغ (ج)","المستلم","الساعة"].map(h => (
                             <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px" }}>{h}</th>
                           ))}
                         </tr>
@@ -918,12 +918,13 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{r.grade} — {r.group}</td>
                             <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
                             <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
+                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{(r.timestamp || "").slice(11, 16) || "—"}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr className="bg-emerald-900/20 border-t-2 border-emerald-700/30">
-                          <td colSpan={2} className="px-3 py-3 text-emerald-400 font-bold text-sm">💰 إجمالي التحصيل</td>
+                          <td colSpan={3} className="px-3 py-3 text-emerald-400 font-bold text-sm">💰 إجمالي التحصيل</td>
                           <td colSpan={2} className="px-3 py-3 text-emerald-400 font-black text-base">{fmtM(dayTotal)} ({dayRecords.length} دفعة)</td>
                         </tr>
                       </tfoot>
