@@ -547,28 +547,42 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
   // ══════════════════════════ ADMIN VIEW ══════════════════════════
 
-  // ── لسه محددتش قسم: اعرض 4 مستطيلات كبيرة تملا الشاشة (بدل قائمة منسدلة) ──
+  // ── لسه محددتش قسم: اعرض الأقسام مرتّبة (الشهر الحالي فوق، المتأخر
+  // بشقّيه [الشهر الحالي / الشهور الماضية] جنب بعض تحته، وسجل المعاملات
+  // في الآخر تحت الكل) — بدل شبكة 2×2 عشوائية الترتيب ──
   if (!financeMode) {
-    const sections = [
-      { key: "current", icon: "💰", label: "الشهر الحالي",        desc: "تسجيل مصاريف الشهر الحالي" },
-      { key: "late",    icon: "⏰", label: "متأخر",                desc: "الطلاب المتأخرين في السداد" },
-      { key: "past",    icon: "🗓️", label: "تسجيل الشهور الماضية", desc: "تسجيل دفعة لشهر سابق" },
-      { key: "log",     icon: "📒", label: "سجل المعاملات",        desc: "كل المعاملات في يوم معيّن" },
-    ];
+    const cardCls = "flex flex-col items-center justify-center gap-2 py-8 rounded-3xl font-bold bg-slate-800/60 border border-slate-700/40 hover:bg-emerald-600/20 hover:border-emerald-500/40 text-slate-200 hover:text-white transition-all";
     return (
       <div className="min-h-[70vh] flex flex-col justify-center gap-3">
         <div className="text-center text-slate-400 text-sm font-bold mb-2">💰 المصاريف — اختر القسم</div>
+
+        {/* فوق: الشهر الحالي */}
+        <button onClick={() => setFinanceMode?.("current")} className={cardCls + " py-10"}>
+          <span className="text-4xl">💰</span>
+          <span className="text-base">تسجيل الشهر الحالي</span>
+          <span className="text-xs text-slate-500 font-normal">تسجيل مصاريف الشهر الحالي</span>
+        </button>
+
+        {/* تحت: المتأخر (شهر حالي / شهور ماضية) جنب بعض */}
         <div className="grid grid-cols-2 gap-3">
-          {sections.map(s => (
-            <button key={s.key}
-              onClick={() => setFinanceMode?.(s.key)}
-              className="flex flex-col items-center justify-center gap-2 py-10 rounded-3xl font-bold bg-slate-800/60 border border-slate-700/40 hover:bg-emerald-600/20 hover:border-emerald-500/40 text-slate-200 hover:text-white transition-all">
-              <span className="text-4xl">{s.icon}</span>
-              <span className="text-base">{s.label}</span>
-              <span className="text-xs text-slate-500 font-normal">{s.desc}</span>
-            </button>
-          ))}
+          <button onClick={() => setFinanceMode?.("late")} className={cardCls}>
+            <span className="text-4xl">⏰</span>
+            <span className="text-base">المتأخر في الشهر الحالي</span>
+            <span className="text-xs text-slate-500 font-normal">المتأخرين في سداد الشهر الحالي</span>
+          </button>
+          <button onClick={() => setFinanceMode?.("past")} className={cardCls}>
+            <span className="text-4xl">🗓️</span>
+            <span className="text-base">المتأخر في الشهور الماضية</span>
+            <span className="text-xs text-slate-500 font-normal">تسجيل دفعة لشهر سابق</span>
+          </button>
         </div>
+
+        {/* الآخر تحت الكل: سجل المعاملات */}
+        <button onClick={() => setFinanceMode?.("log")} className={cardCls + " py-6"}>
+          <span className="text-3xl">📒</span>
+          <span className="text-base">سجل المعاملات</span>
+          <span className="text-xs text-slate-500 font-normal">كل المعاملات في يوم معيّن</span>
+        </button>
       </div>
     );
   }
@@ -625,7 +639,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: اختيار الشهر (كمستطيلات) والسنة أولاً، بعدين مستطيلات
           // الصفوف اللي فيها متأخرين بس عن الشهر ده (زي ما طلبتي) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-            <div className="text-xs text-slate-400 font-bold mb-1">🗓️ تسجيل الشهور الماضية — اختر الشهر</div>
+            <div className="text-xs text-slate-400 font-bold mb-1">🗓️ المتأخر في الشهور الماضية — اختر الشهر</div>
             <Field label="السنة">
               <input type="number" value={regYear} onChange={e => setRegYear(e.target.value ? parseInt(e.target.value) : curYear)}
                 className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
@@ -688,7 +702,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         !selGrade ? (
           // ── مفيش صف متاختار: مستطيلات الصفوف اللي فيها متأخرين بس (زي تسجيل الشهور الماضية) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-            <div className="text-xs text-slate-400 font-bold mb-1">⏰ المتأخرين في السداد — اختر الصف</div>
+            <div className="text-xs text-slate-400 font-bold mb-1">⏰ المتأخر في الشهر الحالي — اختر الصف</div>
             {lateGradesWithDebt.length === 0 ? (
               <div className="text-center py-6 text-slate-600">
                 <div className="text-3xl mb-2">🎉</div>
@@ -722,7 +736,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 ⬅️ رجوع
               </button>
               <div className="flex-1 px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center">
-                ⏰ المتأخرين في السداد — {selGrade}
+                ⏰ المتأخر في الشهر الحالي — {selGrade}
               </div>
             </div>
           </div>
