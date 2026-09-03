@@ -78,22 +78,29 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [logGroup, setLogGroup] = useState(group);
   const [logDate,  setLogDate]  = useState(TODAY);
 
+  // آخر يوم اتسجّل فيه غياب فعليًا لصف/مجموعة معيّنين — لو مفيش أي سجل خالص، رجّع اليوم الحالي
+  const lastRecordedLogDate = (g, grp) => {
+    const dates = (attRecords || []).filter(r => r.grade === g && r.group === grp).map(r => r.date);
+    return dates.length ? dates.sort().slice(-1)[0] : TODAY;
+  };
+
   const openLog = () => {
     setLogGrade(grade);
     setLogGroup(group);
-    setLogDate(date);
+    setLogDate(lastRecordedLogDate(grade, group));
     setLogOpen(true);
   };
 
   const handleLogGradeChange = (g) => {
+    const newGroup = GROUPS_MAP[g]?.[0] || "A";
     setLogGrade(g);
-    setLogGroup(GROUPS_MAP[g]?.[0] || "A");
-    setLogDate(TODAY);
+    setLogGroup(newGroup);
+    setLogDate(lastRecordedLogDate(g, newGroup));
   };
 
   const handleLogGroupChange = (g) => {
     setLogGroup(g);
-    setLogDate(TODAY);
+    setLogDate(lastRecordedLogDate(logGrade, g));
   };
 
   const logGrpList = GROUPS_MAP[logGrade] || ["A"];
@@ -105,6 +112,26 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     const recs = (attRecords || []).filter(r => r.grade === logGrade && r.group === logGroup && r.date === logDate);
     return Object.fromEntries(recs.map(r => [r.studentId, r]));
   }, [attRecords, logGrade, logGroup, logDate]);
+
+  // كل الأيام اللي فيها سجل غياب فعلي لنفس الصف/المجموعة، مرتبة تصاعديًا —
+  // بيتستخدموا في أسهم التنقل (يمين = قبل كده، شمال = بعد كده)
+  const logDatesList = useMemo(() => {
+    const set = new Set((attRecords || []).filter(r => r.grade === logGrade && r.group === logGroup).map(r => r.date));
+    return [...set].sort();
+  }, [attRecords, logGrade, logGroup]);
+
+  const logDateIdx = logDatesList.indexOf(logDate);
+  const hasPrevLogDate = logDateIdx > 0 || (logDateIdx === -1 && logDatesList.length > 0);
+  const hasNextLogDate = logDateIdx !== -1 && logDateIdx < logDatesList.length - 1;
+
+  const goPrevLogDate = () => {
+    if (logDateIdx > 0) setLogDate(logDatesList[logDateIdx - 1]);
+    else if (logDateIdx === -1 && logDatesList.length) setLogDate(logDatesList[logDatesList.length - 1]);
+  };
+  const goNextLogDate = () => {
+    if (logDateIdx !== -1 && logDateIdx < logDatesList.length - 1) setLogDate(logDatesList[logDateIdx + 1]);
+  };
+
 
   // ══════════════════════════════════════════════════════════════
   // 🚫 تقرير الغياب السريع (زرار "غياب" جنب البحث)
@@ -375,16 +402,35 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           <div className="text-white font-black text-sm">📔 سجل الغياب</div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
-          <div className="grid grid-cols-3 gap-2 items-stretch">
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2">
+          <div className="grid grid-cols-2 gap-2 items-stretch">
             <Sel value={logGrade} onChange={e => handleLogGradeChange(e.target.value)}>
               {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
             </Sel>
             <Sel value={logGroup} onChange={e => handleLogGroupChange(e.target.value)}>
               {logGrpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
             </Sel>
-            <DatePicker value={logDate} onChange={setLogDate} max={TODAY} />
           </div>
+          <div className="flex items-center gap-1.5">
+            <button onClick={goPrevLogDate} disabled={!hasPrevLogDate}
+              title="السجل اللي قبل كده"
+              className="w-9 h-9 shrink-0 rounded-xl bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-30 flex items-center justify-center text-base">
+              →
+            </button>
+            <div className="flex-1 min-w-0">
+              <DatePicker value={logDate} onChange={setLogDate} max={TODAY} />
+            </div>
+            <button onClick={goNextLogDate} disabled={!hasNextLogDate}
+              title="السجل اللي بعد كده"
+              className="w-9 h-9 shrink-0 rounded-xl bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-30 flex items-center justify-center text-base">
+              ←
+            </button>
+          </div>
+          {logDatesList.length > 0 && (
+            <div className="text-slate-500 text-[11px] text-center">
+              {logDateIdx >= 0 ? `سجل ${logDateIdx + 1} من ${logDatesList.length}` : `${logDatesList.length} يوم مسجَّل — دوس → عشان تشوف آخرهم`}
+            </div>
+          )}
         </div>
 
         {logStudents.length === 0 ? (
