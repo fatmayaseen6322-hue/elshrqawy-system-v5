@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
-import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked, sortStudentsList } from "../../utils";
+import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked, sortStudentsList, findStudentByName } from "../../utils";
 import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar, GradeSelect } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
 
@@ -507,6 +507,9 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
   const [sPhone, setSPhone] = useState(s.phone        || "");
   const [fees,   setFees]   = useState(s.totalFees    || 2400);
   const [err,    setErr]    = useState({});
+  // لو الاسم اللي بتتسجّل بيه موجود بالفعل في صف/مجموعة تانية، بنوقف
+  // ونعرض تحذير قبل الحفظ الفعلي (بدل ما نسجّل نسخة مكررة بالغلط).
+  const [dupWarning, setDupWarning] = useState(null); // { student } أو null
 
   // ── تسجيل بتاريخ الحضور الفعلي + حساب المطلوب حسب الحصص المتبقية (بس عند الإضافة) ──
   // الفكرة: الرسوم دي رسوم شهرية مقسّمة على عدد حصص الشهر، ولو الطالب
@@ -524,7 +527,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
     setStep(mode === "edit" ? "profile" : "section");
   };
 
-  const save = useCallback(() => {
+  const doSave = useCallback(() => {
     const e = {};
     if (!name.trim())    e.name   = "مطلوب";
     if (!sg)             e.grade  = "مطلوب اختيار الصف";
@@ -584,6 +587,27 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
       setRemainingSessions(sessionsPerMonth);
     }
   }, [name, sg, sgp, gender, pPhone, sPhone, fees, mode, students, joinDate, sessionsPerMonth, remainingSessions, owedAmount]);
+
+  // بتتنفّذ لما تدوسي زرار "تسجيل" — لو فيه طالب موجود بالفعل بنفس
+  // الاسم (في أي صف)، بتوقف وتعرض تحذير بدل ما تسجّل على طول؛
+  // بعد التأكيد (استمر/تجاهل) بترجع تنادي doSave أو تمسح الفورم.
+  const attemptSave = () => {
+    if (!name.trim() || !sg || !gender) { doSave(); return; } // سيب رسائل الحقول الناقصة تظهر عادي
+    const dup = findStudentByName(students, name, s.id);
+    if (dup) { setDupWarning(dup); return; }
+    doSave();
+  };
+
+  const confirmDupContinue = () => { setDupWarning(null); doSave(); };
+  const confirmDupIgnore = () => {
+    setDupWarning(null);
+    // "تجاهل" = امسحي كل البيانات اللي كنتِ بتكتبيها للطالب ده — من غير
+    // ما تلمسي بيانات الطالب الأصلي الموجود بالفعل.
+    setName(""); setPPhone(""); setSPhone(""); setGender("");
+    setErr({});
+    setJoinDate(TODAY);
+    setRemainingSessions(sessionsPerMonth);
+  };
 
   return (
     <div className="space-y-4">
@@ -674,8 +698,29 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
       )}
       <div className="flex gap-3">
         <Btn variant="ghost" size="lg" className="flex-1" onClick={finishStep}>إلغاء</Btn>
-        <Btn variant="primary" size="lg" className="flex-1" onClick={save}>{mode === "edit" ? "💾 حفظ" : "✓ تسجيل"}</Btn>
+        <Btn variant="primary" size="lg" className="flex-1" onClick={attemptSave}>{mode === "edit" ? "💾 حفظ" : "✓ تسجيل"}</Btn>
       </div>
+      {dupWarning && (
+        <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-600/40 rounded-2xl p-5 w-full max-w-xs space-y-4">
+            <div className="text-3xl text-center">⚠️</div>
+            <div className="text-white text-sm text-center font-bold">
+              الطالب "{dupWarning.name}" موجود بالفعل في {dupWarning.grade} — مجموعة {dupWarning.group}
+            </div>
+            <div className="text-slate-500 text-xs text-center">تقدري تكملي التسجيل عادي لو الاسم اتكرر بالصدفة (شخصين بنفس الاسم)، أو تلغي التسجيل ده لو كان بالغلط.</div>
+            <div className="flex gap-2">
+              <button onClick={confirmDupIgnore}
+                className="flex-1 py-2.5 rounded-xl bg-red-600/20 border border-red-600/30 text-red-400 text-sm font-bold flex items-center justify-center gap-1.5">
+                ✕ تجاهل التسجيل
+              </button>
+              <button onClick={confirmDupContinue}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold flex items-center justify-center gap-1.5">
+                ✓ استمر في التسجيل
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

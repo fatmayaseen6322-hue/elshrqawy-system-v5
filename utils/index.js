@@ -125,10 +125,24 @@ export function genStudentId(existingIds = []) {
   } while (idsSet.has(id));
   return id;
 }
+// ── تطبيع الاسم العربي: بيوحّد أشكال الهمزة (أ إ آ ء ← ا) ويشيل
+// المسافات الزيادة، عشان مقارنة/بحث الأسماء تشتغل صح مهما اختلفت
+// طريقة الكتابة (مستخدمة في البحث بالحضور، ترتيب الطلاب، والتحقق من
+// تكرار اسم الطالب عند التسجيل) ──
+export const normalizeAr = (str = "") => String(str).trim().replace(/\s+/g, " ").replace(/[أإآء]/g, "ا");
+
+// بيدوّر على طالب موجود بالفعل بنفس الاسم (بالظبط، بعد تطبيع الهمزة
+// والمسافات) في أي صف/مجموعة. `excludeId` بيتجاهل طالب معيّن من
+// المقارنة (مفيد وقت التعديل عشان الطالب نفسه ميتقارنش بنفسه).
+export function findStudentByName(students, name, excludeId) {
+  const target = normalizeAr(name);
+  if (!target) return null;
+  return (students || []).find(s => s && s.id !== excludeId && normalizeAr(s.name) === target) || null;
+}
+
 // ── ترتيب قائمة الطلاب: البنات مع بعض ثم الأولاد مع بعض، وجوه كل
 // مجموعة ترتيب أبجدي (يتجاهل اختلاف أشكال الهمزة زي باقي البحث) ──
 export function sortStudentsList(list = []) {
-  const normalizeAr = (str = "") => String(str).replace(/[أإآء]/g, "ا");
   const rank = g => (g === "بنت" ? 0 : g === "ولد" ? 1 : 2); // بدون نوع محدد يظهر في الآخر
   return [...(list || [])].sort((a, b) => {
     const r = rank(a.gender) - rank(b.gender);
