@@ -17,6 +17,7 @@ import FinanceModule    from "./components/modules/FinanceModule";
 import ExamsModule      from "./components/modules/ExamsModule";
 import DashboardModule  from "./components/modules/DashboardModule";
 import WhatsappModule   from "./components/modules/WhatsappModule";
+import CallModule       from "./components/modules/CallModule";
 import SettingsModule   from "./components/modules/SettingsModule";
 import RoleGate, { ROLE_PERMS } from "./components/modules/RoleGate";
 import StudentPortal            from "./components/StudentPortal";
@@ -632,6 +633,7 @@ export default function App() {
             {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} jumpTo={financeJump} onJumpDone={() => setFinanceJump(null)} financeMode={financeMode} setFinanceMode={setFinanceMode} />}
             {safePage === "exams"      && <ExamsModule      students={students || []} setStudents={setStudents} addActivity={addActivity} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} />}
             {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} addActivity={addActivity} activityLog={activityLog || []} jumpTo={dashboardJump} onJumpDone={() => setDashboardJump(null)} showToast={showToast} sectionJump={dashboardSectionJump} onSectionJumpDone={() => setDashboardSectionJump(null)} />}
+            {safePage === "call"       && <CallModule       students={students || []} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} attRecords={attRecords || []} />}
             {safePage === "block"      && <BlockModule      students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} setWebExams={setWebExams} addActivity={addActivity} />}
           </div>

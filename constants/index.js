@@ -71,6 +71,7 @@ export const SIDEBAR_NAV = [
   {key:"dashboard",  icon:"🗼", label:"المراقبة"},
   {key:"addStudent", icon:"➕", label:"إضافة طالب"},
   {key:"students",   icon:"👥", label:"الطلاب"},
+  {key:"call",       icon:"📞", label:"الاتصال"},
   {key:"whatsapp",   icon:"💬", label:"الواتس"},
   {key:"block",      icon:"🚫", label:"بلوك"},
 ];
