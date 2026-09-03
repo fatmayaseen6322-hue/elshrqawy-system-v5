@@ -36,6 +36,44 @@ function computeRealLevel(s, centerExams) {
   return Math.round((examLevel + attLevel) / 2);
 }
 
+// ── تاريخ الانضمام مختصر (يوم + شهر) لعرضه كعمود في الجدول ──
+function fmtJoinDayMonth(joinDate) {
+  const parts = (joinDate || "").split("-");
+  if (parts.length !== 3) return "—";
+  const day   = parseInt(parts[2], 10);
+  const month = parseInt(parts[1], 10);
+  if (!day || !month) return "—";
+  return `${day} ${MONTHS_AR[month - 1] || ""}`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// عمود "المصاريف": خصم قابل للتعديل + المصروفات المطلوبة بعد الخصم،
+// بيتحفظ تلقائي أول ما تتغيّر قيمة الخصم (زي أي حفظ تلقائي تاني في النظام)
+// ══════════════════════════════════════════════════════════════
+function FeeDiscountCell({ student, setStudents, gradeFees }) {
+  const [discount, setDiscount] = useState(student.discount || 0);
+  const baseFee = (gradeFees?.[student.grade] || 0);
+  const finalFee = Math.max(0, baseFee - (parseInt(discount) || 0));
+
+  const saveDiscount = val => {
+    const num = Math.max(0, parseInt(val) || 0);
+    setDiscount(num);
+    setStudents(prev => prev.map(st => st.id === student.id ? { ...st, discount: num } : st));
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number" value={discount} min={0}
+        onChange={e => saveDiscount(e.target.value)}
+        title="مبلغ الخصم"
+        className="w-14 bg-slate-800 border border-slate-700/50 rounded-lg px-1.5 py-1 text-white text-xs text-center focus:outline-none focus:border-blue-500/50"
+      />
+      <span className="text-emerald-400 font-bold text-xs whitespace-nowrap">{finalFee}ج</span>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // MODULE 2: STUDENTS
 // ══════════════════════════════════════════════════════════════
@@ -66,7 +104,7 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, centerExams, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
+export default function StudentsModule({ students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, centerExams, settings, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
   const [step, setStep] = useState(startAdd ? "add" : "select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
@@ -152,6 +190,8 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
                       <th className="px-3 py-2 font-medium">الطالب</th>
                       <th className="px-3 py-2 font-medium">أرقام التليفونات</th>
                       <th className="px-3 py-2 font-medium">المستوى</th>
+                      <th className="px-3 py-2 font-medium">المصاريف</th>
+                      <th className="px-3 py-2 font-medium">تاريخ الانضمام</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -175,6 +215,12 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
                           </td>
                           <td className="px-3 py-2.5">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t}`}>{lvl === null ? "—" : `${lvl}%`}</span>
+                          </td>
+                          <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                            <FeeDiscountCell student={s} setStudents={setStudents} gradeFees={settings?.gradeFees} />
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap" style={{ fontSize: "12px" }}>
+                            {fmtJoinDayMonth(s.joinDate)}
                           </td>
                         </tr>
                       );
