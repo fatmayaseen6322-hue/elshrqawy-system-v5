@@ -233,6 +233,7 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
         {showImport && (
           <ImportStudentsModal
+            students={students}
             onClose={() => setShowImport(false)}
             onImport={(newStudents) => {
               setStudents(prev => [...newStudents, ...prev]);

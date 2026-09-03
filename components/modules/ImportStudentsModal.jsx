@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { GRADES_LIST, GROUPS_MAP } from "../../constants";
-import { genSID } from "../../utils";
+import { genSID, normalizeAr, isBlocked } from "../../utils";
 import { Btn, Toast } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
@@ -142,7 +142,7 @@ function matchGroup(grade, value) {
   return found || options[0];
 }
 
-export default function ImportStudentsModal({ onImport, onClose }) {
+export default function ImportStudentsModal({ onImport, onClose, students }) {
   const [rows, setRows] = useState(null);   // preview rows بعد التحليل
   const [fileName, setFileName] = useState("");
   const [toast, setToast] = useState(null);
@@ -188,19 +188,29 @@ export default function ImportStudentsModal({ onImport, onClose }) {
         return;
       }
 
+      // كشف التكرار: لو الاسم ده موجود بالفعل في النظام (نشط أو بلوك)،
+      // نمنع إعادة إضافته كطالب جديد تلقائيًا — ده اللي كان بيحصل قبل كده
+      // وبيرجّع طلاب اتعملهم بلوك أو حذف كأنهم جداد في كل استيراد.
+      const findExisting = (name) => {
+        const target = normalizeAr(name).toLowerCase();
+        return (students || []).find(s => s && normalizeAr(s.name || "").toLowerCase() === target);
+      };
+
       const parsed = dataRows.map((r, i) => {
         const name  = String(r[cols.name] || "").trim();
         const phone = cols.phone !== undefined ? String(r[cols.phone] || "").trim() : "";
         const gradeRaw = cols.grade !== undefined ? r[cols.grade] : "";
         const groupRaw = cols.group !== undefined ? r[cols.group] : "";
         const grade = matchGrade(gradeRaw);
+        const existing = name ? findExisting(name) : null;
         return {
           _rowId: i,
           name,
           phone,
           grade,
           group: matchGroup(grade, groupRaw),
-          skip: !name, // صف من غير اسم يتجاهل تلقائيًا (المستخدم يقدر يفعّله يدوي لو حابب)
+          skip: !name || !!existing, // صف من غير اسم أو مكرر (موجود بالفعل) يتجاهل تلقائيًا
+          existing: existing ? { grade: existing.grade, group: existing.group, blocked: isBlocked(existing) } : null,
         };
       });
 
@@ -255,6 +265,7 @@ export default function ImportStudentsModal({ onImport, onClose }) {
   };
 
   const activeCount = rows ? rows.filter(r => !r.skip && r.name.trim()).length : 0;
+  const dupCount = rows ? rows.filter(r => r.existing).length : 0;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4" onClick={onClose}>
@@ -287,7 +298,10 @@ export default function ImportStudentsModal({ onImport, onClose }) {
           {rows && (
             <>
               <div className="flex items-center justify-between">
-                <div className="text-xs text-slate-400">{rows.length} صف في الملف — <span className="text-emerald-400 font-bold">{activeCount}</span> هيتضاف</div>
+                <div className="text-xs text-slate-400">
+                  {rows.length} صف في الملف — <span className="text-emerald-400 font-bold">{activeCount}</span> هيتضاف
+                  {dupCount > 0 && <span className="text-amber-400"> — {dupCount} مكرر متجاهَل</span>}
+                </div>
                 <button onClick={() => { setRows(null); setFileName(""); }} className="text-xs text-blue-400">اختيار ملف تاني</button>
               </div>
               <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
@@ -302,6 +316,11 @@ export default function ImportStudentsModal({ onImport, onClose }) {
                       <input value={r.name} onChange={e => updateRow(r._rowId, "name", e.target.value)}
                         placeholder="اسم الطالب"
                         className="w-full bg-slate-900/60 border border-slate-700/40 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none"/>
+                      {r.existing && (
+                        <div className="text-amber-400 text-[11px] mt-1">
+                          ⚠️ موجود بالفعل في النظام ({r.existing.grade}{r.existing.blocked ? " — في البلوك" : ""}) — متجاهل افتراضيًا عشان مايتكررش
+                        </div>
+                      )}
                     </div>
                     <div className="w-28 shrink-0">
                       <input value={r.phone} onChange={e => updateRow(r._rowId, "phone", e.target.value)}
