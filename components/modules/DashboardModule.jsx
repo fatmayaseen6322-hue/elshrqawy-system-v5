@@ -313,6 +313,101 @@ function ReportButtons({ students, finRecords, settings }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// خانة سؤال سريع فوق برج المراقبة — للمستر بس (مش Assist)
+// بترد على أي سؤال عن الطلاب/المصاريف/الغياب باستخدام Claude API
+// ══════════════════════════════════════════════════════════════
+function buildQuickAskCtx(students, finRecords, attRecords) {
+  const dateOf = r => r.date || (r.timestamp || "").slice(0, 10);
+  const todayFin = (finRecords || []).filter(r => dateOf(r) === TODAY);
+  const paidLines = todayFin.length
+    ? todayFin.map(r => `${r.studentName} (${r.grade}) دفع ${r.amount} ج`).join("\n")
+    : "محدش دفع النهاردة لسه";
+  const todayAtt = buildTodayAttendance(attRecords, students);
+  const absentLines = todayAtt.grades.length
+    ? todayAtt.grades.flatMap(g => g.students.map(s => `${s.name} (${g.grade}) — ${s.statusLabel}`)).join("\n")
+    : "محدش غاب النهاردة لسه";
+  const debts = students.map(s => ({ s, due: (s.totalFees || 0) - (s.paid || 0) })).filter(x => x.due > 0);
+  const lines = [
+    `تاريخ النهاردة: ${TODAY}`,
+    `إجمالي الطلاب: ${students.length}`,
+    `── مين دفع النهاردة (${todayFin.length} دفعة) ──`,
+    paidLines,
+    `إجمالي المحصّل النهاردة: ${todayFin.reduce((a, r) => a + (r.amount || 0), 0)} ج`,
+    `── مين غاب/اتأخر النهاردة (${absentLines === "محدش غاب النهاردة لسه" ? 0 : todayAtt.grades.reduce((a, g) => a + g.students.length, 0)}) ──`,
+    absentLines,
+    `── طلاب عليهم متأخرات (${debts.length}) ──`,
+    debts.length ? debts.map(x => `${x.s.name} (${x.s.grade}) — متأخر ${x.due} ج`).join("\n") : "مفيش حد متأخر",
+  ];
+  return lines.join("\n");
+}
+
+function TowerAskBox({ students, finRecords, attRecords }) {
+  const [q,       setQ]       = useState("");
+  const [answer,  setAnswer]  = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err,     setErr]     = useState("");
+  const [apiKey]  = useState(() => { try { return localStorage.getItem("asal_api_key") || ""; } catch { return ""; } });
+
+  const ask = async () => {
+    if (!q.trim() || loading) return;
+    if (!apiKey) { setErr("محتاجة تفعّلي asal.ai الأول (زرار ✨ تحت) وتضيفي مفتاح API عشان الخانة دي تشتغل."); return; }
+    setLoading(true);
+    setErr("");
+    setAnswer("");
+    try {
+      const sys = `أنت مساعد نظام Elshrqawy التعليمي. جاوب على سؤال المستر بخصوص الطلاب أو المصاريف أو الغياب، اعتمادًا فقط على البيانات دي، بإيجاز ووضوح:\n${buildQuickAskCtx(students, finRecords, attRecords)}`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 400,
+          system: sys,
+          messages: [{ role: "user", content: q }],
+        }),
+      });
+      if (res.status === 401) { setErr("مفتاح API غير صحيح."); setLoading(false); return; }
+      const data = await res.json();
+      const text = (data.content || []).map(c => c.text || "").join("\n").trim() || "معلش، مش قادر أجاوب دلوقتي.";
+      setAnswer(text);
+    } catch {
+      setErr("حصل خطأ في الاتصال، حاول تاني.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 min-w-[220px]">
+      <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2">
+        <span className="text-sm">💬</span>
+        <input
+          value={q} onChange={e => setQ(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") ask(); }}
+          placeholder="اسأل عن أي حاجة… زي: مين دفع النهاردة؟"
+          className="flex-1 bg-transparent text-white text-xs focus:outline-none min-w-0"
+        />
+        <button onClick={ask} disabled={loading || !q.trim()}
+          className="shrink-0 text-xs font-bold text-blue-400 disabled:opacity-40 px-2">
+          {loading ? "⏳" : "اسأل"}
+        </button>
+      </div>
+      {err && <div className="text-red-400 text-xs mt-1.5 px-1">{err}</div>}
+      {answer && (
+        <div className="mt-1.5 bg-slate-800/40 border border-slate-700/30 rounded-xl px-3 py-2 text-slate-200 text-xs whitespace-pre-line">
+          {answer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // ASAL AI CHAT WIDGET
 // ══════════════════════════════════════════════════════════════
 function buildCtxSummary(students, finRecords) {
@@ -791,8 +886,9 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div><h1 className="text-lg font-bold text-white flex items-center gap-2">🗼 برج المراقبة{alerts.length > 0 && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">{alerts.length}</span>}</h1><p className="text-xs text-slate-500">Control Tower</p></div>
+        {!isAssist && <TowerAskBox students={students} finRecords={finRecords} attRecords={attRecords} />}
         {!isAssist && <div className="flex gap-1 bg-slate-800 rounded-xl p-1">{Object.entries(periodLabels).map(([k, v]) => <button key={k} onClick={() => setPeriod(k)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === k ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}>{v}</button>)}</div>}
       </div>
       {!isAssist && (
