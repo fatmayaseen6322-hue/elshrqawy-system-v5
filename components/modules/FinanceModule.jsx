@@ -446,7 +446,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       ));
     }
 
-    addActivity?.("دفعة مالية", `${rec.studentName} — ${rec.amount} ج`);
+    addActivity?.("دفعة مالية", `${rec.studentName} — شهر ${MONTHS_AR[(rec.month || 1) - 1]} ${rec.year} — ${rec.amount} ج`);
     setToast({ msg: `✓ تم حفظ دفعة ${rec.studentName}`, type: "success" });
 
     // ── المستلم اللي اتسجل يبقى تلقائي لباقي الطلاب اللي لسه ما اتسجلوش (اللي جايين بعده) ──
@@ -465,7 +465,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         ? { ...s, paid: Math.max(0, (s.paid || 0) - (rec.amount || 0)) }
         : s
     ));
-    addActivity?.("تراجع عن دفعة", `${rec.studentName} — ${rec.amount} ج`);
+    addActivity?.("تراجع عن دفعة", `${rec.studentName} — شهر ${MONTHS_AR[(rec.month || 1) - 1]} ${rec.year} — ${rec.amount} ج`);
     setToast({ msg: `↩️ تم التراجع عن دفعة ${rec.studentName}`, type: "success" });
     if (rec.studentId === highlightId) setHighlightId(null);
   };
