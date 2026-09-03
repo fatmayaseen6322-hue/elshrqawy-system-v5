@@ -10,6 +10,37 @@ const fmt  = n => (n || 0).toLocaleString("en-US") + " ج";
 const fmtM = n => (n || 0).toLocaleString("en-US");
 
 // ══════════════════════════════════════════════════════════════
+// كشف التكرار: طلاب بنفس الاسم (بغض النظر عن الصف)، أو نفس رقم
+// التليفون مسجّل لأكتر من طالب — بيشمل الطلاب النشطين والمحظورين
+// (البلوك) كمان عشان يمسك التكرار الناتج عن استيراد قديم أو غلطة يدوية.
+// ══════════════════════════════════════════════════════════════
+function buildDuplicatesData(allStudents) {
+  allStudents = allStudents || [];
+
+  const byName = {};
+  allStudents.forEach(s => {
+    if (!s?.name?.trim()) return;
+    const key = normalizeAr(s.name).toLowerCase();
+    (byName[key] ||= []).push(s);
+  });
+  const dupNames = Object.values(byName).filter(list => list.length > 1);
+
+  const byPhone = {};
+  allStudents.forEach(s => {
+    const phone = (s?.phone || "").trim();
+    if (!phone) return;
+    (byPhone[phone] ||= []).push(s);
+  });
+  const dupPhones = Object.values(byPhone).filter(list => list.length > 1);
+
+  const affectedIds = new Set();
+  dupNames.forEach(list => list.forEach(s => affectedIds.add(s.id)));
+  dupPhones.forEach(list => list.forEach(s => affectedIds.add(s.id)));
+
+  return { dupNames, dupPhones, count: affectedIds.size };
+}
+
+// ══════════════════════════════════════════════════════════════
 // DASHBOARD DATA BUILDER
 // Uses finRecords (single source of truth) instead of payments
 // ══════════════════════════════════════════════════════════════
@@ -592,6 +623,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [logPickedDate, setLogPickedDate] = useState("");
   const [showExams, setShowExams] = useState(false);
   const [examsGrade, setExamsGrade] = useState(null);
+  const [showDup, setShowDup] = useState(false);
 
   // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
   // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
@@ -628,6 +660,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
 
   const alerts = students.filter(s => s.score < 60 || s.absent > 8 || (s.totalFees - s.paid) > 1200);
   const dd = useMemo(() => buildDashboardData(students, finRecords, settings?.gradeFees), [students, finRecords, settings?.gradeFees]);
+  const dupData = useMemo(() => buildDuplicatesData(studentsProp), [studentsProp]);
   const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
 
   // Assist: يشوف المحصّل + قائمة المتأخرين بالاسم + الغياب — بدون إجمالي عدد الطلاب أو إجمالي الديون
@@ -842,6 +875,65 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
 
   // ── صفحة "الطلاب بدون أرقام" — نفس آلية "الطلاب المتأخرين من شهور سابقة"
   // بالظبط: مستطيل واحد، وبالضغط عليه بيفتح شاشة صفوف ثم أسماء
+  if (showDup) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => setShowDup(false)} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <h2 className="text-white font-bold text-sm">الأسماء المكررة</h2>
+          <span className="w-10" />
+        </div>
+
+        {dupData.dupNames.length === 0 && dupData.dupPhones.length === 0 ? (
+          <div className="text-center text-slate-500 text-xs py-8">مفيش أي تكرار في الأسماء أو أرقام التليفونات 🎉</div>
+        ) : (
+          <div className="space-y-5">
+            {dupData.dupNames.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-red-400 font-bold text-xs flex items-center gap-1.5">👤 نفس الاسم ({dupData.dupNames.length} حالة)</div>
+                {dupData.dupNames.map((list, i) => (
+                  <div key={i} className="bg-slate-800/60 border border-red-500/20 rounded-2xl overflow-hidden">
+                    <div className="px-3 py-2 bg-red-500/10 text-white text-sm font-bold">{list[0].name} — {list.length} طالب بنفس الاسم</div>
+                    <div className="divide-y divide-slate-700/40">
+                      {list.map((s, si) => (
+                        <div key={si} className="px-3 py-2 flex items-center justify-between text-xs">
+                          <div className="text-slate-300">{s.grade} — مجموعة {s.group}</div>
+                          <div className="flex items-center gap-2">
+                            {s.phone && <span className="text-slate-500">{s.phone}</span>}
+                            {isBlocked(s) && <span className="text-amber-400 font-bold">🚫 بلوك</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {dupData.dupPhones.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-amber-400 font-bold text-xs flex items-center gap-1.5">📞 نفس رقم التليفون ({dupData.dupPhones.length} حالة)</div>
+                {dupData.dupPhones.map((list, i) => (
+                  <div key={i} className="bg-slate-800/60 border border-amber-500/20 rounded-2xl overflow-hidden">
+                    <div className="px-3 py-2 bg-amber-500/10 text-white text-sm font-bold">{list[0].phone} — مسجّل لـ {list.length} طلاب</div>
+                    <div className="divide-y divide-slate-700/40">
+                      {list.map((s, si) => (
+                        <div key={si} className="px-3 py-2 flex items-center justify-between text-xs">
+                          <div className="text-slate-300">{s.name} — {s.grade} — مجموعة {s.group}</div>
+                          {isBlocked(s) && <span className="text-amber-400 font-bold">🚫 بلوك</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (showNoPhone) {
     const gradeList = noPhoneGrade ? dd.noPhoneSection.grades.find(g => g.grade === noPhoneGrade)?.students || [] : [];
     return (
@@ -899,6 +991,12 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
           <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />
           <KPICard icon="💰" label={`المحصّل (${periodLabels[effectivePeriod]})`} value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
           <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" gradeBreakdown={dd.gradeDebts} formatValue={fmtM} onNamesClick={() => setShowOldDebtors(true)} namesLabel="الطلاب المتأخرين من شهور سابقة" />
+          <button onClick={() => setShowDup(true)}
+            className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
+            <span className="text-2xl">🧬</span>
+            <div className={`text-2xl font-bold ${dupData.count > 0 ? "text-red-400" : "text-emerald-400"}`}>{dupData.count}</div>
+            <div className="text-slate-400 text-xs">الأسماء المكررة</div>
+          </button>
         </div>
       )}
       {isAssist && (
