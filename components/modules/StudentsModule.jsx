@@ -51,26 +51,25 @@ function fmtJoinDayMonth(joinDate) {
 // بيتحفظ تلقائي أول ما تتغيّر قيمة الخصم (زي أي حفظ تلقائي تاني في النظام)
 // ══════════════════════════════════════════════════════════════
 function FeeDiscountCell({ student, setStudents, gradeFees }) {
-  const [discount, setDiscount] = useState(student.discount || 0);
   const baseFee = (gradeFees?.[student.grade] || 0);
-  const finalFee = Math.max(0, baseFee - (parseInt(discount) || 0));
+  const currentFee = baseFee - (student.discount || 0);
+  const [amount, setAmount] = useState(currentFee);
 
-  const saveDiscount = val => {
+  const saveAmount = val => {
     const num = Math.max(0, parseInt(val) || 0);
-    setDiscount(num);
-    setStudents(prev => prev.map(st => st.id === student.id ? { ...st, discount: num } : st));
+    setAmount(val === "" ? "" : num);
+    if (val === "") return; // من غير حفظ لحد ما تكتب رقم فعلي
+    const discount = Math.max(0, baseFee - num);
+    setStudents(prev => prev.map(st => st.id === student.id ? { ...st, discount } : st));
   };
 
   return (
-    <div className="flex items-center gap-1.5">
-      <input
-        type="number" value={discount} min={0}
-        onChange={e => saveDiscount(e.target.value)}
-        title="مبلغ الخصم"
-        className="w-14 bg-slate-800 border border-slate-700/50 rounded-lg px-1.5 py-1 text-white text-xs text-center focus:outline-none focus:border-blue-500/50"
-      />
-      <span className="text-emerald-400 font-bold text-xs whitespace-nowrap">{finalFee}ج</span>
-    </div>
+    <input
+      type="number" value={amount} min={0}
+      onChange={e => saveAmount(e.target.value)}
+      title="المصاريف الشهرية المطلوبة من الطالب"
+      className="w-16 bg-slate-800 border border-slate-700/50 rounded-lg px-1.5 py-1 text-emerald-400 font-bold text-xs text-center focus:outline-none focus:border-blue-500/50"
+    />
   );
 }
 
