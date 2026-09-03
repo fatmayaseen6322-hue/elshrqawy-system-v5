@@ -373,10 +373,13 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   }, [financeMode]);
 
   // بحث التوبار العلوي: افتحلها صف وصف الطالب وافتح السجل تلقائي
+  // (لو كانت واقفة في شاشة "اختر القسم" بالأساس، بنفتحلها قسم "الشهر
+  // الحالي" افتراضيًا عشان البحث يوصلها فعليًا لجدول فيه اسم الطالب)
   useEffect(() => {
     if (!jumpTo) return;
     const target = safeStudents.find(st => st.id === jumpTo);
     if (target) {
+      if (!financeMode) setFinanceMode?.("current");
       setSelGrade(target.grade);
       setSelGroup(target.group);
       setTableOpen(true);
