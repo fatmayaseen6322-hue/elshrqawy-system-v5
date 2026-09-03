@@ -157,8 +157,6 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
   const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
   const [pickTime,    setPickTime]    = useState(""); // ⏱ وقت اختيار المستلم (قبل الحفظ)
-  // 📅 تاريخ استلام الفلوس الفعلي (ممكن يختلف عن وقت التسجيل لو اتسجلت متأخر)
-  const [recDate,     setRecDate]     = useState(record?.date || TODAY);
   const [saved,       setSaved]       = useState(!!record);
   const [editing,     setEditing]     = useState(false);
   const [showPw,      setShowPw]      = useState(false);
@@ -183,7 +181,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
     month: student._month, year: student._year,
     amount: parseInt(amt) || 0,
     receiverId: recvId, receiverName: recvName,
-    date: recDate || TODAY, timestamp: nowStr(), note: "",
+    timestamp: nowStr(), note: "",
   });
 
   const doSave = () => {
@@ -244,7 +242,6 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
     setAmount(student._defaultFee || 0);
     setReceiverId(globalReceiver?.id || null);
     setPickTime("");
-    setRecDate(TODAY);
   };
 
   const canPrint = saved && localRecord !== null;
@@ -284,23 +281,6 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
         </td>
         <td className="px-2 py-3">
           <span className="text-slate-500 text-xs whitespace-nowrap">{(editing || !saved) ? (pickTime || "—") : (localRecord?.timestamp || "—")}</span>
-        </td>
-        <td className="px-2 py-3">
-          {editing || !saved
-            ? <input type="date" value={recDate} max={TODAY}
-                onChange={e => {
-                  const v = e.target.value;
-                  setRecDate(v);
-                  if (receiverId && amount) {
-                    const rec = { ...buildRec(receiverId, receiverName), date: v };
-                    onSave(rec);
-                    setLocalRecord(rec);
-                    setSaved(true);
-                  }
-                }}
-                className="w-28 bg-slate-700 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none" />
-            : <span className="text-slate-300 text-xs whitespace-nowrap">{localRecord?.date || "—"}</span>
-          }
         </td>
         <td className="px-2 py-3">
           {editing || !saved
@@ -382,9 +362,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const dayRecords = useMemo(() => {
     if (!dSelDay || !dSelMonth || !dSelYear) return [];
     const dayStr = `${dSelYear}-${String(dSelMonth).padStart(2, "0")}-${String(dSelDay).padStart(2, "0")}`;
-    // بنعتمد على "تاريخ الاستلام" الفعلي (r.date) مش وقت التسجيل، عشان السجلات القديمة
-    // اللي مفيهاش تاريخ استلام محفوظ بيرجعلها لوقت التسجيل زي ما كان دايمًا
-    return safeRecords.filter(r => r && (r.date || r.timestamp?.slice(0, 10)) === dayStr);
+    return safeRecords.filter(r => r && r.timestamp?.startsWith(dayStr));
   }, [safeRecords, dSelDay, dSelMonth, dSelYear]);
 
   const dayTotal = dayRecords.reduce((a, r) => a + (r.amount || 0), 0);
@@ -860,7 +838,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
                     <thead>
                       <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
-                        {["اسم الطالب","المستلم","وقت التسجيل","📅 تاريخ الاستلام","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
+                        {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
                           <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
                         ))}
                       </tr>

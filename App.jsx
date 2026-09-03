@@ -291,7 +291,7 @@ export default function App() {
   const absentContacted    = absentToday.filter(a => a.contacted);
 
   // 2) مصروفات اليوم — عدد الطلاب اللي دفعوا واجمالي كل صف واجمالي عام
-  const dateOfFin = r => r.date || (r.timestamp || "").slice(0, 10);
+  const dateOfFin = r => (r.timestamp || "").slice(0, 10);
   const finToday = (finRecords || []).filter(r => dateOfFin(r) === TODAY);
   const finByGrade = {};
   finToday.forEach(r => {

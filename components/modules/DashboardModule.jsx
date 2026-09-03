@@ -29,7 +29,7 @@ export function buildDashboardData(students, finRecords, gradeFees) {
   const weekAgo  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-  const dateOf  = r => r.date || (r.timestamp || "").slice(0, 10);   // تاريخ الاستلام الفعلي، وإلا وقت التسجيل (سجلات قديمة)
+  const dateOf  = r => (r.timestamp || "").slice(0, 10);   // "YYYY-MM-DD HH:MM" → "YYYY-MM-DD"
   const revToday = finRecords.filter(r => dateOf(r) === todayStr).reduce((a, r) => a + (r.amount || 0), 0);
   const revWeek  = finRecords.filter(r => dateOf(r) >= weekAgo ).reduce((a, r) => a + (r.amount || 0), 0);
   const revMonth = finRecords.filter(r => dateOf(r) >= monthAgo).reduce((a, r) => a + (r.amount || 0), 0);
