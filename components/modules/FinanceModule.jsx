@@ -416,16 +416,22 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
   const getRecord = studentId => monthRecords.find(r => r.studentId === studentId) || null;
 
-  // ══════════════ "متأخرين" — قائمة الطلاب المتأخرين في السداد بنفس فلاتر الصف/المجموعة ══════════════
+  // ══════════════ "المتأخر في الشهر الحالي" — الطلاب اللي ما دفعوش
+  // الشهر الحالي بالتحديد فقط (مش أي تاريخ متأخر تراكمي)، بنفس فلاتر
+  // الصف/المجموعة، مع المبلغ الصحيح المطلوب فعليًا عن الشهر الحالي ──
+  const isCurrentMonthUnpaid = (s) =>
+    !isMonthBlocked(s, curMonth, curYear) &&
+    !safeRecords.some(r => r.studentId === s.id && r.month === curMonth && r.year === curYear && (r.amount || 0) > 0);
+
   const adminLateStudents = useMemo(() => {
-    if (!selGrade) return [];
+    if (!selGrade || financeMode !== "late") return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
     return list
-      .map(s => ({ student: s, ...getOverdueInfo(s, safeRecords) }))
-      .filter(x => x.count > 0)
-      .sort((a, b) => b.count - a.count);
-  }, [safeStudents, safeRecords, selGrade, selGroup]);
+      .filter(s => isCurrentMonthUnpaid(s))
+      .map(s => ({ student: s, amount: getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees) }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [safeStudents, safeRecords, selGrade, selGroup, financeMode, curMonth, curYear, safeSettings.gradeFees]);
 
   const handleSave = rec => {
     const existing = (finRecords || []).find(r => r.id === rec.id);
@@ -517,28 +523,51 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     });
   }, [financeMode, safeStudents, safeRecords, regMonth, regYear]);
 
-  // ── "متأخر": نفس فكرة pastLateGrades بالظبط لكن بمنطق getOverdueInfo
-  // (أي شهر سابق أو الشهر الحالي لسه مش مدفوع) — الصفوف اللي مفيهاش
-  // ولا طالب متأخر أصلاً متتعرضش كمستطيل ──
+  // ── إجمالي المبلغ المطلوب عن الشهر/السنة المختارين (الماضي) لكل صف
+  // + إجمالي عام — بنفس شكل lateGradeTotals بالظبط ──
+  const pastLateGradeTotals = useMemo(() => {
+    if (financeMode !== "past") return {};
+    const map = {};
+    GRADES_LIST.forEach(g => {
+      const gradeStudents = safeStudents.filter(s => s && s.grade === g);
+      map[g] = gradeStudents
+        .filter(s =>
+          !isMonthBlocked(s, regMonth, regYear) &&
+          !safeRecords.some(r => r.studentId === s.id && r.month === regMonth && r.year === regYear)
+        )
+        .reduce((a, s) => a + getExpectedFeeForMonth(s, regMonth, regYear, safeSettings.gradeFees), 0);
+    });
+    return map;
+  }, [financeMode, safeStudents, safeRecords, regMonth, regYear, safeSettings.gradeFees]);
+
+  const pastLateGrandTotal = useMemo(
+    () => Object.values(pastLateGradeTotals).reduce((a, v) => a + v, 0),
+    [pastLateGradeTotals]
+  );
+
+  // ── "المتأخر في الشهر الحالي": الصفوف اللي فيها طلاب ما دفعوش الشهر
+  // الحالي بالتحديد بس (نفس معيار isCurrentMonthUnpaid فوق) ──
   const lateGradesWithDebt = useMemo(() => {
     if (financeMode !== "late") return GRADES_LIST;
     return GRADES_LIST.filter(g => {
       const gradeStudents = safeStudents.filter(s => s && s.grade === g);
-      return gradeStudents.some(s => getOverdueInfo(s, safeRecords).count > 0);
+      return gradeStudents.some(s => isCurrentMonthUnpaid(s));
     });
-  }, [financeMode, safeStudents, safeRecords]);
+  }, [financeMode, safeStudents, safeRecords, curMonth, curYear]);
 
-  // ── إجمالي المبلغ المتأخر لكل صف + إجمالي عام لكل الصفوف مع بعض
-  // (بيظهر جنب كل صف ومستطيل الإجمالي فوق) ──
+  // ── إجمالي المبلغ المطلوب فعليًا عن الشهر الحالي بس (مش أي دَين
+  // متراكم من شهور سابقة) لكل صف + إجمالي عام ──
   const lateGradeTotals = useMemo(() => {
     if (financeMode !== "late") return {};
     const map = {};
     GRADES_LIST.forEach(g => {
       const gradeStudents = safeStudents.filter(s => s && s.grade === g);
-      map[g] = gradeStudents.reduce((a, s) => a + getOverdueAmount(s, safeRecords, safeSettings.gradeFees), 0);
+      map[g] = gradeStudents
+        .filter(s => isCurrentMonthUnpaid(s))
+        .reduce((a, s) => a + getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees), 0);
     });
     return map;
-  }, [financeMode, safeStudents, safeRecords, safeSettings.gradeFees]);
+  }, [financeMode, safeStudents, safeRecords, curMonth, curYear, safeSettings.gradeFees]);
 
   const lateGrandTotal = useMemo(
     () => Object.values(lateGradeTotals).reduce((a, v) => a + v, 0),
@@ -547,21 +576,28 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
   // ══════════════════════════ ADMIN VIEW ══════════════════════════
 
-  // ── لسه محددتش قسم: اعرض الأقسام مرتّبة (الشهر الحالي فوق، المتأخر
-  // بشقّيه [الشهر الحالي / الشهور الماضية] جنب بعض تحته، وسجل المعاملات
-  // في الآخر تحت الكل) — بدل شبكة 2×2 عشوائية الترتيب ──
+  // ── لسه محددتش قسم: اعرض الأقسام مرتّبة (الشهر الحالي/الماضي فوق جنب
+  // بعض، المتأخر بشقّيه [الشهر الحالي / الشهور الماضية] جنب بعض تحته،
+  // وسجل المعاملات في الآخر تحت الكل) ──
   if (!financeMode) {
     const cardCls = "flex flex-col items-center justify-center gap-2 py-8 rounded-3xl font-bold bg-slate-800/60 border border-slate-700/40 hover:bg-emerald-600/20 hover:border-emerald-500/40 text-slate-200 hover:text-white transition-all";
     return (
       <div className="min-h-[70vh] flex flex-col justify-center gap-3">
         <div className="text-center text-slate-400 text-sm font-bold mb-2">💰 المصاريف — اختر القسم</div>
 
-        {/* فوق: الشهر الحالي */}
-        <button onClick={() => setFinanceMode?.("current")} className={cardCls + " py-10"}>
-          <span className="text-4xl">💰</span>
-          <span className="text-base">تسجيل الشهر الحالي</span>
-          <span className="text-xs text-slate-500 font-normal">تسجيل مصاريف الشهر الحالي</span>
-        </button>
+        {/* فوق: الشهر الحالي / الشهر الماضي جنب بعض */}
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => setFinanceMode?.("current")} className={cardCls}>
+            <span className="text-4xl">💰</span>
+            <span className="text-base">الشهر الحالي</span>
+            <span className="text-xs text-slate-500 font-normal">تسجيل مصاريف الشهر الحالي</span>
+          </button>
+          <button onClick={() => setFinanceMode?.("past")} className={cardCls}>
+            <span className="text-4xl">🗓️</span>
+            <span className="text-base">الشهر الماضي</span>
+            <span className="text-xs text-slate-500 font-normal">تسجيل دفعة لشهر سابق</span>
+          </button>
+        </div>
 
         {/* تحت: المتأخر (شهر حالي / شهور ماضية) جنب بعض */}
         <div className="grid grid-cols-2 gap-3">
@@ -671,15 +707,22 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 <div className="text-sm">كل الصفوف مسدّدة شهر {MONTHS_AR[regMonth - 1]} {regYear}</div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {pastLateGrades.map(g => (
-                  <button key={g}
-                    onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
-                    className="py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
-                    {g}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="bg-red-500/10 border border-red-500/25 rounded-2xl px-4 py-3 text-center">
+                  <div className="text-slate-400 text-xs mb-1">إجمالي المبالغ المتبقية على كل الصفوف — شهر {MONTHS_AR[regMonth - 1]}</div>
+                  <div className="text-red-400 font-black text-2xl">{fmtM(pastLateGrandTotal)} ج</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {pastLateGrades.map(g => (
+                    <button key={g}
+                      onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
+                      className="flex flex-col items-center justify-center gap-1 py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
+                      <span>{g}</span>
+                      <span className="text-xs font-normal text-amber-300">{fmtM(pastLateGradeTotals[g] || 0)} ج</span>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
             </>
             )}
@@ -745,19 +788,19 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
       {tableOpen && selGrade && financeMode === "late" && (
         adminLateStudents.length === 0
-          ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">🎉</div><div className="text-sm">مفيش طلاب متأخرين بالفلتر ده</div></div>
+          ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">🎉</div><div className="text-sm">مفيش طلاب متأخرين عن الشهر الحالي بالفلتر ده</div></div>
           : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
+                <table className="w-full border-collapse" style={{ minWidth: "420px" }}>
                   <thead>
                     <tr className="bg-slate-900/80 border-b border-slate-700/60">
-                      {["اسم الطالب","الصف / المجموعة","عدد الشهور المتأخرة","الشهر الحالي"].map(h => (
+                      {["اسم الطالب","الصف / المجموعة","المبلغ المطلوب (ج)"].map(h => (
                         <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {adminLateStudents.map(({ student, count, currentMonthOverdue, overdueMonths }) => (
+                    {adminLateStudents.map(({ student, amount }) => (
                       <tr key={student.id} className="border-b border-slate-700/20">
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-2 min-w-0">
@@ -766,14 +809,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                           </div>
                         </td>
                         <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{student.grade} — {student.group}</td>
-                        <td className="px-3 py-2.5" title={overdueMonths.join("، ")}>
-                          <span className="text-red-400 font-black text-sm">{count}</span>
-                          <span className="text-slate-500 text-xs"> شهر</span>
-                        </td>
                         <td className="px-3 py-2.5">
-                          {currentMonthOverdue
-                            ? <span className="px-2 py-1 rounded-lg bg-red-500/15 text-red-400 text-xs font-bold">متأخر</span>
-                            : <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 text-xs font-bold">مدفوع</span>}
+                          <span className="text-red-400 font-black text-sm">{fmtM(amount)}</span>
                         </td>
                       </tr>
                     ))}
