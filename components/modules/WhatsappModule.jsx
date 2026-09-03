@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { GRADES_LIST } from "../../constants";
+import { GRADES_LIST, TODAY } from "../../constants";
 import { fmt, waLink, isBlocked } from "../../utils";
 import { Av, Sel, Btn, Toast } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
 // MODULE 6: WHATSAPP
 // ══════════════════════════════════════════════════════════════
-export default function WhatsappModule({ students: studentsProp, settings }) {
+export default function WhatsappModule({ students: studentsProp, settings, attRecords }) {
   const students = studentsProp || [];
-  const [msgType,   setMsgType]   = useState("absent");
+  const [msgType,   setMsgType]   = useState("absentToday");
   const [selGrade,  setSelGrade]  = useState(""); // فاضي لحد ما تختار — مفيش عرض قبل اختيار الصف
   const [sent,      setSent]      = useState([]);
   const [toast,     setToast]     = useState(null);
@@ -17,17 +17,29 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
 
   const cn = settings?.centerName || "مركز الشرقاوي";
 
-  // فلتر الطلاب — لازم صف مختار الأول، وإلا القائمة فاضية
-  const filtered = !selGrade ? [] : students.filter(s =>
-    s.grade === selGrade && !isBlocked(s)
+  // أسماء الطلاب اللي اتسجّلوا "غايب" في سجل الحضور بتاع النهاردة بالظبط
+  // (مش إجمالي مرات الغياب زي رسالة "الغياب" العادية) — مبني على attRecords.
+  const todayAbsentIds = new Set(
+    (attRecords || []).filter(r => r.date === TODAY && r.status === "a").map(r => r.studentId)
   );
 
+  // فلتر الطلاب — لازم صف مختار الأول، وإلا القائمة فاضية
+  const filtered = !selGrade ? [] : students.filter(s => {
+    if (s.grade !== selGrade || isBlocked(s)) return false;
+    if (msgType === "absentToday") return todayAbsentIds.has(s.id);
+    return true;
+  });
+
   const tpls = {
-    absent:  s => `السلام عليكم ولي أمر ${s.name}،\nتغيب ${s.name} ${s.absent} مرة.\nيرجى المتابعة.\nشكراً - ${cn}`,
-    fees:    s => `السلام عليكم ولي أمر ${s.name}،\nيوجد مبلغ مستحق ${fmt(s.totalFees - s.paid)}.\nيرجى السداد.\nشكراً - ${cn}`,
-    score:   s => `السلام عليكم ولي أمر ${s.name}،\nمستوى ${s.name} (${s.score}%) يحتاج متابعة.\nنرجو التواصل.\nشكراً - ${cn}`,
-    general: s => `السلام عليكم ولي أمر ${s.name}،\nتحية طيبة من ${cn} 😊`,
+    absent:      s => `السلام عليكم ولي أمر ${s.name}،\nتغيب ${s.name} ${s.absent} مرة.\nيرجى المتابعة.\nشكراً - ${cn}`,
+    absentToday: s => `السلام عليكم ولي أمر ${s.name}،\n${s.name} غايب النهاردة.\nيرجى المتابعة.\nشكراً - ${cn}`,
+    fees:        s => `السلام عليكم ولي أمر ${s.name}،\nيوجد مبلغ مستحق ${fmt(s.totalFees - s.paid)}.\nيرجى السداد.\nشكراً - ${cn}`,
+    score:       s => `السلام عليكم ولي أمر ${s.name}،\nمستوى ${s.name} (${s.score}%) يحتاج متابعة.\nنرجو التواصل.\nشكراً - ${cn}`,
+    general:     s => `السلام عليكم ولي أمر ${s.name}،\nتحية طيبة من ${cn} 😊`,
   };
+
+  // رقم الاتصال المفضّل: هاتف ولي الأمر أولاً (هو المقصود بالرسالة والمكالمة)، وإلا هاتف الطالب
+  const callPhone = s => s.parentPhone || s.phone || "";
 
   const openWa = s => {
     const url = waLink(s.parentPhone, `?text=${encodeURIComponent(tpls[msgType](s))}`);
@@ -85,10 +97,16 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
         <div className="bg-slate-800/60 border border-green-500/30 rounded-2xl p-4 space-y-3">
           <div className="flex items-center gap-3">
             <Av name={current.name} />
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="text-white font-black">{current.name}</div>
               <div className="text-slate-400 text-xs">{current.parentPhone}</div>
             </div>
+            {callPhone(current) && (
+              <a href={`tel:${callPhone(current)}`}
+                className="shrink-0 w-9 h-9 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-300 flex items-center justify-center text-base">
+                📞
+              </a>
+            )}
           </div>
           <div className="bg-slate-900/40 rounded-xl p-3 text-slate-300 text-xs leading-relaxed whitespace-pre-line">
             {tpls[msgType](current)}
@@ -136,7 +154,7 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
 
       {/* نوع الرسالة */}
       <div className="grid grid-cols-2 gap-2">
-        {[["absent","📅 الغياب"],["fees","💰 المصاريف"],["score","📊 المستوى"],["general","✉️ عام"]].map(([k, v]) => (
+        {[["absentToday","🔴 غياب اليوم"],["absent","📅 إجمالي الغياب"],["fees","💰 المصاريف"],["score","📊 المستوى"],["general","✉️ عام"]].map(([k, v]) => (
           <button key={k} onClick={() => setMsgType(k)}
             className={`py-2.5 rounded-xl text-sm font-medium ${msgType === k ? "bg-green-600 text-white" : "bg-slate-800 text-slate-400"}`}>
             {v}
@@ -169,8 +187,8 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
 
           {filtered.length === 0 && (
             <div className="text-center py-10 text-slate-600">
-              <div className="text-4xl mb-2">💬</div>
-              <div className="text-sm">لا يوجد طلاب في هذا الصف</div>
+              <div className="text-4xl mb-2">{msgType === "absentToday" ? "🎉" : "💬"}</div>
+              <div className="text-sm">{msgType === "absentToday" ? "مفيش حد غايب النهاردة في الصف ده" : "لا يوجد طلاب في هذا الصف"}</div>
             </div>
           )}
 
@@ -178,13 +196,20 @@ export default function WhatsappModule({ students: studentsProp, settings }) {
           <div className="space-y-2">
             {filtered.map(s => {
               const isSent = sent.includes(s.id);
+              const phone = callPhone(s);
               return (
                 <div key={s.id} className="bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 flex items-center gap-3">
                   <Av name={s.name} size="sm" />
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-medium whitespace-normal break-words">{s.name}</div>
-                    <div className="text-slate-500 text-xs">{s.parentPhone}</div>
+                    <div className="text-slate-500 text-xs">{s.parentPhone || "بدون رقم"}</div>
                   </div>
+                  {phone && (
+                    <a href={`tel:${phone}`}
+                      className="shrink-0 w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-300 flex items-center justify-center text-sm">
+                      📞
+                    </a>
+                  )}
                   <button
                     onClick={() => send(s)}
                     className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold ${
