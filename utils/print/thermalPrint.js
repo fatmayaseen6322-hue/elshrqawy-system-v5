@@ -110,7 +110,7 @@ export function thermalScoreSlip(student, examTitle, centerName) {
     <div class="ok">${status}</div>
     ${student.weak?.length ? `<div class="note">نقاط ضعف: ${student.weak.join("، ")}</div>` : ""}
     <hr class="sep"/>
-    <div class="note">${new Date().toLocaleDateString("ar-EG")}</div>
+    <div class="note">${new Date().toLocaleDateString("en-GB")}</div>
   `);
   return openPrintWindow(html);
 }

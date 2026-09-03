@@ -34,8 +34,11 @@ export async function hashPwdStored(plain) {
   return "sha256:" + h;
 }
 export const pct  = (a, b) => b === 0 ? 0 : Math.round(a / b * 100);
-export const fmt  = n => (n || 0).toLocaleString("ar-EG") + " ج";
-export const fmtM = n => (n || 0).toLocaleString("ar-EG");
+// ملحوظة: "en-US" مقصودة (مش "ar-EG") عشان الأرقام تفضل إنجليزية
+// (1,2,3) في كل البرنامج، حتى لو الجهاز أو المتصفح شغال بالعربي —
+// "ar-EG" كانت بتحوّل الأرقام لهندية (١٢٣) تلقائيًا.
+export const fmt  = n => (n || 0).toLocaleString("en-US") + " ج";
+export const fmtM = n => (n || 0).toLocaleString("en-US");
 export const scC  = v => v >= 85 ? "#10b981" : v >= 65 ? "#3b82f6" : v >= 50 ? "#f59e0b" : "#ef4444";
 export const scL  = v => v >= 85 ? "ممتاز"  : v >= 65 ? "جيد"    : v >= 50 ? "مقبول"  : "ضعيف";
 
