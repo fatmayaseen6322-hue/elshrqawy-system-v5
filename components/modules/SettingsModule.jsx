@@ -178,27 +178,22 @@ export default function SettingsModule({ settings, setSettings, students, setStu
   };
 
   // ── إدخال رسم الصف الشهري (كل صف) — منقولة من صفحة المصاريف ──
-  const [feeGrade,    setFeeGrade]    = useState("");
-  const [feeAmount,   setFeeAmount]   = useState("");
-  const [feeUnlocked, setFeeUnlocked] = useState(false);
-  const [showFeePw,   setShowFeePw]   = useState(false);
+  // ملحوظة: كان فيه قفل باسورد لتعديل أي رسم اتحفظ قبل كده، تم إلغاؤه
+  // بناءً على طلبها — دلوقتي بتدخل/تعدّل رسم أي صف عادي من غير باسورد.
+  const [feeGrade,  setFeeGrade]  = useState("");
+  const [feeAmount, setFeeAmount] = useState("");
   const feeAmountRef = useRef(null);
-  const feeLocked = (settings.gradeFees?.[feeGrade] || 0) > 0 && !feeUnlocked;
 
   const openFeeGrade = g => {
     setFeeGrade(g);
-    setFeeUnlocked(false);
     setFeeAmount(settings.gradeFees?.[g] ? String(settings.gradeFees[g]) : "");
     setTimeout(() => feeAmountRef.current?.focus(), 50);
   };
-  const requestFeeEdit = () => setShowFeePw(true);
-  const unlockFeeEdit  = () => { setShowFeePw(false); setFeeUnlocked(true); };
   const saveFee = () => {
     if (!feeGrade || feeAmount === "") return;
     setSettings(prev => ({ ...(prev || {}), gradeFees: { ...(prev?.gradeFees || {}), [feeGrade]: parseInt(feeAmount) || 0 } }));
     addActivity?.("رسوم صف", `${feeGrade} — ${feeAmount} ج`);
     setToast({ msg: `✓ تم حفظ رسم ${feeGrade}`, type: "success" });
-    setFeeUnlocked(false);
   };
 
   const save = (field, val, msg = "✓ تم الحفظ") => { setSettings(s => ({ ...s, [field]: val })); setToast({ msg, type: "success" }); };
@@ -403,24 +398,20 @@ export default function SettingsModule({ settings, setSettings, students, setStu
                     {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
                   </select>
                 </Field>
-                <Field label={feeLocked ? "الرسم (معتمد 🔒)" : "قيمة الرسم"}>
+                <Field label="قيمة الرسم">
                   <div className="flex gap-2">
                     <input
-                      ref={feeAmountRef} type="number" value={feeAmount} disabled={!feeGrade || feeLocked}
+                      ref={feeAmountRef} type="number" value={feeAmount} disabled={!feeGrade}
                       onChange={e => setFeeAmount(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter" && !feeLocked) saveFee(); }}
+                      onKeyDown={e => { if (e.key === "Enter") saveFee(); }}
                       placeholder="مثال: 500"
                       className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none disabled:opacity-50" />
-                    {feeGrade && (feeLocked
-                      ? <button onClick={requestFeeEdit} className="px-3 rounded-xl bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
-                      : <button onClick={saveFee} disabled={feeAmount === ""} className="px-3 rounded-xl bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm disabled:opacity-30 hover:bg-emerald-700/50">💾</button>)}
+                    {feeGrade && (
+                      <button onClick={saveFee} disabled={feeAmount === ""} className="px-3 rounded-xl bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm disabled:opacity-30 hover:bg-emerald-700/50">💾</button>
+                    )}
                   </div>
                 </Field>
-                {feeLocked && <div className="text-slate-500 text-xs text-center">هذا الرسم معتمد من قبل — أي تعديل يتطلب باسورد المستر.</div>}
               </div>
-              {showFeePw && (
-                <AdminPasswordGate title="🔑 تعديل رسم صف معتمد" adminHash={settings.password} onUnlock={unlockFeeEdit} onCancel={() => setShowFeePw(false)} />
-              )}
             </>
           )}
           {view === "whatsapp" && <><Back /><div className="space-y-4"><div className="space-y-2">{waList.map(w => <div key={w.id} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center gap-3"><span className="text-xl">💬</span><div className="flex-1 min-w-0"><div className="text-white text-sm font-medium">{w.number}</div><div className="text-slate-500 text-xs">{w.label}</div></div><div className="flex gap-2"><button onClick={() => { const url = waLink(w.number); if (url) window.open(url, "_blank"); }} className="text-green-400 text-xs px-2 py-1 rounded-lg bg-green-700/20">اختبار</button><button onClick={() => delWa(w.id)} className="text-red-400 text-xs px-2 py-1 rounded-lg bg-red-700/20">حذف</button></div></div>)}</div><div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3"><div className="text-xs text-blue-400 font-bold">إضافة رقم</div><Field label="الرقم"><Inp value={newNum} onChange={e => setNewNum(e.target.value)} placeholder="01xxxxxxxxx" /></Field><div className="grid grid-cols-2 gap-2"><Field label="النوع"><Sel value={newType} onChange={e => setNewType(e.target.value)}><option value="admin">إدارة</option><option value="teacher">مدرس</option><option value="support">دعم</option></Sel></Field><Field label="اسم"><Inp value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="أ. محمود" /></Field></div><Btn variant="success" className="w-full" onClick={addWa}>+ إضافة</Btn></div></div></>}

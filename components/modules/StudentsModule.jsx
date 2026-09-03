@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
 import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked, sortStudentsList } from "../../utils";
-import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar } from "../ui";
+import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar, GradeSelect } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
 
 // المستوى الحقيقي للطالب: مبني على حاجتين مع بعض —
@@ -109,9 +109,7 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
 
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
           <div className="grid grid-cols-4 gap-2 items-stretch">
-            <Sel value={grade} onChange={e => { setGrade(e.target.value); setGroup(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
-              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-            </Sel>
+            <GradeSelect value={grade} onChange={v => { setGrade(v); setGroup(GROUPS_MAP[v]?.[0] || "A"); }} />
             <Sel value={group} onChange={e => setGroup(e.target.value)}>
               {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
             </Sel>
@@ -555,10 +553,8 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
           </div>
           <div className="flex-1 min-w-0">
             <Field label="الصف *" error={err.grade}>
-              <Sel value={sg} err={!!err.grade} onChange={e => { setSg(e.target.value); setSgp(GROUPS_MAP[e.target.value]?.[0] || "A"); }}>
-                <option value="">اختر الصف</option>
-                {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-              </Sel>
+              <GradeSelect value={sg} err={!!err.grade} placeholder="اختر الصف"
+                onChange={v => { setSg(v); setSgp(GROUPS_MAP[v]?.[0] || "A"); }} />
             </Field>
           </div>
           <div className="flex-1 min-w-0">

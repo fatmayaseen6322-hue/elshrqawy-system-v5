@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { pct, scC } from "../../utils/index.js";
-import { MONTHS_AR, GROUPS_MAP } from "../../constants/index.js";
+import { MONTHS_AR, GROUPS_MAP, GRADES_LIST, addCustomGrade } from "../../constants/index.js";
 
 // ══════════════════════════════════════════════════════════════
 // PRIMITIVE UI COMPONENTS — v8
@@ -121,6 +121,63 @@ export function Sel({ children, className = "", err, style: extraStyle = {}, ...
     >
       {children}
     </select>
+  );
+}
+
+// قيمة خاصة بتظهر كخيار أخير في قائمة الصفوف — اختيارها بيفتح حقل
+// كتابة اسم الصف الجديد بدل ما يغيّر القيمة فعليًا.
+const ADD_NEW_GRADE = "__add_new_grade__";
+
+/**
+ * قائمة منسدلة لاختيار الصف، مع خيار "➕ إضافة صف جديد" في آخرها.
+ * لما المستخدم يختاره، بيظهر بدل القائمة حقل كتابة صغير؛ بمجرد
+ * التأكيد بيتضاف الصف للنظام كله (عبر addCustomGrade) ويتم اختياره
+ * تلقائيًا.
+ */
+export function GradeSelect({ value, onChange, placeholder, className = "", err }) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const handleSelect = (e) => {
+    const v = e.target.value;
+    if (v === ADD_NEW_GRADE) { setNewName(""); setAdding(true); return; }
+    onChange(v);
+  };
+
+  const confirmAdd = () => {
+    const name = newName.trim();
+    if (!name) return;
+    addCustomGrade(name); // لو الاسم موجود بالفعل، الدالة بتتجاهل التكرار وتسيب الحالي
+    onChange(name);
+    setAdding(false);
+    setNewName("");
+  };
+
+  if (adding) {
+    return (
+      <div className="flex gap-1.5">
+        <Inp
+          autoFocus
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") confirmAdd(); if (e.key === "Escape") setAdding(false); }}
+          placeholder="اسم الصف الجديد"
+          className={className}
+        />
+        <button type="button" onClick={confirmAdd}
+          className="px-3 rounded-lg bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm shrink-0">✓</button>
+        <button type="button" onClick={() => setAdding(false)}
+          className="px-3 rounded-lg bg-slate-700/40 text-slate-300 text-sm shrink-0">✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <Sel value={value} err={err} onChange={handleSelect} className={className}>
+      {placeholder && <option value="">{placeholder}</option>}
+      {GRADES_LIST.map(g => <option key={g} value={g}>{g}</option>)}
+      <option value={ADD_NEW_GRADE}>➕ إضافة صف جديد</option>
+    </Sel>
   );
 }
 
