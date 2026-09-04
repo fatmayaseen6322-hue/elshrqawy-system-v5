@@ -44,10 +44,34 @@ function buildDuplicatesData(allStudents) {
 // DASHBOARD DATA BUILDER
 // Uses finRecords (single source of truth) instead of payments
 // ══════════════════════════════════════════════════════════════
-export function buildDashboardData(students, finRecords, gradeFees) {
+// ══════════════════════════════════════════════════════════════
+// سبب "الغلطة الكبيرة": قسم الغياب في برج المراقبة كان بيعتمد على
+// عدّادات قديمة تراكمية جوه بيانات الطالب نفسه (s.present/absent/late/total)
+// بدل ما يعتمد على attRecords (مصدر الحقيقة الحقيقي اللي بتشوفيه في
+// صفحة الحضور). العدّادات دي ممكن "تخرج عن المزامنة" مع attRecords —
+// فتظهر طالب "غايب" في البرج وهو أصلاً مسجّل حاضر أو مالوش أي سجل غياب
+// حقيقي في صفحة الحضور. الحل: نحسب إحصائيات الغياب مباشرة من attRecords
+// نفسها بدل العدّادات، عشان القسمين (البرج وصفحة الحضور) يفضلوا متطابقين دايمًا.
+// ══════════════════════════════════════════════════════════════
+function buildAttStatsByStudent(attRecords) {
+  const map = {};
+  (attRecords || []).forEach(r => {
+    if (!r?.studentId) return;
+    const rec = (map[r.studentId] ||= { present: 0, absent: 0, late: 0, total: 0 });
+    if (r.status === "p") rec.present++;
+    else if (r.status === "a") rec.absent++;
+    else if (r.status === "l") rec.late++;
+    if (r.status === "p" || r.status === "a" || r.status === "l") rec.total++;
+  });
+  return map;
+}
+
+export function buildDashboardData(students, finRecords, gradeFees, attRecords) {
   students   = students   || [];
   finRecords = finRecords || [];
   gradeFees  = gradeFees  || {};
+  const attStats = buildAttStatsByStudent(attRecords);
+  const attOf = s => attStats[s.id] || { present: 0, absent: 0, late: 0, total: 0 };
 
   const total  = students.length;
   const active = students.filter(s => s.status === "active").length;
@@ -123,9 +147,10 @@ export function buildDashboardData(students, finRecords, gradeFees) {
   const gradeDebtStudents = GRADES_LIST.map(g => ({ grade: g, list: prevDebtorsList.filter(x => x.grade === g) }));
 
   const absenceStudents = students
-    .filter(s => s.absent > 3 || pct(s.absent, s.total || 1) > 15)
-    .sort((a, b) => b.absent - a.absent)
-    .map(s => ({ name: s.name, absentDays: s.absent, lateCount: s.late, absentPct: `${pct(s.absent, s.total || 1)}%`, grade: s.grade }));
+    .map(s => ({ s, a: attOf(s) }))
+    .filter(({ a }) => a.absent > 3 || pct(a.absent, a.total || 1) > 15)
+    .sort((x, y) => y.a.absent - x.a.absent)
+    .map(({ s, a }) => ({ name: s.name, absentDays: a.absent, lateCount: a.late, absentPct: `${pct(a.absent, a.total || 1)}%`, grade: s.grade }));
   const absenceSection = {
     title: "الغياب", icon: "📋",
     cols: ["اسم الطالب","أيام الغياب","تأخير","نسبة الغياب"],
@@ -152,7 +177,7 @@ export function buildDashboardData(students, finRecords, gradeFees) {
     grades: groupByGrade(noPhoneStudents),
   };
 
-  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, absenceSection, examsSection, noPhoneSection };
+  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, absenceSection, examsSection, noPhoneSection, absenceByStudentId: attStats };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -658,8 +683,8 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionJump]);
 
-  const alerts = students.filter(s => s.score < 60 || s.absent > 8 || (s.totalFees - s.paid) > 1200);
-  const dd = useMemo(() => buildDashboardData(students, finRecords, settings?.gradeFees), [students, finRecords, settings?.gradeFees]);
+  const dd = useMemo(() => buildDashboardData(students, finRecords, settings?.gradeFees, attRecords), [students, finRecords, settings?.gradeFees, attRecords]);
+  const alerts = students.filter(s => s.score < 60 || (dd.absenceByStudentId?.[s.id]?.absent || 0) > 8 || (s.totalFees - s.paid) > 1200);
   const dupData = useMemo(() => buildDuplicatesData(studentsProp), [studentsProp]);
   const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
 
@@ -1000,8 +1025,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
         </div>
       )}
       {isAssist && (
-        <div className="grid gap-3 grid-cols-2">
-          <KPICard icon="💰" label="المحصّل (اليوم)" value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
+        <div className="grid gap-3 grid-cols-1">
           <button onClick={() => setShowOldDebtors(true)}
             className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
             <span className="text-2xl">🟠</span>
