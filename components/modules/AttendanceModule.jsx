@@ -113,6 +113,15 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     return Object.fromEntries(recs.map(r => [r.studentId, r]));
   }, [attRecords, logGrade, logGroup, logDate]);
 
+  // نفس إصلاح "الطلاب المنقولين" بس لصفحة الدفتر
+  const logStudentsForDisplay = useMemo(() => {
+    const currentIds = new Set(logStudents.map(s => s.id));
+    const extra = Object.keys(logRecordsMap)
+      .filter(id => !currentIds.has(id))
+      .map(id => (students || []).find(s => s.id === id) || { id, name: "طالب سابق (نُقل أو حُذف)" });
+    return [...logStudents, ...extra];
+  }, [logStudents, logRecordsMap, students]);
+
   // كل الأيام اللي فيها سجل غياب فعلي لنفس الصف/المجموعة، مرتبة تصاعديًا —
   // بيتستخدموا في أسهم التنقل (يمين = قبل كده، شمال = بعد كده)
   const logDatesList = useMemo(() => {
@@ -233,11 +242,24 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     [safeAttRecords, grade, group, date]
   );
   const existingMap = useMemo(
-    () => Object.fromEntries(recordsForSession.map(r => [r.studentId, { status: r.status, reason: r.reason || "" }])),
+    () => Object.fromEntries(recordsForSession.map(r => [r.studentId, { status: r.status, reason: r.reason || "", time: r.time || null }])),
     [recordsForSession]
   );
   const hasExistingSession = recordsForSession.length > 0;
   const isOldDate = date !== TODAY;
+
+  // إصلاح: طالب اتسجّل له غياب فعلي في هذا اليوم بالذات، بس دلوقتي
+  // اتنقل لصف/مجموعة تانية (أو اتحذف) — سجله القديم لازم يفضل ظاهر هنا
+  // عشان "لا يختفي" من يوم كان مسجَّل فيه، حتى لو مش من ضمن طلاب
+  // الصف/المجموعة الحاليين.
+  const grpStudentsForDisplay = useMemo(() => {
+    if (!isOldDate) return grpStudents;
+    const currentIds = new Set(grpStudents.map(s => s.id));
+    const extra = recordsForSession
+      .filter(r => !currentIds.has(r.studentId))
+      .map(r => (students || []).find(s => s.id === r.studentId) || { id: r.studentId, name: "طالب سابق (نُقل أو حُذف)" });
+    return [...grpStudents, ...extra];
+  }, [grpStudents, recordsForSession, students, isOldDate]);
 
   // فتح تلقائي: كل ما يتغيّر الصف/المجموعة/اليوم، السيشن بتتظبط من السجلات
   // الموجودة (لو فيه) من غير الحاجة لأي ضغط زرار.
@@ -263,10 +285,22 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   };
 
   // Toggle الحالة: نفس الحالة تاني → إلغاء التحديد (يسمح بالتصحيح)
+  // لو الحالة الجديدة "متأخر" (l)، بنلقط وقت الحضور تلقائيًا (ساعة:دقيقة)
+  // لحظة الضغط، من غير ما يحتاج يكتبه هو.
   const mark = (id, st) => setSession(prev => {
     const cur = prev[id] || {};
-    if (cur.status === st) return { ...prev, [id]: { ...cur, status: null } };
-    return { ...prev, [id]: { ...cur, status: st } };
+    if (cur.status === st) {
+      const next = { ...cur, status: null };
+      if (st === "l") next.time = null;
+      return { ...prev, [id]: next };
+    }
+    const next = { ...cur, status: st };
+    if (st === "l") {
+      next.time = new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+    } else {
+      next.time = null;
+    }
+    return { ...prev, [id]: next };
   });
 
   const setReasonFor = (id, text) => setSession(prev => ({
@@ -293,7 +327,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     setAttRecords(prev => {
       let list = prev || [];
       const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
-      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft };
+      const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
+      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft, time: newTime };
       return idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
     });
 
@@ -340,8 +375,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         const newStatus = session[id]?.status || null;
         const newReason = session[id]?.reason || "";
         const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
+        const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
         if (newStatus) {
-          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason };
+          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime };
           list = idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
         } else if (idx >= 0) {
           list = list.filter((_, i) => i !== idx);
@@ -412,8 +448,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             </Sel>
           </div>
           <div className="flex items-center gap-1.5">
+            {/* الأسهم بتاخد direction:"ltr" عشان ما تتعكسش تلقائي جوه سياق RTL
+                (رموز الأسهم عندها خاصية Bidi_Mirrored فبيقلبها المتصفح
+                لوحدها في صفحة RTL، فكانت تبان بعكس اتجاهها وتحس إنها معطلة) */}
             <button onClick={goPrevLogDate} disabled={!hasPrevLogDate}
               title="السجل اللي قبل كده"
+              style={{ direction: "ltr" }}
               className="w-9 h-9 shrink-0 rounded-xl bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-30 flex items-center justify-center text-base">
               →
             </button>
@@ -422,6 +462,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             </div>
             <button onClick={goNextLogDate} disabled={!hasNextLogDate}
               title="السجل اللي بعد كده"
+              style={{ direction: "ltr" }}
               className="w-9 h-9 shrink-0 rounded-xl bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-30 flex items-center justify-center text-base">
               ←
             </button>
@@ -433,7 +474,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           )}
         </div>
 
-        {logStudents.length === 0 ? (
+        {logStudentsForDisplay.length === 0 ? (
           <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">👥</div>لا يوجد طلاب</div>
         ) : (
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
@@ -446,22 +487,31 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                 </tr>
               </thead>
               <tbody>
-                {logStudents.map((s, i) => {
-                  const rec = logRecordsMap[s.id];
-                  return (
-                    <tr key={s.id} className={i % 2 === 0 ? "bg-slate-900/20" : ""}>
-                      <td className="px-3 py-2.5 text-white text-sm font-bold break-words">{s.name}</td>
-                      <td className="px-3 py-2.5 text-center">
-                        {rec?.status
-                          ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[rec.status].color}/20 border ${stCfg[rec.status].border}/40 ${stCfg[rec.status].text}`}>
-                              <span>{stCfg[rec.status].icon}</span><span>{stCfg[rec.status].label}</span>
-                            </span>
-                          : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.reason || "—"}</td>
-                    </tr>
-                  );
-                })}
+                {(() => {
+                  const logHasSession = Object.keys(logRecordsMap).length > 0;
+                  return logStudentsForDisplay.map((s, i) => {
+                    const rec = logRecordsMap[s.id];
+                    const effStatus = rec?.status || (logHasSession ? "a" : null);
+                    return (
+                      <tr key={s.id} className={i % 2 === 0 ? "bg-slate-900/20" : ""}>
+                        <td className="px-3 py-2.5 text-white text-sm font-bold break-words">{s.name}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          {effStatus
+                            ? <div className="flex flex-col items-center gap-0.5">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[effStatus].color}/20 border ${stCfg[effStatus].border}/40 ${stCfg[effStatus].text}`}>
+                                  <span>{stCfg[effStatus].icon}</span><span>{stCfg[effStatus].label}</span>
+                                </span>
+                                {effStatus === "l" && rec?.time && (
+                                  <span className="text-[10px] text-slate-500">🕐 {rec.time}</span>
+                                )}
+                              </div>
+                            : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.reason || "—"}</td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -556,11 +606,11 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </div>
       </div>
 
-      {grpStudents.length === 0 && (
+      {grpStudentsForDisplay.length === 0 && (
         <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">👥</div>لا يوجد طلاب</div>
       )}
 
-      {grpStudents.length > 0 && <>
+      {grpStudentsForDisplay.length > 0 && <>
         <div className="grid grid-cols-3 gap-1.5">
           {[{ k: "p", l: "حاضر", v: counts.p }, { k: "a", l: "غائب", v: counts.a }, { k: "l", l: "متأخر", v: counts.l }].map(x => (
             <div key={x.k} className={`rounded-lg py-2 text-center border ${stCfg[x.k].border}/30 ${stCfg[x.k].color}/10`}>
@@ -582,16 +632,25 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                 </tr>
               </thead>
               <tbody>
-                {grpStudents.map((s, i) => {
+                {grpStudentsForDisplay.map((s, i) => {
                   const rec = existingMap[s.id];
+                  // لو اليوم ده اتاخد فيه حضور فعلاً (فيه سجلات لطلاب تانيين)،
+                  // أي طالب من غير حالة صريحة معناه إنه ما اتحضّرش = غائب،
+                  // مش "لم يُسجَّل". "لم يُسجَّل" تفضل بس لو اليوم مالوش سجل خالص.
+                  const effStatus = rec?.status || (hasExistingSession ? "a" : null);
                   return (
                     <tr key={s.id} className={`${i % 2 === 0 ? "bg-slate-900/20" : ""} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
                       <td className="px-3 py-2.5 text-white text-sm font-bold break-words">{s.name}</td>
                       <td className="px-3 py-2.5 text-center">
-                        {rec?.status
-                          ? <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[rec.status].color}/20 border ${stCfg[rec.status].border}/40 ${stCfg[rec.status].text}`}>
-                              <span>{stCfg[rec.status].icon}</span><span>{stCfg[rec.status].label}</span>
-                            </span>
+                        {effStatus
+                          ? <div className="flex flex-col items-center gap-0.5">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[effStatus].color}/20 border ${stCfg[effStatus].border}/40 ${stCfg[effStatus].text}`}>
+                                <span>{stCfg[effStatus].icon}</span><span>{stCfg[effStatus].label}</span>
+                              </span>
+                              {effStatus === "l" && rec?.time && (
+                                <span className="text-[10px] text-slate-500">🕐 {rec.time}</span>
+                              )}
+                            </div>
                           : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
                       </td>
                       <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.reason || "—"}</td>
@@ -624,9 +683,10 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           </div>
 
           <div className="space-y-2">
-            {grpStudents.map((s, i) => {
+            {grpStudentsForDisplay.map((s, i) => {
               const st = session[s.id]?.status;
               const reason = session[s.id]?.reason || "";
+              const time = session[s.id]?.time || "";
               return (
                 <div key={s.id} className={`rounded-2xl border transition-all duration-200 ${st ? "border-slate-600/50" : "border-slate-700/40"} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
                   <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl ${st === "p" ? "bg-emerald-500/5" : st === "a" ? "bg-red-500/5" : st === "l" ? "bg-amber-500/5" : "bg-slate-800/60"}`}>
@@ -650,6 +710,11 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     </div>
                     {(st === "a" || st === "l") && (
                       <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                        {st === "l" && time && (
+                          <span className="shrink-0 text-[11px] text-amber-400 font-bold" title="وقت الحضور التلقائي">
+                            🕐 {time}
+                          </span>
+                        )}
                         <input
                           value={reasonDrafts[s.id] ?? reason}
                           onChange={e => setReasonDrafts(prev => ({ ...prev, [s.id]: e.target.value }))}
