@@ -913,7 +913,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                               </div>
                             </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{r.grade} — {r.group}</td>
-                            <td className="px-3 py-2.5 text-blue-300 font-bold whitespace-nowrap" style={{ fontSize: "15px" }}>{r.month || "—"}</td>
+                            <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${((r.year || 0) < curYear || ((r.year || 0) === curYear && (r.month || 0) < curMonth)) ? "text-red-400" : "text-blue-400"}`} style={{ fontSize: "25px" }}>{r.month || "—"}</td>
                             <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
                             <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{(r.timestamp || "").slice(11, 16) || "—"}</td>
