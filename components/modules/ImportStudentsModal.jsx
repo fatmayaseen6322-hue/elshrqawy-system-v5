@@ -196,6 +196,13 @@ export default function ImportStudentsModal({ onImport, onClose, students }) {
         return (students || []).find(s => s && normalizeAr(s.name || "").toLowerCase() === target);
       };
 
+      // كشف التكرار *جوه نفس ملف الاستيراد*: لو الاسم اتكرر أكتر من مرة
+      // في نفس الملف نفسه (مثلاً نظام الحجز الخارجي صدّر نفس الطالب
+      // مرتين)، كان بيتضاف كطالبين منفصلين بكل استيراد — ده السبب
+      // الحقيقي لرجوع التكرار حتى بعد البلوك/الحذف. بنمنع ده هنا بتتبع
+      // الأسماء اللي "هتتضاف" في نفس الدفعة دي.
+      const seenInBatch = new Set();
+
       const parsed = dataRows.map((r, i) => {
         const name  = String(r[cols.name] || "").trim();
         const phone = cols.phone !== undefined ? String(r[cols.phone] || "").trim() : "";
@@ -203,16 +210,20 @@ export default function ImportStudentsModal({ onImport, onClose, students }) {
         const groupRaw = cols.group !== undefined ? r[cols.group] : "";
         const grade = matchGrade(gradeRaw);
         const existing = name ? findExisting(name) : null;
+        const key = name ? normalizeAr(name).toLowerCase() : "";
+        const dupInBatch = !existing && key && seenInBatch.has(key);
+        if (!existing && key && !dupInBatch) seenInBatch.add(key);
         return {
           _rowId: i,
           name,
           phone,
           grade,
           group: matchGroup(grade, groupRaw),
-          skip: !name || !!existing, // صف من غير اسم أو مكرر (موجود بالفعل) يتجاهل تلقائيًا
-          existing: existing ? { grade: existing.grade, group: existing.group, blocked: isBlocked(existing) } : null,
+          skip: !name || !!existing || dupInBatch, // صف من غير اسم أو مكرر (موجود بالفعل أو مكرر في نفس الملف) يتجاهل تلقائيًا
+          existing: existing ? { grade: existing.grade, group: existing.group, blocked: isBlocked(existing) } : (dupInBatch ? { inFile: true } : null),
         };
       });
+
 
       setRows(parsed);
     } catch (err) {
@@ -318,7 +329,9 @@ export default function ImportStudentsModal({ onImport, onClose, students }) {
                         className="w-full bg-slate-900/60 border border-slate-700/40 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none"/>
                       {r.existing && (
                         <div className="text-amber-400 text-[11px] mt-1">
-                          ⚠️ موجود بالفعل في النظام ({r.existing.grade}{r.existing.blocked ? " — في البلوك" : ""}) — متجاهل افتراضيًا عشان مايتكررش
+                          {r.existing.inFile
+                            ? "⚠️ الاسم ده مكرر جوه نفس الملف — متجاهل عشان مايتكررش"
+                            : `⚠️ موجود بالفعل في النظام (${r.existing.grade}${r.existing.blocked ? " — في البلوك" : ""}) — متجاهل افتراضيًا عشان مايتكررش`}
                         </div>
                       )}
                     </div>
