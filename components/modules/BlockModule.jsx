@@ -21,6 +21,20 @@ export default function BlockModule({ students: studentsProp, setStudents, finRe
 
   const blockedStudents = useMemo(() => students.filter(isBlocked), [students]);
 
+  // ── الأسماء المكرّرة: بتلمّ أي طالبين (أو أكتر) بنفس الاسم بالظبط
+  // (بعد تطبيع الهمزة) في كل النظام — سواء نشطين أو بلوك — عشان تقدري
+  // تشوفي وتحذفي النسخة الزيادة نهائيًا من هنا مباشرة. ──
+  const dupGroups = useMemo(() => {
+    const map = {};
+    students.forEach(s => {
+      const key = normalizeAr((s.name || "").trim());
+      if (!key) return;
+      if (!map[key]) map[key] = [];
+      map[key].push(s);
+    });
+    return Object.values(map).filter(list => list.length > 1);
+  }, [students]);
+
   const filtered = useMemo(() => {
     if (!search.trim()) return blockedStudents;
     const q = normalizeAr(search.trim());
@@ -81,6 +95,29 @@ export default function BlockModule({ students: studentsProp, setStudents, finRe
           placeholder="🔍 دوّر في البلوك بالاسم..."
           className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none" />
       </div>
+
+      {dupGroups.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 space-y-2">
+          <div className="text-amber-300 text-xs font-bold px-1">⚠️ أسماء مكررة موجودة أكتر من مرة — {dupGroups.length}</div>
+          {dupGroups.map((list, gi) => (
+            <div key={gi} className="bg-slate-900/50 border border-slate-700/40 rounded-xl p-2 space-y-1.5">
+              {list.map(s => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <Av name={s.name} size="sm" />
+                  <div className="flex-1 min-w-0 text-right">
+                    <div className="text-white text-sm font-bold whitespace-normal break-words">{s.name}</div>
+                    <div className="text-slate-500 text-xs">
+                      {s.grade} — {s.group} · {s.id}{isBlocked(s) ? " · 🚫 بلوك" : " · نشط"}
+                    </div>
+                  </div>
+                  <button onClick={() => setConfirmDel(s)}
+                    className="shrink-0 px-2.5 h-8 rounded-lg bg-red-700/25 border border-red-600/30 text-red-300 text-xs font-bold">✗ حذف نهائي</button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 && (
         <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">🚫</div>مفيش طلاب في البلوك</div>
