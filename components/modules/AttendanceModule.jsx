@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY } from "../../constants";
-import { pct, isBlocked } from "../../utils";
+import { pct, isBlocked, waLink } from "../../utils";
 import { Av, Sel, DatePicker, Toast, Modal, Field, Btn } from "../ui";
 
 // تطبيع الألف بأشكال الهمزة المختلفة عشان البحث ما يفرقش بين
@@ -66,6 +66,23 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [editUnlocked, setEditUnlocked] = useState(false); // مفتوح للتعديل (يوم قديم بعد الباسورد)
   const [reasonDrafts, setReasonDrafts] = useState({}); // نص السبب قبل ما يتحفظ بالزرار الصغير
   const [highlightId, setHighlightId] = useState(null); // تمييز الطالب لما نيجي من بحث التوبار
+
+  // ══════════════════════════════════════════════════════════════
+  // 📲 تنبيه واتساب تلقائي لولي الأمر بعد حفظ غياب/تأخير اليوم
+  // ملحوظة مهمة: واتساب نفسه (من غير API رسمي مدفوع من ميتا) بيرفض
+  // إرسال رسالة "صامت" تمامًا من غير ما حد يضغط زرار "إرسال" جوه
+  // الشات — فده أقصى أتمتة ممكنة فعليًا: بعد الحفظ، بتفتح تلقائي قائمة
+  // بكل غايب/متأخر معاه رقم ولي أمر، وانتي بس بتدوسي "التالي" وهو
+  // بيفتحلك الشات جاهز بالرسالة، تدوسي إرسال جوه واتساب وخلاص.
+  // ══════════════════════════════════════════════════════════════
+  const [waPrompt, setWaPrompt] = useState(null); // [{student, kind:"a"|"l"}]
+  const [waQueue,  setWaQueue]  = useState(null); // { list, idx }
+  const [waToast,  setWaToast]  = useState(null);
+
+  const cn = settings?.centerName || "مركز الشرقاوي";
+  const waMsg = (s, kind, time) => kind === "l"
+    ? `السلام عليكم ولي أمر ${s.name}،\n${s.name} اتأخر النهاردة${time ? " الساعة " + time : ""}.\nيرجى المتابعة.\nشكراً - ${cn}`
+    : `السلام عليكم ولي أمر ${s.name}،\n${s.name} غايب النهاردة.\nيرجى المتابعة.\nشكراً - ${cn}`;
 
   // ══════════════════════════════════════════════════════════════
   // 📔 دفتر / سجل الغياب — صفحة عرض منفصلة (الصف/المجموعة/التاريخ)
@@ -401,6 +418,21 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     addActivity?.("تسجيل غياب", `${grade} - مجموعة ${group} - ${date} (${changedIds.length} طالب)`);
     setToast({ msg: `✓ تم حفظ غياب ${changedIds.length} طالب`, type: "success" });
     setPendingGate(false);
+
+    // بعد الحفظ: لو النهارده (مش تعديل يوم قديم)، اجمعي كل طالب اتسجّل
+    // غايب/متأخر عنده رقم ولي أمر، واعرضي عليها ترسل واتساب دلوقتي.
+    if (date === TODAY) {
+      const notifyList = changedIds
+        .map(id => {
+          const st = session[id]?.status;
+          if (st !== "a" && st !== "l") return null;
+          const stu = (students || []).find(s => s.id === id);
+          if (!stu || !stu.parentPhone) return null;
+          return { student: stu, kind: st, time: session[id]?.time || null };
+        })
+        .filter(Boolean);
+      if (notifyList.length > 0) setWaPrompt(notifyList);
+    }
   };
 
   const saveSession = () => {
@@ -423,6 +455,81 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   };
 
   const isEditable = !isOldDate || editUnlocked;
+
+  // ══════════════════════════════════════════════════════════════
+  // 📲 منطق قائمة إرسال واتساب التلقائية (بعد سؤال waPrompt)
+  // ══════════════════════════════════════════════════════════════
+  const startWaQueue = () => {
+    const withPhone = (waPrompt || []).filter(x => waLink(x.student.parentPhone));
+    if (withPhone.length === 0) {
+      setWaToast({ msg: "محدش من الغايبين/المتأخرين عنده رقم ولي أمر", type: "error" });
+      setWaPrompt(null);
+      return;
+    }
+    setWaQueue({ list: withPhone, idx: 0 });
+    setWaPrompt(null);
+  };
+
+  const waQueueNext = () => {
+    if (!waQueue) return;
+    const cur = waQueue.list[waQueue.idx];
+    const url = waLink(cur.student.parentPhone, `?text=${encodeURIComponent(waMsg(cur.student, cur.kind, cur.time))}`);
+    if (url) window.open(url, "_blank");
+    const nextIdx = waQueue.idx + 1;
+    if (nextIdx >= waQueue.list.length) {
+      setWaQueue(null);
+      setWaToast({ msg: `✓ تم فتح واتساب لـ ${waQueue.list.length} من أولياء الأمور`, type: "success" });
+    } else {
+      setWaQueue(q => ({ ...q, idx: nextIdx }));
+    }
+  };
+
+  const waQueueCancel = () => setWaQueue(null);
+  const dismissWaPrompt = () => setWaPrompt(null);
+
+  // شاشة قائمة إرسال واتساب المنبثقة بعد الحفظ
+  if (waQueue) {
+    const current  = waQueue.list[waQueue.idx];
+    const progress = waQueue.idx + 1;
+    const total    = waQueue.list.length;
+    return (
+      <div className="space-y-4">
+        <div className="bg-green-900/30 border border-green-500/20 rounded-2xl p-4 text-center">
+          <div className="text-3xl mb-2">💬</div>
+          <div className="text-white font-black">إرسال تنبيه واتساب لأولياء الأمور</div>
+          <div className="text-slate-400 text-xs mt-1">{progress} من {total}</div>
+        </div>
+
+        <div className="bg-slate-800 rounded-full h-2">
+          <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${((progress - 1) / total) * 100}%` }} />
+        </div>
+
+        <div className="bg-slate-800/60 border border-green-500/30 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Av name={current.student.name} />
+            <div className="flex-1 min-w-0">
+              <div className="text-white font-black">{current.student.name}</div>
+              <div className="text-slate-400 text-xs">
+                {current.kind === "l" ? "⏰ متأخر" : "✗ غايب"} · {current.student.parentPhone}
+              </div>
+            </div>
+          </div>
+          <div className="bg-slate-900/40 rounded-xl p-3 text-slate-300 text-xs leading-relaxed whitespace-pre-line">
+            {waMsg(current.student, current.kind, current.time)}
+          </div>
+        </div>
+
+        <Btn variant="success" size="lg" className="w-full" onClick={waQueueNext}>
+          💬 فتح واتساب — {current.student.name} ({progress}/{total})
+        </Btn>
+        <Btn variant="ghost" size="lg" className="w-full" onClick={waQueueCancel}>
+          ✕ إيقاف الإرسال
+        </Btn>
+
+        {waToast && <Toast msg={waToast.msg} type={waToast.type} onDone={() => setWaToast(null)} />}
+      </div>
+    );
+  }
 
   // ══════════════════════════════════════════════════════════════
   // صفحة "سجل الغياب" (الدفتر) — عرض فقط، بفلاتر صف/مجموعة/تاريخ
@@ -746,6 +853,23 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       </>}
 
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+
+      {/* سؤال إرسال واتساب تلقائي بعد الحفظ */}
+      {waPrompt && (
+        <Modal title="📲 تنبيه أولياء الأمور" onClose={dismissWaPrompt}>
+          <div className="space-y-4">
+            <div className="text-slate-300 text-sm text-center leading-relaxed">
+              فيه <span className="text-white font-black">{waPrompt.length}</span> طالب اتسجّل غايب/متأخر النهاردة ومعاه رقم ولي أمر.
+              <br />عايزة تبعتيلهم رسالة واتساب دلوقتي؟
+            </div>
+            <div className="flex gap-2">
+              <Btn variant="ghost" className="flex-1" onClick={dismissWaPrompt}>لأ، مش دلوقتي</Btn>
+              <Btn variant="success" className="flex-1" onClick={startWaQueue}>💬 ابدأ الإرسال</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {waToast && <Toast msg={waToast.msg} type={waToast.type} onDone={() => setWaToast(null)} />}
     </div>
   );
 }
