@@ -365,7 +365,10 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const dayRecords = useMemo(() => {
     if (!dSelDay || !dSelMonth || !dSelYear) return [];
     const dayStr = `${dSelYear}-${String(dSelMonth).padStart(2, "0")}-${String(dSelDay).padStart(2, "0")}`;
-    return safeRecords.filter(r => r && r.timestamp?.startsWith(dayStr));
+    return safeRecords
+      .filter(r => r && r.timestamp?.startsWith(dayStr))
+      // ترتيب حسب الشهر المدفوع عنه: القديم الأول ثم الأحدث (8 قبل 9 قبل 10...)
+      .sort((a, b) => (a.year || 0) - (b.year || 0) || (a.month || 0) - (b.month || 0));
   }, [safeRecords, dSelDay, dSelMonth, dSelYear]);
 
   const dayTotal = dayRecords.reduce((a, r) => a + (r.amount || 0), 0);
@@ -895,7 +898,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                     <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
                       <thead className="sticky top-0">
                         <tr className="led-thead bg-slate-900 border-b border-slate-700/60">
-                          {["اسم الطالب","الصف","المبلغ (ج)","المستلم","الساعة"].map(h => (
+                          {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","الساعة"].map(h => (
                             <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px" }}>{h}</th>
                           ))}
                         </tr>
@@ -910,6 +913,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                               </div>
                             </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{r.grade} — {r.group}</td>
+                            <td className="px-3 py-2.5 text-blue-300 font-bold text-xs whitespace-nowrap">{r.month || "—"}</td>
                             <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
                             <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{(r.timestamp || "").slice(11, 16) || "—"}</td>
