@@ -81,6 +81,19 @@ function getOverdueAmount(student, finRecords, gradeFees) {
   return total;
 }
 
+// ── تحويل وقت "HH:MM" (24 ساعة) من الـ timestamp لصيغة 12 ساعة + صباحًا/مساءً ──
+function fmtTime12(timestamp) {
+  const timePart = (timestamp || "").slice(11, 16);
+  if (!timePart || !timePart.includes(":")) return "—";
+  const [hStr, mStr] = timePart.split(":");
+  const h = parseInt(hStr, 10);
+  if (isNaN(h)) return "—";
+  const period = h >= 12 ? "مساءً" : "صباحًا";
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return `${h12}:${mStr} ${period}`;
+}
+
 // ══════════════════════════════════════════════════════════════
 // FINANCE PASSWORD GATE (كلمة مرور المصاريف العادية — تُستخدم فقط
 // إذا فُعِّل الخيار العام financePasswordEnabled من الإعدادات)
@@ -352,6 +365,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const [dSelDay,       setDSelDay]       = useState(curDay);
   const [dSelMonth,     setDSelMonth]     = useState(curMonth);
   const [dSelYear,      setDSelYear]      = useState(curYear);
+  const [filtersOpen,   setFiltersOpen]   = useState(false); // إظهار/إخفاء فلاتر اليوم/الشهر/السنة أعلى سجل المصاريف
 
   // تصفح إلكتروني بين الأيام (زي صفحات كتاب) — يوم قبل / يوم بعد
   const goDay = (delta) => {
@@ -862,34 +876,43 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       )}
 
       {dayReportOpen && (
-        <Modal title="📅 سجل المصاريف اليومي" onClose={() => setDayReportOpen(false)} maxW="max-w-2xl">
+        <Modal title="📅 سجل المصاريف اليومي" onClose={() => setDayReportOpen(false)} maxW={filtersOpen ? "max-w-2xl" : "max-w-4xl"}>
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-2">
-              <Field label="اليوم">
-                <input type="number" min={1} max={31} value={dSelDay}
-                  onChange={e => setDSelDay(e.target.value ? parseInt(e.target.value) : "")}
-                  placeholder="يوم"
-                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
-              </Field>
-              <Field label="الشهر">
-                <select value={dSelMonth} onChange={e => setDSelMonth(parseInt(e.target.value))}
-                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
-                  {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
-                </select>
-              </Field>
-              <Field label="السنة">
-                <input type="number" value={dSelYear}
-                  onChange={e => setDSelYear(e.target.value ? parseInt(e.target.value) : curYear)}
-                  className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
-              </Field>
+            {/* الصف العلوي: سهم / سهم + التاريخ + زر إظهار الفلاتر فقط */}
+            <div className="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2.5">
+              <button onClick={() => goDay(-1)} title="اليوم اللي قبله" className="w-9 h-9 shrink-0 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-base font-bold">◀</button>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-300 text-xs font-bold whitespace-nowrap">{dSelDay} {MONTHS_AR[dSelMonth - 1]} {dSelYear}</span>
+                <button onClick={() => setFiltersOpen(v => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${filtersOpen ? "bg-blue-700/40 border-blue-600/40 text-blue-200" : "bg-slate-700/50 border-slate-600/40 text-slate-300"}`}>
+                  🔍 فلاتر
+                </button>
+              </div>
+              <button onClick={() => goDay(1)} title="اليوم اللي بعده" className="w-9 h-9 shrink-0 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-base font-bold">▶</button>
             </div>
 
-            {/* تصفح إلكتروني — زي صفحات كتاب: يوم قبل / يوم بعد */}
-            <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2.5">
-              <button onClick={() => goDay(-1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold">◀ اليوم اللي قبله</button>
-              <span className="text-slate-300 text-xs font-bold">{dSelDay} {MONTHS_AR[dSelMonth - 1]} {dSelYear}</span>
-              <button onClick={() => goDay(1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold">اليوم اللي بعده ▶</button>
-            </div>
+            {/* الفلاتر (يوم/شهر/سنة) — تظهر بس لو ضغطت على زرار "فلاتر" */}
+            {filtersOpen && (
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="اليوم">
+                  <input type="number" min={1} max={31} value={dSelDay}
+                    onChange={e => setDSelDay(e.target.value ? parseInt(e.target.value) : "")}
+                    placeholder="يوم"
+                    className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+                </Field>
+                <Field label="الشهر">
+                  <select value={dSelMonth} onChange={e => setDSelMonth(parseInt(e.target.value))}
+                    className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+                    {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{i + 1} - {m}</option>)}
+                  </select>
+                </Field>
+                <Field label="السنة">
+                  <input type="number" value={dSelYear}
+                    onChange={e => setDSelYear(e.target.value ? parseInt(e.target.value) : curYear)}
+                    className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+                </Field>
+              </div>
+            )}
 
             {dayRecords.length === 0
               ? <div className="text-center py-8 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">محدش دفع في يوم {dSelDay} {MONTHS_AR[dSelMonth - 1]}</div></div>
@@ -898,15 +921,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                     <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
                       <thead className="sticky top-0">
                         <tr className="led-thead bg-slate-900 border-b border-slate-700/60">
-                          {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","الساعة"].map(h => (
-                            <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px" }}>{h}</th>
+                          {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","الساعة"].map((h, i) => (
+                            <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px", width: i === 0 ? "100%" : "auto" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {dayRecords.map(r => (
                           <tr key={r.id} className="border-b border-slate-700/20">
-                            <td className="px-3 py-2.5">
+                            <td className="px-3 py-2.5 w-full">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Av name={r.studentName} size="sm" />
                                 <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
@@ -916,7 +939,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${((r.year || 0) < curYear || ((r.year || 0) === curYear && (r.month || 0) < curMonth)) ? "text-red-400" : "text-blue-400"}`} style={{ fontSize: "25px" }}>{r.month || "—"}</td>
                             <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
                             <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{(r.timestamp || "").slice(11, 16) || "—"}</td>
+                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{fmtTime12(r.timestamp)}</td>
                           </tr>
                         ))}
                       </tbody>
