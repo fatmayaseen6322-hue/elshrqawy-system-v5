@@ -153,7 +153,7 @@ function UndoPasswordGate({ undoHash, onUnlock, onCancel }) {
 // ══════════════════════════════════════════════════════════════
 // FINANCE ROW (نفس آلية العرض القديمة: اسم / مبلغ / مستلم / وقت / تعديل / طباعة / تراجع)
 // ══════════════════════════════════════════════════════════════
-function FinRow({ student, index, record, globalReceiver, activeReceivers, onSave, onUndo, passwordEnabled, financePassword, undoPassword, centerName, highlighted }) {
+function FinRow({ student, index, record, globalReceiver, activeReceivers, onSave, onUndo, passwordEnabled, financePassword, undoPassword, centerName, highlighted, role = "admin" }) {
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
   const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
   const [pickTime,    setPickTime]    = useState(""); // ⏱ وقت اختيار المستلم (قبل الحفظ)
@@ -283,7 +283,10 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
           <span className="text-slate-500 text-xs whitespace-nowrap">{(editing || !saved) ? (pickTime || "—") : (localRecord?.timestamp || "—")}</span>
         </td>
         <td className="px-2 py-3">
-          {editing || !saved
+          {/* Assist: عمود المبلغ ثابت دايمًا — بيعرض المبلغ المطلوب دفعه فقط
+              (student._defaultFee)، ومفيش أي مربع تعديل حتى في وضع التعديل.
+              المستر بس هو اللي يقدر يغيّر المبلغ (خصم/زيادة). */}
+          {(editing || !saved) && role !== "assist"
             ? <input type="number" value={amount} onChange={e => autoSaveAmount(e.target.value)}
                 onBlur={() => setEditing(false)}
                 className="w-16 bg-slate-700 border border-blue-500/40 rounded-lg px-2 py-1 text-white text-xs text-center focus:outline-none" />
@@ -854,6 +857,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                           undoPassword={safeSettings.financeUndoPassword}
                           centerName={safeSettings.centerName || "مركز تعليمي"}
                           highlighted={highlightId === s.id}
+                          role={role}
                         />
                       ))}
                     </tbody>
