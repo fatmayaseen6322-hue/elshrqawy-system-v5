@@ -714,17 +714,12 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
               </div>
             ) : (
               <>
-                <div className="bg-red-500/10 border border-red-500/25 rounded-2xl px-4 py-3 text-center">
-                  <div className="text-slate-400 text-xs mb-1">إجمالي المبالغ المتبقية على كل الصفوف — شهر {MONTHS_AR[regMonth - 1]}</div>
-                  <div className="text-red-400 font-black text-2xl">{fmtM(pastLateGrandTotal)} ج</div>
-                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {pastLateGrades.map(g => (
                     <button key={g}
                       onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
                       className="flex flex-col items-center justify-center gap-1 py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
                       <span>{g}</span>
-                      <span className="text-xs font-normal text-amber-300">{fmtM(pastLateGradeTotals[g] || 0)} ج</span>
                     </button>
                   ))}
                 </div>
@@ -759,17 +754,12 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
               </div>
             ) : (
               <>
-                <div className="bg-red-500/10 border border-red-500/25 rounded-2xl px-4 py-3 text-center">
-                  <div className="text-slate-400 text-xs mb-1">إجمالي المبالغ المتبقية على كل الصفوف</div>
-                  <div className="text-red-400 font-black text-2xl">{fmtM(lateGrandTotal)} ج</div>
-                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {lateGradesWithDebt.map(g => (
                     <button key={g}
                       onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
                       className="flex flex-col items-center justify-center gap-1 py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
                       <span>{g}</span>
-                      <span className="text-xs font-normal text-amber-300">{fmtM(lateGradeTotals[g] || 0)} ج</span>
                     </button>
                   ))}
                 </div>
@@ -926,12 +916,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot>
-                        <tr className="bg-emerald-900/20 border-t-2 border-emerald-700/30">
-                          <td colSpan={3} className="px-3 py-3 text-emerald-400 font-bold text-sm">💰 إجمالي التحصيل</td>
-                          <td colSpan={2} className="px-3 py-3 text-emerald-400 font-black text-base">{fmtM(dayTotal)} ({dayRecords.length} دفعة)</td>
-                        </tr>
-                      </tfoot>
                     </table>
                   </div>
                 </div>
