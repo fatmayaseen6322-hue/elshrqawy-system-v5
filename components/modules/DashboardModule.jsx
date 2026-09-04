@@ -16,9 +16,12 @@ const fmtM = n => (n || 0).toLocaleString("en-US");
 // ══════════════════════════════════════════════════════════════
 function buildDuplicatesData(allStudents) {
   allStudents = allStudents || [];
+  // الطلاب اللي اتأكد عليهم يدويًا إنهم مش تكرار فعلي (زي إخوات بنفس
+  // الاسم) بيتشالوا من كشف التكرار تمامًا وميظهروش تاني.
+  const relevant = allStudents.filter(s => !s?.dupConfirmed);
 
   const byName = {};
-  allStudents.forEach(s => {
+  relevant.forEach(s => {
     if (!s?.name?.trim()) return;
     const key = normalizeAr(s.name).toLowerCase();
     (byName[key] ||= []).push(s);
@@ -26,7 +29,7 @@ function buildDuplicatesData(allStudents) {
   const dupNames = Object.values(byName).filter(list => list.length > 1);
 
   const byPhone = {};
-  allStudents.forEach(s => {
+  relevant.forEach(s => {
     const phone = (s?.phone || "").trim();
     if (!phone) return;
     (byPhone[phone] ||= []).push(s);
@@ -686,6 +689,12 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const dd = useMemo(() => buildDashboardData(students, finRecords, settings?.gradeFees, attRecords), [students, finRecords, settings?.gradeFees, attRecords]);
   const alerts = students.filter(s => s.score < 60 || (dd.absenceByStudentId?.[s.id]?.absent || 0) > 8 || (s.totalFees - s.paid) > 1200);
   const dupData = useMemo(() => buildDuplicatesData(studentsProp), [studentsProp]);
+  // بتتعلّم لما يتدوس ✓ على اسم في "الأسماء المكررة" — بتحفظ إن الطالب/
+  // الطلاب دول اتأكد عليهم إنهم مش تكرار فعلي (زي إخوات بنفس الاسم)
+  // فيختفوا من القايمة نهائيًا وميرجعوش تاني.
+  const confirmNotDup = (ids) => {
+    setStudents?.(p => p.map(x => ids.includes(x.id) ? { ...x, dupConfirmed: true } : x));
+  };
   const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
 
   // Assist: يشوف المحصّل + قائمة المتأخرين بالاسم + الغياب — بدون إجمالي عدد الطلاب أو إجمالي الديون
@@ -918,7 +927,15 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
                 <div className="text-red-400 font-bold text-xs flex items-center gap-1.5">👤 نفس الاسم ({dupData.dupNames.length} حالة)</div>
                 {dupData.dupNames.map((list, i) => (
                   <div key={i} className="bg-slate-800/60 border border-red-500/20 rounded-2xl overflow-hidden">
-                    <div className="px-3 py-2 bg-red-500/10 text-white text-sm font-bold">{list[0].name} — {list.length} طالب بنفس الاسم</div>
+                    <div className="px-3 py-2 bg-red-500/10 flex items-center justify-between gap-2">
+                      <span className="text-white text-sm font-bold">{list[0].name} — {list.length} طالب بنفس الاسم</span>
+                      <button
+                        onClick={() => confirmNotDup(list.map(s => s.id))}
+                        title="مش تكرار فعلي (مثلاً إخوات) — اخفِ من القايمة"
+                        className="shrink-0 w-7 h-7 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold hover:bg-emerald-600/30 transition-colors">
+                        ✓
+                      </button>
+                    </div>
                     <div className="divide-y divide-slate-700/40">
                       {list.map((s, si) => (
                         <div key={si} className="px-3 py-2 flex items-center justify-between text-xs">
@@ -926,6 +943,12 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
                           <div className="flex items-center gap-2">
                             {s.phone && <span className="text-slate-500">{s.phone}</span>}
                             {isBlocked(s) && <span className="text-amber-400 font-bold">🚫 بلوك</span>}
+                            <button
+                              onClick={() => confirmNotDup([s.id])}
+                              title="الطالب ده مش تكرار — اخفِ بس ده"
+                              className="shrink-0 w-6 h-6 rounded-md bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold hover:bg-emerald-600/30 transition-colors">
+                              ✓
+                            </button>
                           </div>
                         </div>
                       ))}
