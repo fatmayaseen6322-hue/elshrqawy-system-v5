@@ -341,6 +341,27 @@ export default function useAppData() {
     if (!cloud) return;
     const localTs = lsGet(KEYS.liveSyncTs, 0);
     if (!cloud.updatedAt || cloud.updatedAt <= localTs) return;
+
+    // ── إصلاح جذري لمشكلة "رجوع الطلاب المكررين بعد الحذف/البلوك" ──
+    // لو فيه تعديل محلي حصل من ثانية/اتنين ولسه في نافذة الـ 3 ثواني
+    // قبل ما يترفع على السحابة (pushTimer لسه شغال)، وفي نفس اللحظة
+    // وصل تحديث من جهاز تاني (onSnapshot) — كان الكود القديم بيستبدل
+    // البيانات المحلية بالنسخة الجاية من السحابة فورًا، ويمسح التايمر
+    // المجدوَل، فيضيع تعديلك المحلي (زي حذف طالب مكرر) قبل ما يوصل
+    // للسحابة أصلاً من غير أي رسالة خطأ. فمرة تانية أي جهاز يعمل push
+    // كانت بترجع النسخة القديمة اللي فيها التكرار وكأن حذفك ماحصلش.
+    // الحل: لو فيه تعديل محلي مستني الرفع، ارفعيه فورًا الأول (بدل
+    // الانتظار) وتجاهلي التحديث الجاي من السحابة مؤقتًا — هيوصلك تاني
+    // صح بعد ما رفعك يخلص عن طريق onSnapshot نفسه.
+    if (pushTimer.current) {
+      clearTimeout(pushTimer.current);
+      pushTimer.current = null;
+      const ts = Date.now();
+      lsSet(KEYS.liveSyncTs, ts);
+      pushLiveState(ts);
+      return;
+    }
+
     isApplyingRemote.current = true;
     setStudents(cloud.students || []);
     setSettings(prev => ({ ...prev, ...(cloud.settings || {}) }));
