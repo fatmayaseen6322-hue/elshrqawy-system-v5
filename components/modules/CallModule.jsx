@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { GRADES_LIST } from "../../constants";
-import { normalizeAr, sortStudentsList, isBlocked } from "../../utils";
-import { Av, Inp, Sel } from "../ui";
+import { normalizeAr, sortStudentsList, isBlocked, waLink } from "../../utils";
+import { Av, Inp, Sel, Modal } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
 // MODULE: CALL LIST — دليل اتصال سريع
@@ -14,6 +14,7 @@ export default function CallModule({ students: studentsProp }) {
   const students = studentsProp || [];
   const [search,   setSearch]   = useState("");
   const [selGrade, setSelGrade] = useState(""); // فاضي = كل الصفوف
+  const [waStudent, setWaStudent] = useState(null); // الطالب المفتوح عليه اختيار رسالة الواتساب
 
   const list = useMemo(() => {
     const q = normalizeAr(search);
@@ -25,6 +26,17 @@ export default function CallModule({ students: studentsProp }) {
 
   const withPhone = list.filter(s => s.parentPhone || s.phone);
   const withoutPhone = list.filter(s => !s.parentPhone && !s.phone);
+
+  const sendWa = (kind) => {
+    if (!waStudent) return;
+    const phone = waStudent.parentPhone || waStudent.phone;
+    const msg = kind === "absent"
+      ? `تحية طيبة، نفيدكم بأن الطالب/ة ${waStudent.name} غاب/ت عن الحصة اليوم. برجاء المتابعة معنا.`
+      : `تحية طيبة، نفيدكم بأن الطالب/ة ${waStudent.name} تأخر/ت عن حضور الحصة اليوم. برجاء المتابعة معنا.`;
+    const link = waLink(phone, `?text=${encodeURIComponent(msg)}`);
+    if (link) window.open(link, "_blank");
+    setWaStudent(null);
+  };
 
   return (
     <div className="space-y-4">
@@ -57,10 +69,9 @@ export default function CallModule({ students: studentsProp }) {
         {withPhone.map(s => {
           const phone = s.parentPhone || s.phone;
           return (
-            <a
+            <div
               key={s.id}
-              href={`tel:${phone}`}
-              className="bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 flex items-center gap-3 active:bg-slate-700/50 transition-colors"
+              className="bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 flex items-center gap-3"
             >
               <Av name={s.name} size="sm" />
               <div className="flex-1 min-w-0">
@@ -72,8 +83,16 @@ export default function CallModule({ students: studentsProp }) {
                   {!s.parentPhone && <span className="text-amber-400">(رقم الطالب)</span>}
                 </div>
               </div>
-              <span className="shrink-0 w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg">📞</span>
-            </a>
+              <button
+                type="button"
+                onClick={() => setWaStudent(s)}
+                className="shrink-0 w-11 h-11 rounded-full bg-emerald-600 text-white flex items-center justify-center text-lg active:bg-emerald-700 transition-colors"
+              >💬</button>
+              <a
+                href={`tel:${phone}`}
+                className="shrink-0 w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg active:bg-blue-700 transition-colors"
+              >📞</a>
+            </div>
           );
         })}
       </div>
@@ -90,6 +109,22 @@ export default function CallModule({ students: studentsProp }) {
             ))}
           </div>
         </div>
+      )}
+
+      {waStudent && (
+        <Modal title={`رسالة واتساب — ${waStudent.name}`} onClose={() => setWaStudent(null)}>
+          <div className="p-5 space-y-3">
+            <div className="text-slate-400 text-xs text-center mb-1">اختاري نوع الرسالة، وهتفتح واتساب على طول جاهزة للإرسال</div>
+            <button
+              onClick={() => sendWa("absent")}
+              className="w-full py-4 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-300 font-bold flex items-center justify-center gap-2 text-base active:bg-red-500/25"
+            >🔴 غياب</button>
+            <button
+              onClick={() => sendWa("late")}
+              className="w-full py-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold flex items-center justify-center gap-2 text-base active:bg-amber-500/25"
+            >🟡 تأخير</button>
+          </div>
+        </Modal>
       )}
     </div>
   );

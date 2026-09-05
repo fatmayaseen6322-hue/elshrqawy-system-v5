@@ -1702,6 +1702,7 @@ function ExamMistakesReport({ students, centerExams }) {
   const [grade,  setGrade]  = useState("");
   const [unit,   setUnit]   = useState("");
   const [lesson, setLesson] = useState("");
+  const [toast,  setToast]  = useState(null);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
 
@@ -1729,6 +1730,38 @@ function ExamMistakesReport({ students, centerExams }) {
 
   const resetToGrades   = () => { setGrade(""); setUnit(""); setLesson(""); };
   const resetUnitLesson = () => { setUnit(""); setLesson(""); };
+
+  const copyStudentErrors = (s, qs) => {
+    const text = `${s.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(q => `- ${descFor(q)}`).join("\n")}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(
+        () => setToast({ msg: "✓ اتنسخت الأسئلة", type: "success" }),
+        () => setToast({ msg: "تعذّر النسخ", type: "error" })
+      );
+    }
+  };
+
+  const printStudentErrors = (s, qs) => {
+    const w = window.open("", "_blank", "width=480,height=640");
+    if (!w) return;
+    w.document.write(`
+      <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${s.name}</title>
+      <style>
+        body{font-family:Tajawal,Arial,sans-serif;padding:20px;color:#111}
+        h2{margin:0 0 4px}
+        .meta{color:#555;font-size:13px;margin-bottom:16px}
+        ol{padding-inline-start:20px}
+        li{margin-bottom:8px;font-size:14px}
+      </style></head><body>
+      <h2>${s.name}</h2>
+      <div class="meta">${grade} — وحدة ${unit} — درس ${lesson}</div>
+      <ol>${qs.map(q => `<li>${descFor(q)}</li>`).join("")}</ol>
+      </body></html>
+    `);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 300);
+  };
 
   // الشاشة 1: اختيار الصف — 6 مستطيلات (من أولى إعدادي لثالثة ثانوي)
   if (!grade) return (
@@ -1780,8 +1813,12 @@ function ExamMistakesReport({ students, centerExams }) {
             <div key={s.id} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Av name={s.name} size="sm" />
-                <div className="text-white text-sm font-bold">{s.name}</div>
-                <span className="text-xs px-2 py-0.5 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0 mr-auto">{qs.length} خطأ</span>
+                <div className="text-white text-sm font-bold flex-1 min-w-0 truncate">{s.name}</div>
+                <span className="text-xs px-2 py-0.5 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{qs.length} خطأ</span>
+                <button onClick={() => copyStudentErrors(s, qs)} title="نسخ الأسئلة"
+                  className="shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 text-blue-300 flex items-center justify-center text-sm">📋</button>
+                <button onClick={() => printStudentErrors(s, qs)} title="طباعة"
+                  className="shrink-0 w-7 h-7 rounded-lg bg-slate-500/15 border border-slate-500/20 text-slate-300 flex items-center justify-center text-sm">🖨️</button>
               </div>
               <div className="space-y-1">
                 {qs.map(q => (
@@ -1794,6 +1831,7 @@ function ExamMistakesReport({ students, centerExams }) {
           ))}
         </div>
       )}
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }
