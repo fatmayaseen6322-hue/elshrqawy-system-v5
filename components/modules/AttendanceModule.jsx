@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY } from "../../constants";
-import { pct, isBlocked, waLink, shortGradeLabel } from "../../utils";
+import { pct, isBlocked, waLink, shortGradeLabel, sortStudentsList } from "../../utils";
 import { Av, Sel, DatePicker, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
 // تطبيع الألف بأشكال الهمزة المختلفة عشان البحث ما يفرقش بين
@@ -264,7 +264,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const safeAttRecords = attRecords || [];
   const grpList     = GROUPS_MAP[grade] || ["A"];
   const grpStudents = useMemo(
-    () => (students || []).filter(s => s && s.grade === grade && s.group === group && !isBlocked(s)),
+    () => sortStudentsList((students || []).filter(s => s && s.grade === grade && s.group === group && !isBlocked(s))),
     [students, grade, group]
   );
 

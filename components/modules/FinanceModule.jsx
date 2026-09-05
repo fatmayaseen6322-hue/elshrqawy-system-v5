@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR, TODAY } from "../../constants";
-import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, checkPwd } from "../../utils";
+import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, checkPwd, sortStudentsList } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
@@ -453,7 +453,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
-    return list.map(s => ({ ...s, _defaultFee: getExpectedFeeForMonth(s, effMonth, effYear, safeSettings.gradeFees), _month: effMonth, _year: effYear }));
+    return sortStudentsList(list).map(s => ({ ...s, _defaultFee: getExpectedFeeForMonth(s, effMonth, effYear, safeSettings.gradeFees), _month: effMonth, _year: effYear }));
   }, [safeStudents, selGrade, selGroup, safeSettings.gradeFees, effMonth, effYear]);
 
   const monthRecords = useMemo(() =>
