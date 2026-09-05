@@ -600,11 +600,11 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </div>
 
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3.5 space-y-3">
-          {/* دواير الصفوف — الست صفوف جنب بعض في صف واحد، دوس على أي واحدة تفتح مجموعتها */}
-          <div className="grid grid-cols-6 gap-1.5">
+          {/* دواير الصفوف — حجم معقول وثابت (مش بيكبر مع عرض الشاشة) عشان ما تبقاش كبيرة قوي على الشاشات الواسعة */}
+          <div className="grid grid-cols-6 gap-1.5 max-w-[280px] mx-auto">
             {GRADES_LIST.map(g => (
               <button key={g} onClick={() => handleLogGradeChange(g)} title={g}
-                className={`aspect-square rounded-full flex items-center justify-center text-[11px] font-black border-2 transition-all duration-150 ${
+                className={`w-9 h-9 mx-auto rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all duration-150 ${
                   logGrade === g
                     ? "bg-gradient-to-br from-blue-600 to-violet-700 border-blue-400 text-white shadow-lg shadow-blue-500/30 scale-105"
                     : "bg-slate-900/50 border-slate-700/50 text-slate-400 hover:border-slate-500 hover:text-slate-200"
@@ -615,35 +615,35 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           </div>
           <div className="text-center text-white text-xs font-bold">{logGrade}</div>
 
-          {/* مستطيلات صغيرة للمجموعة */}
-          <div className="flex items-center justify-center gap-1.5 flex-wrap">
-            {logGrpList.map(g => (
-              <button key={g} onClick={() => handleLogGroupChange(g)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
-                  logGroup === g
-                    ? "bg-blue-600/25 border-blue-500/60 text-blue-200"
-                    : "bg-slate-900/40 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-500"
-                }`}>
-                مجموعة {g}
-              </button>
-            ))}
-          </div>
-
-          {/* اليوم + الأسهم جنب بعض في صف واحد مضغوط */}
-          <div className="flex items-center justify-center gap-1.5">
-            <button onClick={goPrevLogDate} disabled={!hasPrevLogDate}
-              title="السجل اللي قبل كده"
-              className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
-              <ChevronIcon dir="right" />
-            </button>
-            <div className="shrink-0 max-w-[150px]">
-              <DatePicker value={logDate} onChange={setLogDate} max={TODAY} />
+          {/* المجموعة جنب اليوم/الشهر والأسهم في نفس الصف */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              {logGrpList.map(g => (
+                <button key={g} onClick={() => handleLogGroupChange(g)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                    logGroup === g
+                      ? "bg-blue-600/25 border-blue-500/60 text-blue-200"
+                      : "bg-slate-900/40 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-500"
+                  }`}>
+                  مجموعة {g}
+                </button>
+              ))}
             </div>
-            <button onClick={goNextLogDate} disabled={!hasNextLogDate}
-              title="السجل اللي بعد كده"
-              className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
-              <ChevronIcon dir="left" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button onClick={goPrevLogDate} disabled={!hasPrevLogDate}
+                title="السجل اللي قبل كده"
+                className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
+                <ChevronIcon dir="right" />
+              </button>
+              <div className="shrink-0 max-w-[150px]">
+                <DatePicker value={logDate} onChange={setLogDate} max={TODAY} />
+              </div>
+              <button onClick={goNextLogDate} disabled={!hasNextLogDate}
+                title="السجل اللي بعد كده"
+                className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
+                <ChevronIcon dir="left" />
+              </button>
+            </div>
           </div>
           {logDatesList.length > 0 && (
             <div className="text-slate-500 text-[11px] text-center">
