@@ -474,6 +474,19 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     return map;
   }, [financeMode, safeRecords, curMonth, curYear]);
 
+  // ── إجمالي "المطلوب" (الرسوم المستحقة) هذا الشهر لكل صف — بيتحسب
+  // من كل طلاب الصف الفعليين (مش المحصّل)، عشان يتقارن بالمحصّل الفعلي ──
+  const currentGradeRequired = useMemo(() => {
+    if (financeMode !== "current") return {};
+    const map = {};
+    GRADES_LIST.forEach(g => {
+      map[g] = safeStudents
+        .filter(s => s.grade === g)
+        .reduce((a, s) => a + getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees), 0);
+    });
+    return map;
+  }, [financeMode, safeStudents, curMonth, curYear, safeSettings.gradeFees]);
+
   const currentGrandTotal = useMemo(
     () => Object.values(currentGradeTotals).reduce((a, v) => a + v, 0),
     [currentGradeTotals]
@@ -741,9 +754,17 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: اعرض 6 مستطيلات للصفوف ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">💰 الشهر الحالي — اختر الصف</div>
-            <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
             <GradeCircles value={selGrade} showLabel={false}
               onChange={g => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }} />
+            <div className="grid grid-cols-2 gap-1.5">
+              {GRADES_LIST.map(g => (
+                <div key={g} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/40 border border-slate-700/40">
+                  <span className="text-slate-300 text-xs font-bold">{g}</span>
+                  <span className="text-amber-300 text-xs font-black">مطلوب: {fmtM(currentGradeRequired[g] || 0)}</span>
+                </div>
+              ))}
+            </div>
+            <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
           </div>
         ) : (
           // ── صف متاختار: تلات ازرار فوق (رجوع / مصاريف اليوم / عرض سجل المصاريف) ──
