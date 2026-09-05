@@ -27,6 +27,7 @@ const KEYS = {
   cloudSync:   "app_cloud_sync_state", // #Cloud (تراكمي)
   liveSyncTs:  "app_live_sync_ts",    // #LiveSync (مزامنة تلقائية لحظية)
   trashedDup:  "app_trashed_dup_students", // #TrashDup — سلة مهملات حذف التكرار (شهرين)
+  studentsSyncSnapshot: "app_live_sync_students_snapshot", // #LiveSyncFix — آخر نسخة طلاب اتزامنت فعليًا (لمنع رجوع المحذوف/البلوك)
 };
 
 const TRASH_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // شهرين (60 يوم)
@@ -408,8 +409,23 @@ export default function useAppData() {
     try {
       const { doc, setDoc } = await import("firebase/firestore");
       const { db } = await import("../src/firebase");
-      await setDoc(doc(db, "elshrqawy_live_state", "main"), {
-        students:    lsGet(KEYS.students,    []),
+
+      // ── إصلاح جذري نهائي لمشكلة "رجوع الطلاب المحذوفين/البلوك بعد
+      // تكرار المحاولة" ────────────────────────────────────────────
+      // السبب الحقيقي للمشكلة: أي جهاز فاتح بنسخة قديمة من قائمة
+      // الطلاب (فيها لسه الطالب المكرر اللي اتحذف أو اتعمله بلوك على
+      // جهاز تاني) — لو عمل أي تعديل بسيط خالص (سجّل حضور، حصّل
+      // مصاريف...) كان بيرفع نسخته القديمة الكاملة من الطلاب، فيمسح
+      // أثر الحذف/البلوك اللي حصل فعليًا على الجهاز التاني من غير أي
+      // تنبيه. الحل: الجهاز ميرفعش قائمة الطلاب في السحابة إلا لو هو
+      // نفسه اللي فعلاً عدّل فيها محليًا (بالمقارنة بآخر نسخة اتزامنت
+      // معاه فعلاً) — أي تعديل تاني (حضور/مصاريف/امتحانات) بيترفع
+      // عادي زي ما هو من غير ما يلمس قائمة الطلاب خالص.
+      const currentStudentsJSON = JSON.stringify(lsGet(KEYS.students, []));
+      const lastSyncedJSON      = lsGet(KEYS.studentsSyncSnapshot, null);
+      const studentsChangedLocally = lastSyncedJSON === null || currentStudentsJSON !== lastSyncedJSON;
+
+      const payload = {
         settings:    lsGet(KEYS.settings,    {}),
         // #StudentPortal: لازم البيانات دي كمان عشان بوابة الطالب (لينك المجموعة)
         // تقدر تعرض حضوره ومصاريفه ودرجاته لحظيًا من أي جهاز.
@@ -421,7 +437,15 @@ export default function useAppData() {
         // من questionMeta بتاع الامتحان الورقي المرتبط.
         centerExams: lsGet(KEYS.centerExams, []),
         updatedAt: ts,
-      });
+      };
+      if (studentsChangedLocally) {
+        payload.students = JSON.parse(currentStudentsJSON);
+        lsSet(KEYS.studentsSyncSnapshot, currentStudentsJSON);
+      }
+      // merge:true إجباري هنا — عشان لو حذفنا "students" من الـ payload
+      // (مفيش تعديل محلي فيها)، الحقل يفضل زي ما هو في السحابة بدل ما
+      // يتمسح تمامًا (setDoc من غير merge بيستبدل المستند بالكامل).
+      await setDoc(doc(db, "elshrqawy_live_state", "main"), payload, { merge: true });
       setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });
     } catch (e) {
       setLiveSyncState({ status: "error", message: "تعذّرت المزامنة التلقائية (تأكد من النت)" });
@@ -463,6 +487,11 @@ export default function useAppData() {
     setAttRecords(cloud.attRecords || []);
     setWebExams(cloud.webExams || []);
     setCenterExams(cloud.centerExams || []);
+    // بعد قبول نسخة الطلاب الجاية من السحابة، لازم نحدّث "آخر نسخة
+    // اتزامنت فعليًا" بنفس القيمة — عشان لو الجهاز ده عمل push بعد كده
+    // من غير ما يلمس قائمة الطلاب أصلاً، ميرفعش نسخة قديمة تمسح تعديل
+    // حصل على جهاز تاني (نفس الإصلاح الجذري في pushLiveState فوق).
+    lsSet(KEYS.studentsSyncSnapshot, JSON.stringify(cloud.students || []));
     lsSet(KEYS.liveSyncTs, cloud.updatedAt);
     setLiveSyncState({ status: "success", message: "تم تحديث البيانات من جهاز تاني تلقائيًا ✓" });
   }, [setStudents, setSettings, setFinRecords, setAttRecords, setWebExams, setCenterExams]);
