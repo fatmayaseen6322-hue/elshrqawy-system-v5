@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { lsGet, lsSet, nowStr } from "../utils";
+import { lsGet, lsSet, nowStr, isBlocked, normalizeAr } from "../utils";
 import {
   INIT_STUDENTS, INIT_SETTINGS, INIT_FIN_RECORDS,
   WEB_EXAMS, CENTER_EXAMS, EXAM_QS,
@@ -73,6 +73,39 @@ function getStorageUsagePct() {
     return Math.round((total / limit) * 100);
   } catch { return 0; }
 }
+
+// ── #DedupGuard: حماية جذرية دائمة ضد تكرار اسم الطالب ──────────
+// بدل ما نحاول نمنع كل مصدر ممكن يسبب تكرار (استيراد / مزامنة لحظية بين
+// الأجهزة / استرجاع نسخة سحابية قديمة / أي كود مستقبلي يضيف طالب من
+// غير ما يتحقق)، بنخلي "مصدر الحقيقة" نفسه (state الطلاب هنا) مايقبلش
+// أصلاً وجود اسمين متطابقين (بعد تجاهل الهمزة والمسافات الزيادة) في نفس
+// اللحظة. لو حصل تكرار لأي سبب، بيتشال تلقائيًا وفورًا، والطالب اللي
+// بيفضل هو: النشط (مش بلوك) عن المحذوف/البلوك، وعند التساوي اللي عنده
+// سجلات مصاريف/غياب أكتر (يعني الأصلي اللي النظام فعلاً بيتعامل معاه) —
+// عشان لو حصل تكرار قبل ما الحماية دي تتفعّل، منمسحش الطالب الصح بالغلط.
+function dedupeStudents(list, finRecords, attRecords) {
+  if (!Array.isArray(list) || list.length < 2) return list;
+  const groups = {};
+  list.forEach(s => {
+    if (!s || !s.id) return;
+    const key = normalizeAr(s.name || "").toLowerCase();
+    if (!key) return;
+    (groups[key] = groups[key] || []).push(s);
+  });
+  const dropIds = new Set();
+  Object.values(groups).forEach(group => {
+    if (group.length < 2) return;
+    const scored = group.map(s => ({
+      s,
+      blockedScore: isBlocked(s) ? 1 : 0,
+      recCount: finRecords.filter(r => r.studentId === s.id).length + attRecords.filter(r => r.studentId === s.id).length,
+    }));
+    scored.sort((a, b) => (a.blockedScore - b.blockedScore) || (b.recCount - a.recCount));
+    scored.slice(1).forEach(x => dropIds.add(x.s.id));
+  });
+  return dropIds.size ? list.filter(s => !dropIds.has(s.id)) : list;
+}
+
 
 export default function useAppData() {
   const [students,    setStudents]    = usePersisted(KEYS.students,    loadStudents);
@@ -431,6 +464,14 @@ export default function useAppData() {
     cloudAutoRan.current = true;
     runIncrementalCloudBackup(false);
   }, [runIncrementalCloudBackup]);
+
+  // ── #DedupGuard: تشغيل الحماية على أي تغيير في قائمة الطلاب، من أي
+  // مصدر (استيراد / مزامنة لحظية / استرجاع سحابي / إضافة يدوية) ──
+  useEffect(() => {
+    const cleaned = dedupeStudents(students, finRecords, attRecords);
+    if (cleaned !== students) setStudents(cleaned);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, finRecords, attRecords]);
 
   return {
     students,    setStudents,
