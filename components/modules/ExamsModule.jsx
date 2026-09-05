@@ -1237,14 +1237,18 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
   const [done, setDone]             = useState(false);
   const [score, setScore]           = useState(0);
   const [toast, setToast]           = useState(null);
+  const [showAllExams, setShowAllExams] = useState(false); // مودال "إجمالي الامتحانات"
 
   const needsCorrection = useMemo(() => centerExams.filter(e => e.status === "needs_correction"), [centerExams]);
   const needsReview     = useMemo(() => centerExams.filter(e => e.status === "needs_review"),     [centerExams]);
   const totalExams      = webExams.length + centerExams.length;
-  const avgScore        = useMemo(() =>
-    students.length ? Math.round(students.reduce((a, s) => a + s.score, 0) / students.length) : 0,
-    [students]
-  );
+  // ── كل الامتحانات (ويب + مركز) مجمّعة في قائمة واحدة، الأحدث أولًا،
+  // لعرضها في مودال "إجمالي الامتحانات" عند الضغط على الكارت ──
+  const allExamsList = useMemo(() => {
+    const web    = webExams.map(e    => ({ ...e, _kind: "web" }));
+    const center = centerExams.map(e => ({ ...e, _kind: "center" }));
+    return [...web, ...center].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [webExams, centerExams]);
 
   // الأسئلة المرتبطة بالامتحان: إذا كان للامتحان أسئلة محددة استخدمها، وإلا استخدم كل البنك
   const correctionQs = useMemo(() => {
@@ -1378,25 +1382,32 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
     <div className="space-y-4">
       <h3 className="text-white font-black">🎛️ لوحة تحكم الامتحانات</h3>
 
-      {/* إحصائيات */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-blue-900/20 border border-blue-700/20 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-blue-400">{totalExams}</div>
-          <div className="text-xs text-slate-400 mt-1">إجمالي الامتحانات</div>
-        </div>
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black" style={{ color: scC(avgScore) }}>{avgScore}%</div>
-          <div className="text-xs text-slate-400 mt-1">متوسط الطلاب</div>
-        </div>
-        <div className="bg-red-900/20 border border-red-700/20 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-red-400">{needsCorrection.length}</div>
-          <div className="text-xs text-slate-400 mt-1">تحتاج تصحيح</div>
-        </div>
-        <div className="bg-amber-900/20 border border-amber-700/20 rounded-2xl p-4 text-center">
-          <div className="text-2xl font-black text-amber-400">{needsReview.length}</div>
-          <div className="text-xs text-slate-400 mt-1">تحتاج مراجعة</div>
-        </div>
-      </div>
+      {/* إحصائيات — كارت واحد بس: إجمالي الامتحانات، قابل للضغط عشان يفتح كل الامتحانات */}
+      <button onClick={() => setShowAllExams(true)}
+        className="w-full bg-blue-900/20 border border-blue-700/20 rounded-2xl p-4 text-center hover:bg-blue-900/30 transition-colors">
+        <div className="text-3xl font-black text-blue-400">{totalExams}</div>
+        <div className="text-xs text-slate-400 mt-1">📋 إجمالي الامتحانات — اضغط للعرض</div>
+      </button>
+
+      {showAllExams && (
+        <Modal onClose={() => setShowAllExams(false)} title="كل الامتحانات">
+          <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+            {allExamsList.length === 0 ? (
+              <div className="text-center text-slate-500 text-sm py-6">مفيش أي امتحانات مسجّلة حاليًا</div>
+            ) : allExamsList.map(e => (
+              <div key={`${e._kind}-${e.id}`} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-white font-bold text-sm truncate">{e.name || "بدون اسم"}</div>
+                  <div className="text-slate-400 text-xs truncate">{e.date} · {e.grade}{e.group ? ` · مج. ${e.group}` : ""}</div>
+                </div>
+                <span className={`shrink-0 text-xs px-2 py-1 rounded-lg ${e._kind === "web" ? "bg-emerald-500/15 text-emerald-400" : "bg-violet-500/15 text-violet-400"}`}>
+                  {e._kind === "web" ? "🌐 ويب" : "🏫 سنتر"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
 
       {/* Bar chart بسيط لمتوسط درجات الطلاب */}
       {students.length > 0 && (
