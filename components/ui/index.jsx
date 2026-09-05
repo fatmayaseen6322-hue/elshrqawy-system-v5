@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { pct, scC, isBlocked } from "../../utils/index.js";
+import { pct, scC, isBlocked, shortGradeLabel } from "../../utils/index.js";
 import { MONTHS_AR, GROUPS_MAP, GRADES_LIST, addCustomGrade } from "../../constants/index.js";
 
 // ══════════════════════════════════════════════════════════════
@@ -178,6 +178,30 @@ export function GradeSelect({ value, onChange, placeholder, className = "", err 
       {GRADES_LIST.map(g => <option key={g} value={g}>{g}</option>)}
       <option value={ADD_NEW_GRADE}>➕ إضافة صف جديد</option>
     </Sel>
+  );
+}
+
+/** فلتر الصف على شكل دوائر (زي سجل الغياب بالظبط) — قابل لإعادة الاستخدام
+ * في أي مكان في التطبيق فيه فلتر متعلق بالصف (المصاريف، الغياب...).
+ * grades: قائمة الصفوف المعروضة (افتراضيًا كل GRADES_LIST). value/onChange:
+ * الصف المختار حاليًا. showLabel: هل يظهر اسم الصف الكامل تحت الدوائر. */
+export function GradeCircles({ grades = GRADES_LIST, value, onChange, showLabel = true }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-6 gap-1.5 max-w-[280px] mx-auto">
+        {grades.map(g => (
+          <button key={g} type="button" onClick={() => onChange(g)} title={g}
+            className={`w-9 h-9 mx-auto rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all duration-150 ${
+              value === g
+                ? "bg-gradient-to-br from-blue-600 to-violet-700 border-blue-400 text-white shadow-lg shadow-blue-500/30 scale-105"
+                : "bg-slate-900/50 border-slate-700/50 text-slate-400 hover:border-slate-500 hover:text-slate-200"
+            }`}>
+            {shortGradeLabel(g)}
+          </button>
+        ))}
+      </div>
+      {showLabel && value && <div className="text-center text-white text-xs font-bold">{value}</div>}
+    </div>
   );
 }
 

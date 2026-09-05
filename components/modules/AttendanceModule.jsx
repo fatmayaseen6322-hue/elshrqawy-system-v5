@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY } from "../../constants";
-import { pct, isBlocked, waLink } from "../../utils";
-import { Av, Sel, DatePicker, Toast, Modal, Field, Btn } from "../ui";
+import { pct, isBlocked, waLink, shortGradeLabel } from "../../utils";
+import { Av, Sel, DatePicker, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
 // تطبيع الألف بأشكال الهمزة المختلفة عشان البحث ما يفرقش بين
 // "احمد" و"أحمد" و"إحمد" و"آحمد" (طلب: البحث يتجاهل الهمزة)
@@ -59,19 +59,8 @@ function ChevronIcon({ dir }) {
   );
 }
 
-// اختصار اسم الصف عشان يتظبط جوه دايرة صغيرة — بيحاول يفهم النمط
-// المعتاد "ترتيب + مرحلة" (أولى/ثانية/ثالثة + إعدادي/ثانوي) ويحوّله
-// لرقم + حرف المرحلة، ولو الصف مخصص وماتوافقش النمط بياخد أول حرفين بس.
-const ORDINAL_MAP = { "أولى": "1", "ثانية": "2", "ثالثة": "3", "رابعة": "4", "خامسة": "5", "سادسة": "6" };
-const shortGradeLabel = (g = "") => {
-  const parts = g.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    const num = ORDINAL_MAP[parts[0]] || parts[0][0] || "";
-    const lvl = parts[1][0] || "";
-    return `${num}${lvl}`;
-  }
-  return g.slice(0, 3) || "-";
-};
+// اختصار اسم الصف عشان يتظبط جوه دايرة صغيرة — منقول لملف utils المشترك
+// (shortGradeLabel) عشان تُستخدم في كل فلاتر الصف الدائرية بالتطبيق.
 
 // ══════════════════════════════════════════════════════════════
 // MODULE 1: ATTENDANCE
@@ -601,19 +590,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
 
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3.5 space-y-3">
           {/* دواير الصفوف — حجم معقول وثابت (مش بيكبر مع عرض الشاشة) عشان ما تبقاش كبيرة قوي على الشاشات الواسعة */}
-          <div className="grid grid-cols-6 gap-1.5 max-w-[280px] mx-auto">
-            {GRADES_LIST.map(g => (
-              <button key={g} onClick={() => handleLogGradeChange(g)} title={g}
-                className={`w-9 h-9 mx-auto rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all duration-150 ${
-                  logGrade === g
-                    ? "bg-gradient-to-br from-blue-600 to-violet-700 border-blue-400 text-white shadow-lg shadow-blue-500/30 scale-105"
-                    : "bg-slate-900/50 border-slate-700/50 text-slate-400 hover:border-slate-500 hover:text-slate-200"
-                }`}>
-                {shortGradeLabel(g)}
-              </button>
-            ))}
-          </div>
-          <div className="text-center text-white text-xs font-bold">{logGrade}</div>
+          <GradeCircles value={logGrade} onChange={handleLogGradeChange} />
 
           {/* المجموعة جنب اليوم/الشهر والأسهم في نفس الصف */}
           <div className="flex items-center justify-center gap-2 flex-wrap">

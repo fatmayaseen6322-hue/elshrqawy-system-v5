@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR, TODAY } from "../../constants";
 import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, checkPwd } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
-import { Av, Toast, Modal, Field, Btn } from "../ui";
+import { Av, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
 // ══════════════════════════════════════════════════════════════
 // MODULE 3: FINANCE
@@ -736,15 +736,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">💰 الشهر الحالي — اختر الصف</div>
             <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
-            <div className="grid grid-cols-2 gap-2">
-              {GRADES_LIST.map(g => (
-                <button key={g}
-                  onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
-                  className="py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
-                  {g}
-                </button>
-              ))}
-            </div>
+            <GradeCircles value={selGrade} showLabel={false}
+              onChange={g => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }} />
           </div>
         ) : (
           // ── صف متاختار: تلات ازرار فوق (رجوع / مصاريف اليوم / عرض سجل المصاريف) ──
@@ -811,17 +804,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 <div className="text-sm">كل الصفوف مسدّدة شهر {MONTHS_AR[regMonth - 1]} {regYear}</div>
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  {pastLateGrades.map(g => (
-                    <button key={g}
-                      onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
-                      className="flex flex-col items-center justify-center gap-1 py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
-                      <span>{g}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
+              <GradeCircles grades={pastLateGrades} value={selGrade} showLabel={false}
+                onChange={g => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }} />
             )}
             </>
             )}
@@ -932,17 +916,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 <div className="text-sm">مفيش أي طالب متأخر في السداد حاليًا</div>
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  {lateGradesWithDebt.map(g => (
-                    <button key={g}
-                      onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
-                      className="flex flex-col items-center justify-center gap-1 py-4 rounded-2xl font-bold text-sm bg-slate-700/60 hover:bg-emerald-600/80 text-slate-200 hover:text-white border border-slate-600/40 transition-all">
-                      <span>{g}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
+              <GradeCircles grades={lateGradesWithDebt} value={selGrade} showLabel={false}
+                onChange={g => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }} />
             )}
           </div>
         ) : (

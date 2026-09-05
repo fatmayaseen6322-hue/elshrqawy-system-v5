@@ -42,6 +42,23 @@ export const fmtM = n => (n || 0).toLocaleString("en-US");
 export const scC  = v => v >= 85 ? "#10b981" : v >= 65 ? "#3b82f6" : v >= 50 ? "#f59e0b" : "#ef4444";
 export const scL  = v => v >= 85 ? "ممتاز"  : v >= 65 ? "جيد"    : v >= 50 ? "مقبول"  : "ضعيف";
 
+// ── اختصار اسم الصف عشان يتظبط جوه دايرة صغيرة (مستخدم في كل فلاتر
+// الصف اللي شكلها دوائر: سجل الغياب، المصاريف...) — بيحاول يفهم النمط
+// المعتاد "ترتيب + مرحلة" (أولى/ثانية/ثالثة + إعدادي/ثانوي) ويحوّله
+// لرقم + حرف مميز للمرحلة (ع = إعدادي، ث = ثانوي)، ولو الصف مخصص
+// وماتوافقش النمط بياخد أول حرفين بس.
+const ORDINAL_MAP = { "أولى": "1", "ثانية": "2", "ثالثة": "3", "رابعة": "4", "خامسة": "5", "سادسة": "6" };
+const LEVEL_MAP    = { "إعدادي": "ع", "ثانوي": "ث" };
+export const shortGradeLabel = (g = "") => {
+  const parts = g.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    const num = ORDINAL_MAP[parts[0]] || parts[0][0] || "";
+    const lvl = LEVEL_MAP[parts[1]] || parts[1][0] || "";
+    return `${num}${lvl}`;
+  }
+  return g.slice(0, 3) || "-";
+};
+
 // ── Safe localStorage helpers ──────────────────────────────────
 export function lsGet(key, fallback) {
   try {
