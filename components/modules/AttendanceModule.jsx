@@ -726,15 +726,6 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </Modal>
       )}
 
-      {/* سجل الغياب (متاح لكل الأدوار) */}
-      <div className="flex gap-2 items-stretch">
-        <button onClick={openLog}
-          className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3 hover:bg-slate-700/50 transition-colors">
-          <span className="text-xl leading-none">📔</span>
-          <span className="text-sm font-bold text-blue-400">سجل الغياب</span>
-        </button>
-      </div>
-
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
         <div className="grid grid-cols-4 gap-2 items-stretch">
           <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
