@@ -726,13 +726,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </Modal>
       )}
 
-      {/* زرار غياب سريع + سجل الغياب (متاحين لكل الأدوار) */}
+      {/* سجل الغياب (متاح لكل الأدوار) */}
       <div className="flex gap-2 items-stretch">
-        <button onClick={openReport}
-          className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3 hover:bg-slate-700/50 transition-colors">
-          <span className="text-xl leading-none">🚫</span>
-          <span className="text-sm font-bold text-red-400">غياب</span>
-        </button>
         <button onClick={openLog}
           className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl flex flex-row items-center justify-center gap-2 py-3 hover:bg-slate-700/50 transition-colors">
           <span className="text-xl leading-none">📔</span>
@@ -749,11 +744,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
           </Sel>
           <DatePicker value={date} onChange={handleDateChange} max={TODAY} />
-          <div className={`rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 ${(!isOldDate || editUnlocked) ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}
-            title={(!isOldDate || editUnlocked) ? "سجل حضور اليوم مفتوح — عدّل عادي من غير باسورد" : "ده يوم قديم — عرض فقط. المستر بس يقدر يعدّل بعد إدخال الباسورد"}>
-            <span className="text-sm leading-none">{(!isOldDate || editUnlocked) ? "✓" : "🔒"}</span>
-            <span className={`text-[12px] font-bold leading-tight ${(!isOldDate || editUnlocked) ? "text-emerald-400" : "text-amber-400"}`}>عرض الحضور</span>
-          </div>
+          <button onClick={openLog}
+            className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
+            title="سجل الغياب">
+            <span className="text-sm leading-none">📔</span>
+            <span className="text-[12px] font-bold leading-tight text-blue-400">سجل الغياب</span>
+          </button>
         </div>
       </div>
 
