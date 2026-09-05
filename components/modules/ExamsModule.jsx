@@ -610,6 +610,11 @@ const LESSONS_COUNT = 6;
 // exam بييجي جاهز من ExamErrorEntry (سواء امتحان مرفوع فعليًا أو امتحان
 // اتسجّل يدويًا بعدد أسئلة/نقط بس من غير رفع ملف) — الشاشة دايمًا بتظهر
 // طول ما فيه امتحان متحدد، سواء اتربط بملف مرفوع أو لأ.
+const EXAM_STATUS_META = {
+  perfect: { label: "كله صح",              icon: "✅", color: "emerald" },
+  absent:  { label: "ما امتحنش",           icon: "❌", color: "slate"   },
+  sick:    { label: "مريض — محتاج ميعاد",  icon: "🤒", color: "amber"   },
+};
 function StudentErrorSheet({ student, grade, unit, lesson, exam, setStudents, addActivity, onClose }) {
   const [toast,   setToast]   = useState(null);
 
@@ -617,22 +622,63 @@ function StudentErrorSheet({ student, grade, unit, lesson, exam, setStudents, ad
   const numQ   = exam?.numQuestions      || 0;
   const numPts = exam?.pointsPerQuestion || 0;
   const errors = (student.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id);
+  const statusEntry = (student.examDayStatus || []).find(d => d.grade === grade && d.unit === unit && d.lesson === lesson && d.examId === exam?.id);
+  const currentStatus = statusEntry?.status || null;
 
+  const countFor = (q, p) => errors.filter(e => e.q === q && e.p === p).length;
+
+  // ── كل دوسة على رقم النقطة بتضيف خطأ جديد (مش تبديل) — عشان لو الطالب
+  // غلط في نفس النقطة أكتر من مرة (مثلاً في أكتر من محاولة) يتسجل العدد صح ──
   const markPoint = (q, p) => {
     const label = `${tag} - سؤال ${q} (نقطة ${p})`;
-    const already = errors.some(e => e.q === q && e.p === p);
     setStudents(prev => (prev || []).map(s => {
       if (s.id !== student.id) return s;
-      const newErrors = already
-        ? (s.examErrors || []).filter(e => !(e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id && e.q === q && e.p === p))
-        : [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() }];
-      const newWeak = already
-        ? (s.weak || []).filter(w => w !== label)
-        : ((s.weak || []).includes(label) ? (s.weak || []) : [...(s.weak || []), label]);
+      const newErrors = [...(s.examErrors || []), { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() }];
+      const newWeak = (s.weak || []).includes(label) ? (s.weak || []) : [...(s.weak || []), label];
       return { ...s, examErrors: newErrors, weak: newWeak };
     }));
-    addActivity?.(already ? "إلغاء خطأ سؤال" : "خطأ سؤال", `${student.name} — ${label}`);
-    setToast({ msg: already ? `تم إلغاء: سؤال ${q} - نقطة ${p}` : `✓ اتسجّل: سؤال ${q} - نقطة ${p}`, type: already ? "info" : "success" });
+    addActivity?.("خطأ سؤال", `${student.name} — ${label} (المرة ${countFor(q, p) + 1})`);
+    setToast({ msg: `✓ اتسجّل غلط: سؤال ${q} - نقطة ${p} (× ${countFor(q, p) + 1})`, type: "success" });
+  };
+
+  // بتشيل آخر مرة اتسجلت بس لنفس السؤال/النقطة (مش كل الأخطاء المتشابهة)
+  const removeOnePoint = (q, p) => {
+    setStudents(prev => (prev || []).map(s => {
+      if (s.id !== student.id) return s;
+      const list = [...(s.examErrors || [])];
+      let lastIdx = -1;
+      for (let i = list.length - 1; i >= 0; i--) {
+        const e = list[i];
+        if (e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id && e.q === q && e.p === p) { lastIdx = i; break; }
+      }
+      if (lastIdx === -1) return s;
+      const newErrors = list.filter((_, i) => i !== lastIdx);
+      const stillHas = newErrors.some(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id && e.q === q && e.p === p);
+      const label = `${tag} - سؤال ${q} (نقطة ${p})`;
+      const newWeak = stillHas ? (s.weak || []) : (s.weak || []).filter(w => w !== label);
+      return { ...s, examErrors: newErrors, weak: newWeak };
+    }));
+  };
+
+  // ── ✅ كله صح / ❌ ما امتحنش / 🤒 مريض — حالة واحدة بس تنفع تتفعل، وتفعيلها
+  // بيمسح أي أخطاء أسئلة متسجّلة قبل كده لنفس الامتحان (عشان الحالة العامة
+  // هي المرجع). دوسي على نفس الزرار تاني عشان تلغيه ترجعي تسجّلي بالتفصيل ──
+  const toggleStatus = (status) => {
+    const turningOn = currentStatus !== status;
+    setStudents(prev => (prev || []).map(s => {
+      if (s.id !== student.id) return s;
+      const otherStatuses = (s.examDayStatus || []).filter(d => !(d.grade === grade && d.unit === unit && d.lesson === lesson && d.examId === exam?.id));
+      const newStatusList = turningOn
+        ? [...otherStatuses, { id: Date.now() + Math.random(), grade, unit, lesson, examId: exam?.id || null, status, ts: new Date().toISOString() }]
+        : otherStatuses;
+      const sameExamErrors = (s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id);
+      const labelsToRemove = sameExamErrors.map(e => `${tag} - سؤال ${e.q} (نقطة ${e.p})`);
+      const newErrors = turningOn ? (s.examErrors || []).filter(e => !(e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === exam?.id)) : (s.examErrors || []);
+      const newWeak = turningOn ? (s.weak || []).filter(w => !labelsToRemove.includes(w)) : (s.weak || []);
+      return { ...s, examDayStatus: newStatusList, examErrors: newErrors, weak: newWeak };
+    }));
+    addActivity?.(turningOn ? "تسجيل حالة امتحان" : "إلغاء حالة امتحان", `${student.name} — ${tag} — ${EXAM_STATUS_META[status].label}`);
+    setToast({ msg: turningOn ? `✓ اتسجّل: ${EXAM_STATUS_META[status].label}` : "تم الإلغاء", type: turningOn ? "success" : "info" });
   };
 
   const removeError = e => {
@@ -647,6 +693,18 @@ function StudentErrorSheet({ student, grade, unit, lesson, exam, setStudents, ad
     }));
   };
 
+  // تجميع الأخطاء المتكررة على نفس السؤال/النقطة في سطر واحد بعدد
+  const groupedErrors = useMemo(() => {
+    const map = {};
+    errors.forEach(e => {
+      const k = `${e.q}-${e.p}`;
+      if (!map[k]) map[k] = { q: e.q, p: e.p, count: 0, ids: [] };
+      map[k].count++;
+      map[k].ids.push(e.id);
+    });
+    return Object.values(map).sort((a, b) => a.q - b.q || a.p - b.p);
+  }, [errors]);
+
   return (
     <Modal title={`📝 ${student.name} — ${tag}`} onClose={onClose} maxW="max-w-lg">
       <div className="space-y-4">
@@ -654,22 +712,50 @@ function StudentErrorSheet({ student, grade, unit, lesson, exam, setStudents, ad
           📎 {exam?.fileName ? `مربوط بامتحان: ${exam.fileName}` : "امتحان مسجَّل يدويًا (بدون ملف)"} — {numQ} سؤال × {numPts} نقط
         </div>
 
-        <div>
-          <div className="text-xs text-slate-400 font-bold mb-2">دوسي على ✓ جنب رقم النقطة الغلط في كل سؤال — دوسي تاني عليها لو غلطتِ عشان تلغيها</div>
+        {/* ✅ / ❌ / 🤒 حالة عامة للامتحان */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {Object.entries(EXAM_STATUS_META).map(([key, meta]) => {
+            const active = currentStatus === key;
+            return (
+              <button key={key} onClick={() => toggleStatus(key)}
+                className={`px-2 py-2.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
+                  active
+                    ? key === "perfect" ? "bg-emerald-600 text-white" : key === "sick" ? "bg-amber-600 text-white" : "bg-slate-600 text-white"
+                    : "bg-slate-900 border border-slate-700/50 text-slate-300 hover:bg-slate-800"}`}>
+                <span className="text-base">{meta.icon}</span>
+                <span>{meta.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {currentStatus === "sick" && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-amber-300 text-xs text-center">
+            🗓️ اتسجّل إن {student.name} عنده ميعاد امتحان متأخر — هيظهر في قائمة "محتاجين ميعاد" لحد ما يمتحن ويتسجّل درجته
+          </div>
+        )}
+
+        <div className={currentStatus ? "opacity-40 pointer-events-none" : ""}>
+          <div className="text-xs text-slate-400 font-bold mb-2">دوسي على رقم النقطة الغلط في كل سؤال — كل دوسة بتزوّد العداد لو غلط تاني، ولإلغاء آخر مرة دوسي "−"</div>
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
             {Array.from({ length: numQ }, (_, i) => i + 1).map(q => (
               <div key={q} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2 flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-black text-white shrink-0 w-14">سؤال {q}</span>
                 <div className="flex gap-1.5 flex-wrap flex-1">
                   {Array.from({ length: numPts }, (_, j) => j + 1).map(p => {
-                    const isMarked = errors.some(e => e.q === q && e.p === p);
+                    const count = countFor(q, p);
                     return (
-                      <button key={p} onClick={() => markPoint(q, p)}
-                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                          isMarked ? "bg-red-600 text-white" : "bg-slate-900 border border-slate-700/50 text-slate-300 hover:bg-red-700/40"}`}>
-                        <span>{p}</span>
-                        <span className={isMarked ? "text-white" : "text-slate-500"}>✓</span>
-                      </button>
+                      <div key={p} className="flex items-center gap-0.5">
+                        <button onClick={() => markPoint(q, p)}
+                          className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                            count > 0 ? "bg-red-600 text-white" : "bg-slate-900 border border-slate-700/50 text-slate-300 hover:bg-red-700/40"}`}>
+                          <span>{p}</span>
+                          {count > 0 && <span className="text-white/90">×{count}</span>}
+                        </button>
+                        {count > 0 && (
+                          <button onClick={() => removeOnePoint(q, p)} title="إلغاء آخر مرة"
+                            className="w-5 h-5 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-300 text-xs font-bold shrink-0">−</button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -678,14 +764,17 @@ function StudentErrorSheet({ student, grade, unit, lesson, exam, setStudents, ad
           </div>
         </div>
 
-        {errors.length > 0 && (
+        {groupedErrors.length > 0 && (
           <div>
             <div className="text-xs text-red-400 font-bold mb-2">الأخطاء المسجَّلة في هذا الدرس ({errors.length})</div>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {errors.map(e => (
-                <div key={e.id} className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5">
-                  <span className="text-red-300 text-xs">سؤال {e.q} — نقطة {e.p}</span>
-                  <button onClick={() => removeError(e)} className="text-slate-500 hover:text-white text-xs px-2">✕</button>
+              {groupedErrors.map(g => (
+                <div key={`${g.q}-${g.p}`} className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5">
+                  <span className="text-red-300 text-xs">سؤال {g.q} — نقطة {g.p} {g.count > 1 && <span className="font-black">× {g.count}</span>}</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => removeOnePoint(g.q, g.p)} className="text-slate-500 hover:text-white text-xs px-1.5">−1</button>
+                    <button onClick={() => g.ids.forEach(id => removeError({ id, q: g.q, p: g.p }))} className="text-slate-500 hover:text-white text-xs px-2">✕</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -736,6 +825,14 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
   const errCountFor = s => selectedExam
     ? (s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).length
     : 0;
+
+  const statusFor = s => selectedExam
+    ? (s.examDayStatus || []).find(d => d.grade === grade && d.unit === unit && d.lesson === lesson && d.examId === selectedExam.id) || null
+    : null;
+
+  const sickStudents = useMemo(() => selectedExam
+    ? gradeStudents.filter(s => statusFor(s)?.status === "sick")
+    : [], [gradeStudents, selectedExam, grade, unit, lesson]);
 
   const resetPick = () => { setSelectedExamId(""); setNewName(""); setNewNumQ(20); setNewNumPts(4); setEditOpen(false); };
 
@@ -886,11 +983,26 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
             </div>
           )}
 
+          {sickStudents.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 space-y-1.5">
+              <div className="text-amber-400 text-xs font-bold">🗓️ محتاجين ميعاد امتحان متأخر ({sickStudents.length})</div>
+              <div className="flex flex-wrap gap-1.5">
+                {sickStudents.map(s => (
+                  <button key={s.id} onClick={() => setOpenStudent(s)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-300">
+                    🤒 {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {gradeStudents.length === 0
             ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
             : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
                 {gradeStudents.map(s => {
                   const n = errCountFor(s);
+                  const st = statusFor(s);
                   return (
                     <button key={s.id} onClick={() => setOpenStudent(s)}
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
@@ -899,7 +1011,15 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
                         <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
                         <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
                       </div>
-                      {n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} خطأ</span>}
+                      {st && (
+                        <span className={`text-xs px-2 py-1 rounded-lg shrink-0 ${
+                          st.status === "perfect" ? "bg-emerald-500/15 border border-emerald-500/20 text-emerald-400"
+                          : st.status === "sick" ? "bg-amber-500/15 border border-amber-500/20 text-amber-400"
+                          : "bg-slate-700/40 border border-slate-600/30 text-slate-300"}`}>
+                          {EXAM_STATUS_META[st.status].icon} {EXAM_STATUS_META[st.status].label}
+                        </span>
+                      )}
+                      {!st && n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} خطأ</span>}
                       <span className="text-slate-500 text-xs shrink-0">تسجيل ›</span>
                     </button>
                   );
@@ -915,7 +1035,8 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
 
       {openStudent && selectedExam && (
         <StudentErrorSheet
-          student={openStudent} grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
+          student={gradeStudents.find(s => s.id === openStudent.id) || openStudent}
+          grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
           setStudents={setStudents} addActivity={addActivity}
           onClose={() => setOpenStudent(null)}
         />
