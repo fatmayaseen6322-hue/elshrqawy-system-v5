@@ -27,6 +27,7 @@ const KEYS = {
   cloudSync:   "app_cloud_sync_state", // #Cloud (تراكمي)
   liveSyncTs:  "app_live_sync_ts",    // #LiveSync (مزامنة تلقائية لحظية)
   trashedDup:  "app_trashed_dup_students", // #TrashDup — سلة مهملات حذف التكرار (شهرين)
+  studentsSyncSnapshot: "app_live_sync_students_snapshot", // #LiveSyncFix — آخر نسخة طلاب اتزامنت فعليًا (لمنع رجوع المحذوف/البلوك)
 };
 
 const TRASH_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // شهرين (60 يوم)
@@ -235,6 +236,10 @@ export default function useAppData() {
       const curStudents     = lsGet(KEYS.students,    []);
       const curSettings     = lsGet(KEYS.settings,    {});
       const curCenterExams  = lsGet(KEYS.centerExams, []);
+      const curWebExams     = lsGet(KEYS.webExams,    []);
+      const curExamQs       = lsGet(KEYS.examQs,      []);
+      const curActivityLog  = lsGet(KEYS.activityLog, []);
+      const curTrashedDup   = lsGet(KEYS.trashedDup,  []);
 
       // الجديد فقط منذ آخر نسخة (بالـ id، مش بالتاريخ، عشان يتحمل أي تعديل رجعي)
       const newFin = curFin.filter(r => !sync.syncedFinIds.includes(r.id));
@@ -271,9 +276,19 @@ export default function useAppData() {
           centerExamResults: newCenterExamResults,
           savedAt:           new Date().toISOString(),
         };
+        // زرار "رفع نسخة على السحابة" اليدوي (force=true) بيرفع نسخة كاملة
+        // شاملة من كل قسم في البرنامج — الطلاب، الإعدادات (كل الباسوردات
+        // والأرقام السرية)، بنك الامتحانات، نتائج التصحيح والأخطاء، امتحانات
+        // الويب، وسجل أنشطة برج المراقبة — عشان أي جهاز تاني يقدر "يستورد"
+        // نفس النظام بالظبط من غير تصدير/استيراد ملف يدوي.
         if (force) {
-          payload.students = curStudents; // نسخة كاملة (فيها البلوك)
-          payload.settings = curSettings; // نسخة كاملة (فيها الباسورد)
+          payload.students        = curStudents;     // نسخة كاملة (فيها البلوك)
+          payload.settings        = curSettings;      // نسخة كاملة (فيها كل الباسوردات والأرقام السرية)
+          payload.webExamsFull    = curWebExams;      // بنك امتحانات الويب كامل
+          payload.centerExamsFull = curCenterExams;   // كل الامتحانات + التصحيح + الأخطاء كاملين
+          payload.examQsFull      = curExamQs;        // بنك الأسئلة كامل
+          payload.activityLogFull = curActivityLog;   // سجل أنشطة برج المراقبة كامل
+          payload.trashedDupFull  = curTrashedDup;     // سلة مهملات تكرار الأسماء
         }
         await setDoc(doc(db, "elshrqawy_daily_backups", today), payload);
       }
@@ -311,7 +326,10 @@ export default function useAppData() {
 
       const finMap = {}, attMap = {}, examSnap = {}, examResultsMap = {};
       let lastDate = "";
-      let fullStudents = null, fullSettings = null; // آخر نسخة كاملة (من زرار الرفع اليدوي)
+      // آخر نسخة كاملة (من زرار الرفع اليدوي) — بتشمل دلوقتي كل قسم في البرنامج
+      let fullStudents = null, fullSettings = null;
+      let fullWebExams = null, fullCenterExams = null, fullExamQs = null;
+      let fullActivityLog = null, fullTrashedDup = null;
       snaps.forEach(d => {
         const data = d.data();
         lastDate = data.savedAt?.split("T")[0] || d.id;
@@ -321,6 +339,11 @@ export default function useAppData() {
         (data.centerExamResults || []).forEach(c => { examResultsMap[c.id] = c; });
         if (data.students) fullStudents = data.students; // بترتيب الوقت (asc) فآخر واحد فيه students هو الأحدث
         if (data.settings) fullSettings = data.settings;
+        if (data.webExamsFull)    fullWebExams    = data.webExamsFull;
+        if (data.centerExamsFull) fullCenterExams = data.centerExamsFull;
+        if (data.examQsFull)      fullExamQs      = data.examQsFull;
+        if (data.activityLogFull) fullActivityLog = data.activityLogFull;
+        if (data.trashedDupFull)  fullTrashedDup  = data.trashedDupFull;
       });
 
       // دمج مع الموجود محليًا (مش استبدال كامل) — لأن رفع السحابة نفسه تراكمي
@@ -335,9 +358,33 @@ export default function useAppData() {
         setStudents(prev => (prev || []).map(s => examSnap[s.id] ? { ...s, score: examSnap[s.id].score, weak: examSnap[s.id].weak } : s));
       }
       if (fullSettings) setSettings(fullSettings);
-      setCenterExams(prev => (prev || []).map(e => examResultsMap[e.id]
-        ? { ...e, _score: examResultsMap[e.id].score, _max: examResultsMap[e.id].max, correctionDate: examResultsMap[e.id].correctionDate, status: "needs_review" }
-        : e));
+
+      // الامتحانات (بنك الأسئلة، التصحيح، الأخطاء): لو فيه نسخة كاملة
+      // اترفعت من زرار الرفع اليدوي، بتستبدل بالكامل عشان تبقى مطابقة
+      // للنسخة اللي رفعتيها بالظبط. لو مفيش، يفضل الدمج الجزئي القديم
+      // (نتائج التصحيح المعلّقة بس) زي ما كان.
+      if (fullCenterExams) {
+        setCenterExams(fullCenterExams);
+      } else {
+        setCenterExams(prev => (prev || []).map(e => examResultsMap[e.id]
+          ? { ...e, _score: examResultsMap[e.id].score, _max: examResultsMap[e.id].max, correctionDate: examResultsMap[e.id].correctionDate, status: "needs_review" }
+          : e));
+      }
+      if (fullWebExams) setWebExams(fullWebExams);
+      if (fullExamQs)   setExamQs(fullExamQs);
+      if (fullTrashedDup) setTrashedDupStudents(fullTrashedDup);
+      // برج المراقبة: سجل الأنشطة بيتدمج (مش استبدال) عشان محدش يفقد سجل
+      // جهازه، وبياخد آخر 300 نشاط بعد الدمج مرتبين بالأحدث.
+      if (fullActivityLog) {
+        setActivityLogRaw(prev => {
+          const merged = Object.values({
+            ...Object.fromEntries((fullActivityLog || []).map(a => [a.id, a])),
+            ...Object.fromEntries((prev || []).map(a => [a.id, a])),
+          }).sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, 300);
+          lsSet(KEYS.activityLog, merged);
+          return merged;
+        });
+      }
 
       setCloudBackupState({ status: "success", message: `تم الاسترجاع ودمج كل النسخ اليومية (آخرها ${lastDate}) ✓` });
     } catch (e) {
@@ -362,8 +409,23 @@ export default function useAppData() {
     try {
       const { doc, setDoc } = await import("firebase/firestore");
       const { db } = await import("../src/firebase");
-      await setDoc(doc(db, "elshrqawy_live_state", "main"), {
-        students:    lsGet(KEYS.students,    []),
+
+      // ── إصلاح جذري نهائي لمشكلة "رجوع الطلاب المحذوفين/البلوك بعد
+      // تكرار المحاولة" ────────────────────────────────────────────
+      // السبب الحقيقي للمشكلة: أي جهاز فاتح بنسخة قديمة من قائمة
+      // الطلاب (فيها لسه الطالب المكرر اللي اتحذف أو اتعمله بلوك على
+      // جهاز تاني) — لو عمل أي تعديل بسيط خالص (سجّل حضور، حصّل
+      // مصاريف...) كان بيرفع نسخته القديمة الكاملة من الطلاب، فيمسح
+      // أثر الحذف/البلوك اللي حصل فعليًا على الجهاز التاني من غير أي
+      // تنبيه. الحل: الجهاز ميرفعش قائمة الطلاب في السحابة إلا لو هو
+      // نفسه اللي فعلاً عدّل فيها محليًا (بالمقارنة بآخر نسخة اتزامنت
+      // معاه فعلاً) — أي تعديل تاني (حضور/مصاريف/امتحانات) بيترفع
+      // عادي زي ما هو من غير ما يلمس قائمة الطلاب خالص.
+      const currentStudentsJSON = JSON.stringify(lsGet(KEYS.students, []));
+      const lastSyncedJSON      = lsGet(KEYS.studentsSyncSnapshot, null);
+      const studentsChangedLocally = lastSyncedJSON === null || currentStudentsJSON !== lastSyncedJSON;
+
+      const payload = {
         settings:    lsGet(KEYS.settings,    {}),
         // #StudentPortal: لازم البيانات دي كمان عشان بوابة الطالب (لينك المجموعة)
         // تقدر تعرض حضوره ومصاريفه ودرجاته لحظيًا من أي جهاز.
@@ -375,7 +437,15 @@ export default function useAppData() {
         // من questionMeta بتاع الامتحان الورقي المرتبط.
         centerExams: lsGet(KEYS.centerExams, []),
         updatedAt: ts,
-      });
+      };
+      if (studentsChangedLocally) {
+        payload.students = JSON.parse(currentStudentsJSON);
+        lsSet(KEYS.studentsSyncSnapshot, currentStudentsJSON);
+      }
+      // merge:true إجباري هنا — عشان لو حذفنا "students" من الـ payload
+      // (مفيش تعديل محلي فيها)، الحقل يفضل زي ما هو في السحابة بدل ما
+      // يتمسح تمامًا (setDoc من غير merge بيستبدل المستند بالكامل).
+      await setDoc(doc(db, "elshrqawy_live_state", "main"), payload, { merge: true });
       setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });
     } catch (e) {
       setLiveSyncState({ status: "error", message: "تعذّرت المزامنة التلقائية (تأكد من النت)" });
@@ -417,6 +487,11 @@ export default function useAppData() {
     setAttRecords(cloud.attRecords || []);
     setWebExams(cloud.webExams || []);
     setCenterExams(cloud.centerExams || []);
+    // بعد قبول نسخة الطلاب الجاية من السحابة، لازم نحدّث "آخر نسخة
+    // اتزامنت فعليًا" بنفس القيمة — عشان لو الجهاز ده عمل push بعد كده
+    // من غير ما يلمس قائمة الطلاب أصلاً، ميرفعش نسخة قديمة تمسح تعديل
+    // حصل على جهاز تاني (نفس الإصلاح الجذري في pushLiveState فوق).
+    lsSet(KEYS.studentsSyncSnapshot, JSON.stringify(cloud.students || []));
     lsSet(KEYS.liveSyncTs, cloud.updatedAt);
     setLiveSyncState({ status: "success", message: "تم تحديث البيانات من جهاز تاني تلقائيًا ✓" });
   }, [setStudents, setSettings, setFinRecords, setAttRecords, setWebExams, setCenterExams]);
