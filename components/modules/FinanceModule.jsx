@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR, TODAY } from "../../constants";
-import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, checkPwd } from "../../utils";
+import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, checkPwd, sortStudentsList } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
@@ -16,10 +16,12 @@ import { Av, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
 // ── حساب "الرسوم المطلوبة" لطالب في شهر/سنة معينين ──
 // القاعدة: لو الطالب اتسجّل (joinDate) في نفس الشهر/السنة اللي بنحسب
-// عليهم، وبعد يوم 15 من الشهر، فالمطلوب في هذا الشهر بالذات هو نص
-// الرسوم الشهرية المسجلة لصفه (مقربة لأقرب رقم صحيح) — وبعد كده أي شهر
-// تاني (بما فيه الشهر اللي بعده) بيتحاسب عادي بالرسوم الكاملة.
-// لو اتسجّل يوم 15 نفسه أو قبله، الشهر ده بيتحاسب كامل زي العادي.
+// عليهم:
+//   - وبعد يوم 25 من الشهر → مفيش مصاريف مطلوبة خالص عن هذا الشهر (صفر).
+//   - وبعد يوم 15 (وحتى 25) من الشهر → نص الرسوم الشهرية المسجلة لصفه
+//     (مقربة لأقرب رقم صحيح).
+// وبعد كده أي شهر تاني (بما فيه الشهر اللي بعده) بيتحاسب عادي بالرسوم
+// الكاملة. لو اتسجّل يوم 15 نفسه أو قبله، الشهر ده بيتحاسب كامل زي العادي.
 function getExpectedFeeForMonth(student, month, year, gradeFees) {
   const base = Math.max(0, (gradeFees?.[student?.grade] || 0) - (student?.discount || 0));
   const parts = (student?.joinDate || "").split("-");
@@ -27,8 +29,9 @@ function getExpectedFeeForMonth(student, month, year, gradeFees) {
   const joinYear  = parseInt(parts[0], 10);
   const joinMonth = parseInt(parts[1], 10);
   const joinDay   = parseInt(parts[2], 10);
-  if (joinYear === year && joinMonth === month && joinDay > 15) {
-    return Math.round(base / 2);
+  if (joinYear === year && joinMonth === month) {
+    if (joinDay > 25) return 0;
+    if (joinDay > 15) return Math.round(base / 2);
   }
   return base;
 }
@@ -61,6 +64,7 @@ function getOverdueInfo(student, finRecords) {
   const overdueMonths = [];
   for (let m = startMonth; m <= currentMonthNum; m++) {
     if (isMonthBlocked(student, m, currentYearNum)) continue; // شهر بلوك — مش دَين
+    if (joinYearNum === currentYearNum && m === joinMonthNum && parseInt((student.joinDate || "").split("-")[2], 10) > 25) continue; // اتسجّل بعد يوم 25 — مفيش مصاريف مطلوبة
     if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(MONTHS_AR[m - 1]);
   }
   return {
@@ -461,7 +465,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
     if (selGroup) list = list.filter(s => s.group === selGroup);
-    return list.map(s => ({ ...s, _defaultFee: getExpectedFeeForMonth(s, effMonth, effYear, safeSettings.gradeFees), _month: effMonth, _year: effYear }));
+    return sortStudentsList(list).map(s => ({ ...s, _defaultFee: getExpectedFeeForMonth(s, effMonth, effYear, safeSettings.gradeFees), _month: effMonth, _year: effYear }));
   }, [safeStudents, selGrade, selGroup, safeSettings.gradeFees, effMonth, effYear]);
 
   const monthRecords = useMemo(() =>
@@ -485,6 +489,19 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     });
     return map;
   }, [financeMode, safeRecords, curMonth, curYear]);
+
+  // ── إجمالي "المطلوب" (الرسوم المستحقة) هذا الشهر لكل صف — بيتحسب
+  // من كل طلاب الصف الفعليين (مش المحصّل)، عشان يتقارن بالمحصّل الفعلي ──
+  const currentGradeRequired = useMemo(() => {
+    if (financeMode !== "current") return {};
+    const map = {};
+    GRADES_LIST.forEach(g => {
+      map[g] = safeStudents
+        .filter(s => s.grade === g)
+        .reduce((a, s) => a + getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees), 0);
+    });
+    return map;
+  }, [financeMode, safeStudents, curMonth, curYear, safeSettings.gradeFees]);
 
   const currentGrandTotal = useMemo(
     () => Object.values(currentGradeTotals).reduce((a, v) => a + v, 0),
@@ -541,6 +558,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   // الصف/المجموعة، مع المبلغ الصحيح المطلوب فعليًا عن الشهر الحالي ──
   const isCurrentMonthUnpaid = (s) =>
     !isMonthBlocked(s, curMonth, curYear) &&
+    getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees) > 0 &&
     !safeRecords.some(r => r.studentId === s.id && r.month === curMonth && r.year === curYear && (r.amount || 0) > 0);
 
   const adminLateStudents = useMemo(() => {
@@ -757,27 +775,52 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: اعرض 6 مستطيلات للصفوف ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">💰 الشهر الحالي — اختر الصف</div>
-            <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
             <GradeCircles value={selGrade} showLabel={false}
               onChange={g => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }} />
+            <div className="grid grid-cols-2 gap-1.5">
+              {GRADES_LIST.map(g => (
+                <div key={g} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/40 border border-slate-700/40">
+                  <span className="text-slate-300 text-xs font-bold">{g}</span>
+                  <span className="text-amber-300 text-xs font-black">مطلوب: {fmtM(currentGradeRequired[g] || 0)}</span>
+                </div>
+              ))}
+            </div>
+            {role === "admin" && (
+              <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
+            )}
           </div>
         ) : (
-          // ── صف متاختار: تلات ازرار فوق (رجوع / مصاريف اليوم / عرض سجل المصاريف) ──
-          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
-            <div className="flex items-center gap-2">
+          // ── صف متاختار: كل حاجة في صف واحد أفقي (رجوع / المصاريف / الإجمالي / عرض سجل المصاريف) ──
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
               <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); }}
-                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+                className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
                 ⬅️ رجوع
               </button>
-              <div className="flex-1 px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center">
-                💰 مصاريف اليوم — {selGrade}
+              <div className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white text-center whitespace-nowrap">
+                💰 {selGrade}
               </div>
+              {role === "admin" && (
+                <>
+                  <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-red-500/30 whitespace-nowrap">
+                    <span className="text-red-400 text-[10px] font-bold">المطلوب:</span>
+                    <span className="font-black text-red-400" style={{ fontSize: "15px", direction: "ltr" }}>
+                      {fmtM(currentGradeRequired[selGrade] || 0)} <span className="text-red-400/60 text-[10px] font-bold">ج</span>
+                    </span>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-slate-700/40 whitespace-nowrap">
+                    <span className="text-slate-400 text-[10px] font-bold">إجمالي:</span>
+                    <span className="font-black text-emerald-400" style={{ fontSize: "15px", direction: "ltr" }}>
+                      {fmtM(currentGradeTotals[selGrade] || 0)} <span className="text-slate-500 text-[10px] font-bold">ج</span>
+                    </span>
+                  </div>
+                </>
+              )}
               <button onClick={() => setDayReportOpen(true)}
-                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-blue-500/15 border border-blue-500/25 text-blue-300 hover:bg-blue-500/25 transition-all whitespace-nowrap">
+                className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-blue-500/15 border border-blue-500/25 text-blue-300 hover:bg-blue-500/25 transition-all whitespace-nowrap">
                 📅 عرض سجل المصاريف
               </button>
             </div>
-            <TotalBanner label={`💰 إجمالي ${selGrade} هذا الشهر`} value={currentGradeTotals[selGrade] || 0} tone="emerald" />
           </div>
         )
       ) : financeMode === "log" ? (
@@ -816,7 +859,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             )}
             {pastLateMonths.length > 0 && (
             <>
-            <TotalBanner label={`⏰ إجمالي المتأخر شهر ${MONTHS_AR[regMonth - 1]} ${regYear} (كل الصفوف)`} value={pastLateGrandTotal} tone="red" />
+            {role === "admin" && (
+              <TotalBanner label={`⏰ إجمالي المتأخر شهر ${MONTHS_AR[regMonth - 1]} ${regYear} (كل الصفوف)`} value={pastLateGrandTotal} tone="red" />
+            )}
             <div className="text-xs text-slate-400 font-bold mb-1 pt-1">
               الصفوف المتأخرة في شهر {MONTHS_AR[regMonth - 1]} {regYear}
             </div>
@@ -833,23 +878,29 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             )}
           </div>
         ) : (
-          // ── صف متاختار: رجوع / (أغسطس — الصف، مصغّرة) / زرار "دفعوا" ──
+          // ── صف متاختار: كل حاجة في صف واحد أفقي (رجوع / الشهر والصف / الإجمالي / دفعوا) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
               <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); setPastPaidOpen(false); }}
-                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+                className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
                 ⬅️ رجوع
               </button>
-              <div className="px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center whitespace-nowrap">
+              <div className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white text-center whitespace-nowrap">
                 🗓️ {MONTHS_AR[regMonth - 1]} — {selGrade}
               </div>
+              {role === "admin" && (
+                <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-red-500/30 whitespace-nowrap">
+                  <span className="text-red-400 text-[10px] font-bold">إجمالي:</span>
+                  <span className="font-black text-red-400" style={{ fontSize: "15px", direction: "ltr" }}>
+                    {fmtM(pastLateGradeTotals[selGrade] || 0)} <span className="text-red-400/60 text-[10px] font-bold">ج</span>
+                  </span>
+                </div>
+              )}
               <button onClick={() => setPastPaidOpen(o => !o)}
-                className={`flex-1 px-3 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${pastPaidOpen ? "bg-emerald-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}>
+                className={`shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${pastPaidOpen ? "bg-emerald-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}>
                 ✅ دفعوا
               </button>
             </div>
-
-            <TotalBanner label={`⏰ إجمالي متأخر ${selGrade} — ${MONTHS_AR[regMonth - 1]}`} value={pastLateGradeTotals[selGrade] || 0} tone="red" />
 
             {pastPaidOpen && (
               role === "admin" ? (
@@ -931,7 +982,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: مستطيلات الصفوف اللي فيها متأخرين بس (زي تسجيل الشهور الماضية) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">⏰ المتأخر في الشهر الحالي — اختر الصف</div>
-            <TotalBanner label="⏰ إجمالي المتأخر هذا الشهر (كل الصفوف)" value={lateGrandTotal} tone="red" />
+            {role === "admin" && (
+              <TotalBanner label="⏰ إجمالي المتأخر هذا الشهر (كل الصفوف)" value={lateGrandTotal} tone="red" />
+            )}
             {lateGradesWithDebt.length === 0 ? (
               <div className="text-center py-6 text-slate-600">
                 <div className="text-3xl mb-2">🎉</div>
@@ -954,7 +1007,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 ⏰ المتأخر في الشهر الحالي — {selGrade}
               </div>
             </div>
-            <TotalBanner label={`⏰ إجمالي متأخر ${selGrade}`} value={lateGradeTotals[selGrade] || 0} tone="red" />
+            {role === "admin" && (
+              <TotalBanner label={`⏰ إجمالي متأخر ${selGrade}`} value={lateGradeTotals[selGrade] || 0} tone="red" />
+            )}
           </div>
         )
       )}
