@@ -639,7 +639,7 @@ export function AsalAI({ sectionRefs, students, finRecords, attRecords }) {
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
-export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, webExams, setWebExams, settings, role = "admin", setStudents, setFinRecords, setAttRecords, addActivity, activityLog, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone }) {
+export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, webExams, setWebExams, settings, role = "admin", setStudents, setFinRecords, setAttRecords, addActivity, activityLog, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone, trashedDupStudents = [], moveDupToTrash, restoreDupFromTrash }) {
   const students   = (studentsProp || []).filter(s => !isBlocked(s));
   const finRecords = finRecordsProp || [];
   const attRecords = attRecordsProp || [];
@@ -698,12 +698,16 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const confirmNotDup = (ids) => {
     setStudents?.(p => p.map(x => ids.includes(x.id) ? { ...x, dupConfirmed: true } : x));
   };
-  // ── حذف نهائي مباشر من هنا (بدل زرار ✓ اللي بيخفي بس من القايمة من
-  // غير ما يمسح حاجة فعليًا) — ده اللي كان بيسبب رجوع نفس الاسم كل مرة:
-  // ✓ بتشيل التحذير من "برج المراقبة" بس الطالب الزيادة بيفضل موجود
-  // بنفس الاسم في كل الصفحات التانية. الزرار ده بيمسح الطالب فعليًا +
-  // كل سجلاته (حضور/مصاريف/امتحانات) نهائيًا، زي "بلوك" بالظبط.
+  // ── نقل لسلة المهملات بدل الحذف النهائي المباشر (حالة التكرار بس) ──
+  // بيفضل الطالب وسجلاته (مصاريف/غياب) محفوظين في السلة شهرين كاملين،
+  // ممكن يترجعوا خلالها لو الاختيار غلط. بعد الشهرين بيتشالوا تلقائيًا.
+  // ملحوظة: نتائج الامتحانات (webExams) بتتشال نهائيًا وقت النقل للسلة
+  // نفسه (مش بترجع مع الاسترجاع) لتبسيط الفكرة — البيانات الأهم
+  // (مصاريف وغياب) هي اللي بترجع كاملة.
   const hardDeleteDup = (s) => {
+    const finForS = (finRecords || []).filter(r => r.studentId === s.id);
+    const attForS = (attRecords || []).filter(r => r.studentId === s.id);
+    moveDupToTrash?.(s, finForS, attForS);
     setStudents?.(p => (p || []).filter(x => x.id !== s.id));
     setFinRecords?.(p => (p || []).filter(r => r.studentId !== s.id));
     setAttRecords?.(p => (p || []).filter(r => r.studentId !== s.id));
@@ -712,8 +716,14 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       results:  (e.results  || []).filter(r => r.studentId !== s.id),
       cheating: (e.cheating || []).filter(r => r.studentId !== s.id),
     })));
-    addActivity?.("حذف نهائي", `${s.name} — تكرار اتحذف من برج المراقبة مع كل سجلاته`);
-    showToast?.(`✓ تم حذف ${s.name} نهائيًا مع كل سجلاته`, "success");
+    addActivity?.("نقل لسلة المهملات", `${s.name} — تكرار اتنقل لسلة المهملات (هيتشال نهائيًا بعد شهرين لو محدش استرجعه)`);
+    showToast?.(`🗑 اتنقل ${s.name} لسلة المهملات — يمكن استرجاعه خلال شهرين`, "success");
+  };
+  const daysLeftInTrash = (deletedAt) => Math.max(0, 60 - Math.floor((Date.now() - deletedAt) / (24 * 60 * 60 * 1000)));
+  const restoreFromTrash = (studentId, name) => {
+    restoreDupFromTrash?.(studentId);
+    addActivity?.("استرجاع من سلة المهملات", `${name} — اترجع من سلة المهملات`);
+    showToast?.(`↩️ تم استرجاع ${name}`, "success");
   };
   const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
 
@@ -1006,14 +1016,37 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
           </div>
         )}
 
+        {/* ── سلة المهملات: الطلاب اللي اتحذفوا بسبب تكرار، بيفضلوا هنا
+        شهرين قابلين للاسترجاع قبل ما يتشالوا نهائيًا ── */}
+        {trashedDupStudents.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-slate-400 font-bold text-xs flex items-center gap-1.5">🗑 سلة المهملات ({trashedDupStudents.length}) — بيتشالوا نهائيًا بعد شهرين لو محدش استرجعهم</div>
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl divide-y divide-slate-700/40 overflow-hidden">
+              {trashedDupStudents.map((t) => (
+                <div key={t.student.id} className="px-3 py-2.5 flex items-center justify-between text-xs gap-2">
+                  <div className="min-w-0">
+                    <div className="text-white font-bold">{t.student.name}</div>
+                    <div className="text-slate-500">{t.student.grade} — مجموعة {t.student.group} · باقي {daysLeftInTrash(t.deletedAt)} يوم قبل الحذف النهائي</div>
+                  </div>
+                  <button
+                    onClick={() => restoreFromTrash(t.student.id, t.student.name)}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 font-bold hover:bg-emerald-600/30 transition-colors whitespace-nowrap">
+                    ↩️ استرجاع
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {confirmDeleteDup && (
           <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5 w-full max-w-xs space-y-4">
-              <div className="text-white text-sm text-center">حذف {confirmDeleteDup.name} ({confirmDeleteDup.grade} — مجموعة {confirmDeleteDup.group}) نهائيًا؟</div>
-              <div className="text-red-400 text-xs text-center">هيتشال هو وكل سجلات الحضور والمصاريف والامتحانات بتاعته — الخطوة دي نهائية</div>
+              <div className="text-white text-sm text-center">نقل {confirmDeleteDup.name} ({confirmDeleteDup.grade} — مجموعة {confirmDeleteDup.group}) لسلة المهملات؟</div>
+              <div className="text-amber-400 text-xs text-center">هيتنقل هو وسجلات الحضور والمصاريف بتاعته لسلة المهملات لمدة شهرين، وممكن تسترجعيه خلالها. بعد الشهرين هيتشال نهائيًا تلقائيًا.</div>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDeleteDup(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm">إلغاء</button>
-                <button onClick={() => { hardDeleteDup(confirmDeleteDup); setConfirmDeleteDup(null); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">🗑 حذف نهائي</button>
+                <button onClick={() => { hardDeleteDup(confirmDeleteDup); setConfirmDeleteDup(null); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">🗑 نقل لسلة المهملات</button>
               </div>
             </div>
           </div>

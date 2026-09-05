@@ -26,7 +26,10 @@ const KEYS = {
   session:     "app_session",         // #7
   cloudSync:   "app_cloud_sync_state", // #Cloud (تراكمي)
   liveSyncTs:  "app_live_sync_ts",    // #LiveSync (مزامنة تلقائية لحظية)
+  trashedDup:  "app_trashed_dup_students", // #TrashDup — سلة مهملات حذف التكرار (شهرين)
 };
+
+const TRASH_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // شهرين (60 يوم)
 
 function loadStudents()    { return lsGet(KEYS.students, []); }
 function loadSettings()    { return { ...INIT_SETTINGS, ...(lsGet(KEYS.settings, {}) || {}) }; }
@@ -36,6 +39,14 @@ function loadWebExams()    { return lsGet(KEYS.webExams, WEB_EXAMS); }
 function loadCenterExams() { return lsGet(KEYS.centerExams, CENTER_EXAMS); }
 function loadExamQs()      { return lsGet(KEYS.examQs, EXAM_QS.map(q => ({ ...q }))); }
 function loadActivityLog() { return lsGet(KEYS.activityLog, []); }  // #4
+// #TrashDup: بيشيل تلقائيًا أي عنصر عدّى عليه شهرين من وقت الحذف
+function loadTrashedDup() {
+  const list = lsGet(KEYS.trashedDup, []);
+  const now = Date.now();
+  const fresh = (list || []).filter(t => now - (t.deletedAt || 0) < TRASH_RETENTION_MS);
+  if (fresh.length !== (list || []).length) lsSet(KEYS.trashedDup, fresh);
+  return fresh;
+}
 
 function usePersisted(key, loader) {
   const [value, setRaw] = useState(loader);
@@ -84,6 +95,41 @@ export default function useAppData() {
   const [webExams,    setWebExams]    = usePersisted(KEYS.webExams,    loadWebExams);
   const [centerExams, setCenterExams] = usePersisted(KEYS.centerExams, loadCenterExams);
   const [examQs,      setExamQs]      = usePersisted(KEYS.examQs,      loadExamQs);
+
+  // ── #TrashDup: سلة مهملات خاصة بحذف "التكرار" بس (من برج المراقبة) ──
+  // أي طالب بيتحذف بسبب تكرار بيتحط هنا شهرين قبل ما يتشال نهائيًا،
+  // عشان لو غلط الاختيار يبقى ممكن يترجع. الحذف/البلوك العادي في أي
+  // مكان تاني في النظام بيفضل نهائي زي ما هو، من غير ما يعدي على السلة دي.
+  const [trashedDupStudents, setTrashedDupStudents] = usePersisted(KEYS.trashedDup, loadTrashedDup);
+
+  // بتنقل طالب (بسجلاته) لسلة المهملات بدل الحذف النهائي المباشر
+  const moveDupToTrash = useCallback((student, finRecs, attRecs) => {
+    setTrashedDupStudents(prev => [
+      { student, finRecords: finRecs || [], attRecords: attRecs || [], deletedAt: Date.now() },
+      ...(prev || []),
+    ]);
+  }, [setTrashedDupStudents]);
+
+  // بترجّع طالب من سلة المهملات لمكانه تاني (الطالب + سجلاته)
+  const restoreDupFromTrash = useCallback((trashId) => {
+    setTrashedDupStudents(prev => {
+      const item = (prev || []).find(t => t.student.id === trashId);
+      if (!item) return prev;
+      setStudents(p => [item.student, ...(p || [])]);
+      if (item.finRecords?.length) setFinRecords(p => [...item.finRecords, ...(p || [])]);
+      if (item.attRecords?.length) setAttRecords(p => [...item.attRecords, ...(p || [])]);
+      return (prev || []).filter(t => t.student.id !== trashId);
+    });
+  }, [setTrashedDupStudents, setStudents, setFinRecords, setAttRecords]);
+
+  // تنظيف دوري: تشيل من السلة أي عنصر عدّى عليه شهرين (بالإضافة للتنظيف
+  // اللي بيحصل تلقائيًا عند فتح الموقع في loadTrashedDup)
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setTrashedDupStudents(prev => (prev || []).filter(t => Date.now() - (t.deletedAt || 0) < TRASH_RETENTION_MS));
+    }, 60 * 60 * 1000); // كل ساعة
+    return () => clearInterval(iv);
+  }, [setTrashedDupStudents]);
 
   // ── #4: Activity Log ─────────────────────────────────────
   const [activityLog, setActivityLogRaw] = useLocalOnly(KEYS.activityLog, loadActivityLog);
@@ -453,5 +499,7 @@ export default function useAppData() {
     cloudBackupState, backupToCloud, restoreFromCloud,
     // #LiveSync
     liveSyncState,
+    // #TrashDup
+    trashedDupStudents, moveDupToTrash, restoreDupFromTrash,
   };
 }
