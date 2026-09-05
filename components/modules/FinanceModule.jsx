@@ -772,22 +772,27 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
           </div>
         ) : (
-          // ── صف متاختار: تلات ازرار فوق (رجوع / مصاريف اليوم / عرض سجل المصاريف) ──
-          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
-            <div className="flex items-center gap-2">
+          // ── صف متاختار: كل حاجة في صف واحد أفقي (رجوع / المصاريف / الإجمالي / عرض سجل المصاريف) ──
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
               <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); }}
-                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+                className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
                 ⬅️ رجوع
               </button>
-              <div className="flex-1 px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center">
-                💰 مصاريف اليوم — {selGrade}
+              <div className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white text-center whitespace-nowrap">
+                💰 {selGrade}
+              </div>
+              <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-slate-700/40 whitespace-nowrap">
+                <span className="text-slate-400 text-[10px] font-bold">إجمالي:</span>
+                <span className="font-black text-emerald-400" style={{ fontSize: "15px", direction: "ltr" }}>
+                  {fmtM(currentGradeTotals[selGrade] || 0)} <span className="text-slate-500 text-[10px] font-bold">ج</span>
+                </span>
               </div>
               <button onClick={() => setDayReportOpen(true)}
-                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-blue-500/15 border border-blue-500/25 text-blue-300 hover:bg-blue-500/25 transition-all whitespace-nowrap">
+                className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-blue-500/15 border border-blue-500/25 text-blue-300 hover:bg-blue-500/25 transition-all whitespace-nowrap">
                 📅 عرض سجل المصاريف
               </button>
             </div>
-            <TotalBanner label={`💰 إجمالي ${selGrade} هذا الشهر`} value={currentGradeTotals[selGrade] || 0} tone="emerald" />
           </div>
         )
       ) : financeMode === "log" ? (
