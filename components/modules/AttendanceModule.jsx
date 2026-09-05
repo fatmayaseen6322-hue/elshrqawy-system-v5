@@ -355,23 +355,76 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     setDate(d);
   };
 
+  // ── حفظ تلقائي بالكامل: مفيش زرار "حفظ الحضور" خالص — بمجرد ما تدوسي
+  // على حالة طالب (حاضر/غايب/متأخر) بتتسجل فورًا في attRecords وتتحدّث
+  // عدّادات الطالب على طول، من غير أي زرار حفظ منفصل.
+  const persistAttendance = (ids, sessionSnapshot) => {
+    setAttRecords(prev => {
+      let list = prev || [];
+      ids.forEach(id => {
+        const newStatus = sessionSnapshot[id]?.status || null;
+        const newReason = sessionSnapshot[id]?.reason || "";
+        const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
+        const newTime = newStatus === "l" ? (sessionSnapshot[id]?.time || list[idx]?.time || null) : null;
+        if (newStatus) {
+          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
+          list = idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
+        } else if (idx >= 0) {
+          list = list.filter((_, i) => i !== idx);
+        }
+      });
+      return list;
+    });
+
+    setStudents(prev => (prev || []).map(s => {
+      if (!ids.includes(s.id)) return s;
+      const oldSt = existingMap[s.id]?.status || null;
+      const newSt = sessionSnapshot[s.id]?.status || null;
+      if (oldSt === newSt) return s;
+      let present = s.present || 0, absent = s.absent || 0, late = s.late || 0, total = s.total || 0;
+      if (oldSt === "p") present--; if (oldSt === "a") absent--; if (oldSt === "l") late--;
+      if (oldSt && !newSt) total--;
+      if (newSt === "p") present++; if (newSt === "a") absent++; if (newSt === "l") late++;
+      if (!oldSt && newSt) total++;
+      return { ...s, present: Math.max(0, present), absent: Math.max(0, absent), late: Math.max(0, late), total: Math.max(0, total) };
+    }));
+
+    addActivity?.("تسجيل غياب", `${grade} - مجموعة ${group} - ${date} (${ids.length} طالب)`);
+    setToast({ msg: `✓ تم الحفظ تلقائيًا (${ids.length} طالب)`, type: "success" });
+    setPendingGate(false);
+
+    // بعد الحفظ التلقائي: لو النهارده (مش تعديل يوم قديم)، اجمعي كل طالب
+    // اتسجّل غايب/متأخر عنده رقم ولي أمر، واعرضي عليها ترسل واتساب دلوقتي.
+    if (date === TODAY) {
+      const notifyList = ids
+        .map(id => {
+          const st = sessionSnapshot[id]?.status;
+          if (st !== "a" && st !== "l") return null;
+          const stu = (students || []).find(s => s.id === id);
+          if (!stu || !stu.parentPhone) return null;
+          return { student: stu, kind: st, time: sessionSnapshot[id]?.time || null };
+        })
+        .filter(Boolean);
+      if (notifyList.length > 0) setWaPrompt(notifyList);
+    }
+  };
+
   // Toggle الحالة: نفس الحالة تاني → إلغاء التحديد (يسمح بالتصحيح)
   // لو الحالة الجديدة "متأخر" (l)، بنلقط وقت الحضور تلقائيًا (ساعة:دقيقة)
-  // لحظة الضغط، من غير ما يحتاج يكتبه هو.
+  // لحظة الضغط، من غير ما يحتاج يكتبه هو. وبعد كل ضغطة، بيتحفظ فورًا.
   const mark = (id, st) => setSession(prev => {
     const cur = prev[id] || {};
+    let next;
     if (cur.status === st) {
-      const next = { ...cur, status: null };
+      next = { ...cur, status: null };
       if (st === "l") next.time = null;
-      return { ...prev, [id]: next };
-    }
-    const next = { ...cur, status: st };
-    if (st === "l") {
-      next.time = new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
     } else {
-      next.time = null;
+      next = { ...cur, status: st };
+      next.time = st === "l" ? new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : null;
     }
-    return { ...prev, [id]: next };
+    const newSession = { ...prev, [id]: next };
+    persistAttendance([id], newSession);
+    return newSession;
   });
 
   const setReasonFor = (id, text) => setSession(prev => ({
@@ -419,82 +472,20 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     setToast({ msg: "✓ تم حفظ السبب بشكل نهائي", type: "success" });
   };
 
-  const markAll = st => setSession(prev => Object.fromEntries(
-    grpStudents.map(s => [s.id, { status: st, reason: prev[s.id]?.reason || "" }])
-  ));
+  const markAll = st => setSession(prev => {
+    const time = st === "l" ? new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : null;
+    const newSession = { ...prev };
+    grpStudents.forEach(s => {
+      newSession[s.id] = { status: st, reason: prev[s.id]?.reason || "", time };
+    });
+    persistAttendance(grpStudents.map(s => s.id), newSession);
+    return newSession;
+  });
 
   const counts = {
     p: Object.values(session).filter(v => v?.status === "p").length,
     a: Object.values(session).filter(v => v?.status === "a").length,
     l: Object.values(session).filter(v => v?.status === "l").length,
-  };
-
-  // هل فيه تغيير فعلي (حالة أو سبب) عن الحالة المحفوظة؟
-  const changedIds = useMemo(() => {
-    const ids = new Set([...Object.keys(session), ...Object.keys(existingMap)]);
-    return [...ids].filter(id => {
-      const s = session[id] || {};
-      const e = existingMap[id] || {};
-      return (s.status || null) !== (e.status || null) || (s.reason || "") !== (e.reason || "");
-    });
-  }, [session, existingMap]);
-
-  const applyDiffAndSave = () => {
-    setAttRecords(prev => {
-      let list = prev || [];
-      changedIds.forEach(id => {
-        const newStatus = session[id]?.status || null;
-        const newReason = session[id]?.reason || "";
-        const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
-        const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
-        if (newStatus) {
-          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
-          list = idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
-        } else if (idx >= 0) {
-          list = list.filter((_, i) => i !== idx);
-        }
-      });
-      return list;
-    });
-
-    setStudents(prev => (prev || []).map(s => {
-      if (!changedIds.includes(s.id)) return s;
-      const oldSt = existingMap[s.id]?.status || null;
-      const newSt = session[s.id]?.status || null;
-      let present = s.present || 0, absent = s.absent || 0, late = s.late || 0, total = s.total || 0;
-      if (oldSt === "p") present--; if (oldSt === "a") absent--; if (oldSt === "l") late--;
-      if (oldSt && !newSt) total--;
-      if (newSt === "p") present++; if (newSt === "a") absent++; if (newSt === "l") late++;
-      if (!oldSt && newSt) total++;
-      return { ...s, present: Math.max(0, present), absent: Math.max(0, absent), late: Math.max(0, late), total: Math.max(0, total) };
-    }));
-
-    addActivity?.("تسجيل غياب", `${grade} - مجموعة ${group} - ${date} (${changedIds.length} طالب)`);
-    setToast({ msg: `✓ تم حفظ غياب ${changedIds.length} طالب`, type: "success" });
-    setPendingGate(false);
-
-    // بعد الحفظ: لو النهارده (مش تعديل يوم قديم)، اجمعي كل طالب اتسجّل
-    // غايب/متأخر عنده رقم ولي أمر، واعرضي عليها ترسل واتساب دلوقتي.
-    if (date === TODAY) {
-      const notifyList = changedIds
-        .map(id => {
-          const st = session[id]?.status;
-          if (st !== "a" && st !== "l") return null;
-          const stu = (students || []).find(s => s.id === id);
-          if (!stu || !stu.parentPhone) return null;
-          return { student: stu, kind: st, time: session[id]?.time || null };
-        })
-        .filter(Boolean);
-      if (notifyList.length > 0) setWaPrompt(notifyList);
-    }
-  };
-
-  const saveSession = () => {
-    if (changedIds.length === 0) {
-      setToast({ msg: "لا يوجد تغييرات لحفظها", type: "error" });
-      return;
-    }
-    applyDiffAndSave();
   };
 
   // فتح وضع التعديل ليوم قديم — لازم باسورد المستر، ومتاح للمستر بس
@@ -901,13 +892,10 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                         <input
                           value={reasonDrafts[s.id] ?? reason}
                           onChange={e => setReasonDrafts(prev => ({ ...prev, [s.id]: e.target.value }))}
-                          onKeyDown={e => { if (e.key === "Enter") saveReason(s.id); }}
-                          placeholder="السبب"
+                          onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); saveReason(s.id); } }}
+                          onBlur={() => saveReason(s.id)}
+                          placeholder="السبب (بيتحفظ تلقائي)"
                           className="flex-1 min-w-0 bg-slate-900/50 border border-slate-700/40 rounded-lg px-2 py-1.5 text-[13px] text-slate-300 focus:outline-none" />
-                        <button onClick={() => saveReason(s.id)}
-                          className="shrink-0 w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-600/30 text-blue-300 text-xs flex items-center justify-center">
-                          💾
-                        </button>
                       </div>
                     )}
                   </div>
@@ -917,15 +905,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           </div>
 
           <div className="sticky bottom-0 pb-2 z-10">
-            <button onClick={saveSession} disabled={changedIds.length === 0}
-              className="w-full py-4 rounded-2xl font-black text-sm transition-all disabled:opacity-30 bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20">
-              {changedIds.length === 0
-                ? "مفيش تغييرات"
-                : isOldDate
-                  ? `🔒 حفظ التعديل (يوم قديم) — ${changedIds.length} طالب`
-                  : `💾 حفظ الحضور — ${changedIds.length} طالب`
-              }
-            </button>
+            <div className="w-full py-3 rounded-2xl font-bold text-xs text-center bg-slate-800/70 border border-slate-700/40 text-emerald-300">
+              ⏳ الحفظ تلقائي — كل ضغطة بتتسجل على طول
+            </div>
           </div>
         </>}
       </>}

@@ -197,14 +197,20 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
     timestamp: nowStr(), note: "",
   });
 
-  const doSave = () => {
-    if (!receiverId || !amount) return;
-    const rec = buildRec(receiverId, receiverName);
-    onSave(rec);
-    setLocalRecord(rec);
-    setSaved(true);
-    setEditing(false);
-  };
+  // ── حفظ تلقائي بالكامل: مفيش زرار حفظ خالص — بمجرد ما المبلغ والمستلم
+  // يبقوا موجودين وصح، بيتسجل الدفعة على طول من غير أي ضغطة زرار.
+  // ده بيغطي حالة: مستلم مقفول (Assist) + مبلغ افتراضي جاهز من غير ما تلمسيه،
+  // وأي تغيير لاحق في المبلغ أو المستلم بيحدّث السجل فورًا بنفس الطريقة.
+  useEffect(() => {
+    if (!saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0) {
+      const rec = buildRec(receiverId, receiverName);
+      onSave(rec);
+      setLocalRecord(rec);
+      setSaved(true);
+      setEditing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, receiverId, amount]);
 
   // ── حفظ تلقائي فوري لحظة تعديل المبلغ (بدون انتظار الخروج من الخانة) ──
   // بيضمن إن أي تعديل في مصاريف الطالب يفضل ثابت حتى لو قفلت الجدول أو غيّرت الصف وردّي تاني.
@@ -311,7 +317,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
         <td className="px-2 py-3 text-center">
           {saved && !editing
             ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
-            : <button onClick={doSave} disabled={!receiverId || !amount} className="w-9 h-8 rounded-lg bg-emerald-700/30 border border-emerald-600/30 text-emerald-300 text-sm disabled:opacity-30 hover:bg-emerald-700/50">💾</button>
+            : <span className="text-slate-500 text-[10px]" title="بيتسجل تلقائي بمجرد اختيار المستلم والمبلغ">⏳ تلقائي</span>
           }
         </td>
         <td className="px-2 py-3 text-center">
