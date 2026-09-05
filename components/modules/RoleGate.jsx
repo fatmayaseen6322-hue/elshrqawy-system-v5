@@ -44,11 +44,12 @@ export default function RoleGate({ settings, onEnter }) {
       return;
     }
 
-    // Assist: كل مستلم ممكن يكون ليه باسورد شخصي خاص بيه (من الإعدادات →
-    // كلمة سر الاسيست) — لو الباسورد المكتوب اتطابق مع حد منهم، بيدخل
-    // النظام باسمه فعليًا (وده اللي بيتسجل تلقائي بعد كده في المصاريف
-    // والحضور بدل ما يختار كل مرة). لو مفيش تطابق، نرجع لباسورد الاسيست
-    // العام القديم (لدعم النظام القديم لحد ما تتحدد باسوردات شخصية).
+    // Assist: دخول إجباري برقم سري شخصي — كل مساعدة (رنا / ملك / فاطمة...) ليها
+    // رقمها الخاص من الإعدادات → أسماء المستلمين. لازم يتطابق مع واحد منهم
+    // عشان يدخل، وبيدخل باسمها فعليًا (وده اللي بيتسجل تلقائي بعد كده في كل
+    // حاجة — الحضور والمصاريف وأي تعديل — من غير ما تختار اسمها كل مرة).
+    // الباسورد العام القديم (cashierPassword) بيشتغل بس لو لسه مفيش أي رقم
+    // سري شخصي متسجّل خالص (عشان محدش يقفل من النظام قبل ما يظبط الأرقام).
     const namedReceivers = (settings?.receivers || []).filter(r => r.active !== false && r.password);
     let matched = null;
     for (const r of namedReceivers) {
@@ -57,6 +58,12 @@ export default function RoleGate({ settings, onEnter }) {
     if (matched) {
       setLoading(false);
       onEnter({ role: "assist", label: matched.name, icon: role.icon, name: matched.name });
+      return;
+    }
+
+    if (namedReceivers.length > 0) {
+      setLoading(false);
+      setErr("الرقم السري غلط");
       return;
     }
 

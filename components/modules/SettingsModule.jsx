@@ -387,7 +387,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
                 )}
 
                 <div className="bg-slate-800/40 border border-slate-700/30 rounded-2xl p-4 space-y-3">
-                  <div className="text-slate-400 text-xs">باسورد اسيست عام (احتياطي) — لو دخل بيه حد من غير باسورد شخصي، هيفضل يختار المستلم يدويًا زي الأول</div>
+                  <div className="text-slate-400 text-xs">باسورد اسيست عام (احتياطي فقط) — بيشتغل بس لو لسه معملتيش أي رقم سري شخصي فوق. أول ما تحطي رقم سري شخصي لأي حد، الباسورد العام ده بيتوقف تمامًا ويبقى الدخول برقم شخصي إجباري لكل المساعدين</div>
                   <Field label="كلمة المرور الجديدة"><Inp type="password" value={caP} onChange={e => { setCaP(e.target.value); setCaErr(""); }} /></Field>
                   <Field label="تأكيد"><Inp type="password" value={caConfP} onChange={e => { setCaConfP(e.target.value); setCaErr(""); }} /></Field>
                   {caErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {caErr}</div>}
@@ -405,7 +405,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
               <div className="space-y-4">
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
                   <div className="text-blue-400 font-bold text-sm mb-1">🧾 أسماء المستلمين</div>
-                  <div className="text-slate-400 text-xs">دي الأسماء اللي بتظهر في زرار "المستلم" وقت تسجيل أي مصروف. تقدري تضيفي "المستر" أو أي اسم، وتعدّلي أو تمسحي أي اسم قديم.</div>
+                  <div className="text-slate-400 text-xs">دي الأسماء اللي بتظهر في زرار "المستلم" وقت تسجيل أي مصروف، وهي نفسها اللي بتدخل بيها المساعدات (رنا / ملك / فاطمة...) لما تحطي لكل واحدة رقمها السري من "كلمة سر الاسيست". تقدري تضيفي "المستر" أو أي اسم، وتعدّلي أو تمسحي أي اسم قديم.</div>
                 </div>
 
                 <div className="space-y-2">
