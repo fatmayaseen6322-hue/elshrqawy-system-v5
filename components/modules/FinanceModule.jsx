@@ -337,6 +337,26 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// TOTAL BANNER — عرض إجمالي مبلغ بشكل كبير وواضح، أرقام إنجليزية
+// (fmtM بتستخدم en-US أصلاً)، بلون مميز حسب نوع الإجمالي.
+// ══════════════════════════════════════════════════════════════
+function TotalBanner({ label, value, tone = "emerald" }) {
+  const toneCls = {
+    emerald: "text-emerald-400",
+    amber:   "text-amber-400",
+    red:     "text-red-400",
+  }[tone] || "text-emerald-400";
+  return (
+    <div className="flex items-center justify-between gap-3 bg-slate-900/70 border border-slate-700/40 rounded-2xl px-4 py-3">
+      <span className="text-slate-400 text-xs font-bold">{label}</span>
+      <span className={`font-black ${toneCls}`} style={{ fontSize: "26px", direction: "ltr", letterSpacing: "0.5px" }}>
+        {fmtM(value)} <span className="text-slate-500 text-xs font-bold">ج</span>
+      </span>
+    </div>
+  );
+}
+
 export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", currentUserName = null, jumpTo, onJumpDone, financeMode = null, setFinanceMode }) {
   const safeStudents = (students || []).filter(s => !isBlocked(s));
   const safeSettings = settings   || {};
@@ -434,6 +454,42 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       r.year  === effYear
     ),
   [safeRecords, selGrade, selGroup, effMonth, effYear]);
+
+  // ── إجمالي المحصّل فعليًا في "الشهر الحالي" لكل صف + إجمالي عام
+  // (بيظهر برّه قبل اختيار الصف، وجوه كإجمالي الصف نفسه بعد اختياره) ──
+  const currentGradeTotals = useMemo(() => {
+    if (financeMode !== "current") return {};
+    const map = {};
+    GRADES_LIST.forEach(g => {
+      map[g] = safeRecords
+        .filter(r => r && r.grade === g && r.month === curMonth && r.year === curYear)
+        .reduce((a, r) => a + (r.amount || 0), 0);
+    });
+    return map;
+  }, [financeMode, safeRecords, curMonth, curYear]);
+
+  const currentGrandTotal = useMemo(
+    () => Object.values(currentGradeTotals).reduce((a, v) => a + v, 0),
+    [currentGradeTotals]
+  );
+
+  // ── إجمالي المحصّل فعليًا عن الشهر/السنة المختارين في "الشهر الماضي"
+  // لكل صف + إجمالي عام ──
+  const pastCollectedGradeTotals = useMemo(() => {
+    if (financeMode !== "past") return {};
+    const map = {};
+    GRADES_LIST.forEach(g => {
+      map[g] = safeRecords
+        .filter(r => r && r.grade === g && r.month === regMonth && r.year === regYear)
+        .reduce((a, r) => a + (r.amount || 0), 0);
+    });
+    return map;
+  }, [financeMode, safeRecords, regMonth, regYear]);
+
+  const pastCollectedGrandTotal = useMemo(
+    () => Object.values(pastCollectedGradeTotals).reduce((a, v) => a + v, 0),
+    [pastCollectedGradeTotals]
+  );
 
   // ── زرار "دفعوا" (تسجيل الشهور الماضية): أسماء الطلاب اللي دفعوا فعلاً عن الشهر/السنة المختارين ──
   const pastPaidStudents = useMemo(() => {
@@ -679,6 +735,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: اعرض 6 مستطيلات للصفوف ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">💰 الشهر الحالي — اختر الصف</div>
+            <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
             <div className="grid grid-cols-2 gap-2">
               {GRADES_LIST.map(g => (
                 <button key={g}
@@ -691,7 +748,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           </div>
         ) : (
           // ── صف متاختار: تلات ازرار فوق (رجوع / مصاريف اليوم / عرض سجل المصاريف) ──
-          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
             <div className="flex items-center gap-2">
               <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); }}
                 className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
@@ -705,6 +762,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 📅 عرض سجل المصاريف
               </button>
             </div>
+            <TotalBanner label={`💰 إجمالي ${selGrade} هذا الشهر`} value={currentGradeTotals[selGrade] || 0} tone="emerald" />
           </div>
         )
       ) : financeMode === "log" ? (
@@ -743,6 +801,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             )}
             {pastLateMonths.length > 0 && (
             <>
+            <TotalBanner label={`⏰ إجمالي المتأخر شهر ${MONTHS_AR[regMonth - 1]} ${regYear} (كل الصفوف)`} value={pastLateGrandTotal} tone="red" />
             <div className="text-xs text-slate-400 font-bold mb-1 pt-1">
               الصفوف المتأخرة في شهر {MONTHS_AR[regMonth - 1]} {regYear}
             </div>
@@ -769,7 +828,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           </div>
         ) : (
           // ── صف متاختار: رجوع / (أغسطس — الصف، مصغّرة) / زرار "دفعوا" ──
-          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
             <div className="flex items-center gap-2">
               <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); setPastPaidOpen(false); }}
                 className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
@@ -783,6 +842,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 ✅ دفعوا
               </button>
             </div>
+
+            <TotalBanner label={`⏰ إجمالي متأخر ${selGrade} — ${MONTHS_AR[regMonth - 1]}`} value={pastLateGradeTotals[selGrade] || 0} tone="red" />
 
             {pastPaidOpen && (
               role === "admin" ? (
@@ -864,6 +925,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: مستطيلات الصفوف اللي فيها متأخرين بس (زي تسجيل الشهور الماضية) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">⏰ المتأخر في الشهر الحالي — اختر الصف</div>
+            <TotalBanner label="⏰ إجمالي المتأخر هذا الشهر (كل الصفوف)" value={lateGrandTotal} tone="red" />
             {lateGradesWithDebt.length === 0 ? (
               <div className="text-center py-6 text-slate-600">
                 <div className="text-3xl mb-2">🎉</div>
@@ -885,7 +947,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           </div>
         ) : (
           // ── صف متاختار: زرارين بس فوق (رجوع / المتأخرين — الصف) بدون عرض سجل المصاريف ──
-          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3">
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
             <div className="flex items-center gap-2">
               <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); }}
                 className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
@@ -895,6 +957,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 ⏰ المتأخر في الشهر الحالي — {selGrade}
               </div>
             </div>
+            <TotalBanner label={`⏰ إجمالي متأخر ${selGrade}`} value={lateGradeTotals[selGrade] || 0} tone="red" />
           </div>
         )
       )}
