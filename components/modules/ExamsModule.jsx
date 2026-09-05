@@ -7,6 +7,85 @@ import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, Modal } from "../ui";
 // MODULE 4: EXAMS  —  v2 (إصلاح شامل)
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// 🎨 تصميم خاص (مختلف عن باقي البرنامج): بطاقات الصف + دوائر
+// الوحدة/الدرس — مستخدم في تابي "التصحيح" و"الأخطاء" فقط.
+// خط Tajawal (مستورد في index.html) + تدرجات لونية جذابة.
+// ══════════════════════════════════════════════════════════════
+const PICKER_FONT = { fontFamily: "'Tajawal', 'Segoe UI', sans-serif" };
+
+const CIRCLE_THEMES = [
+  { grad: "from-violet-500 via-purple-500 to-fuchsia-500", glow: "shadow-[0_6px-0px]" },
+  { grad: "from-sky-400 via-cyan-500 to-blue-500",         glow: "" },
+  { grad: "from-emerald-400 via-teal-500 to-green-500",    glow: "" },
+  { grad: "from-amber-400 via-orange-500 to-red-500",      glow: "" },
+  { grad: "from-pink-400 via-rose-500 to-red-400",         glow: "" },
+  { grad: "from-indigo-400 via-blue-500 to-cyan-400",      glow: "" },
+  { grad: "from-lime-400 via-green-500 to-emerald-500",    glow: "" },
+  { grad: "from-orange-400 via-amber-500 to-yellow-400",   glow: "" },
+];
+const CIRCLE_GLOW = [
+  "shadow-[0_8px_22px_-4px_rgba(168,85,247,0.65)]",
+  "shadow-[0_8px_22px_-4px_rgba(56,189,248,0.65)]",
+  "shadow-[0_8px_22px_-4px_rgba(52,211,153,0.65)]",
+  "shadow-[0_8px_22px_-4px_rgba(251,146,60,0.65)]",
+  "shadow-[0_8px_22px_-4px_rgba(244,114,182,0.65)]",
+  "shadow-[0_8px_22px_-4px_rgba(99,102,241,0.65)]",
+  "shadow-[0_8px_22px_-4px_rgba(163,230,53,0.65)]",
+  "shadow-[0_8px_22px_-4px_rgba(251,191,36,0.65)]",
+];
+
+// صندوق أنيق فيه دوائر أرقام (وحدة/درس) — كل قسم في "مستطيل" خاص بيه
+function CircleFilterBox({ title, icon, count, value, onChange, disabled }) {
+  return (
+    <div
+      className={`relative rounded-[26px] p-4 border transition-opacity duration-300 ${disabled ? "opacity-40 pointer-events-none" : "opacity-100"} bg-gradient-to-b from-white/[0.07] to-white/[0.015] border-white/10 backdrop-blur-md shadow-[0_10px_28px_-12px_rgba(0,0,0,0.7)]`}
+    >
+      <div className="flex items-center gap-2 mb-3.5 px-1">
+        <span className="text-base leading-none">{icon}</span>
+        <span style={PICKER_FONT} className="text-white font-extrabold text-[13.5px] tracking-wide">{title}</span>
+      </div>
+      <div className="flex flex-wrap gap-2.5 justify-center">
+        {Array.from({ length: count }, (_, i) => i + 1).map(n => {
+          const active = String(value) === String(n);
+          const idx = (n - 1) % CIRCLE_THEMES.length;
+          return (
+            <button
+              key={n} type="button" onClick={() => onChange(n)} style={PICKER_FONT}
+              className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-[15px] font-black transition-all duration-200 active:scale-90
+                ${active
+                  ? `bg-gradient-to-br ${CIRCLE_THEMES[idx].grad} text-white scale-[1.14] ring-2 ring-white/50 ${CIRCLE_GLOW[idx]}`
+                  : "bg-white/[0.06] text-slate-300 border border-white/10 hover:bg-white/[0.12] hover:scale-105"}`}
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// بطاقات اختيار الصف بتصميم عالمي متدرّج الألوان
+function GradeCardsPicker({ onSelect }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {GRADES_LIST.map((g, i) => {
+        const idx = i % CIRCLE_THEMES.length;
+        return (
+          <button
+            key={g} type="button" onClick={() => onSelect(g)} style={PICKER_FONT}
+            className={`relative overflow-hidden rounded-[22px] p-4 text-right bg-gradient-to-br ${CIRCLE_THEMES[idx].grad} text-white ${CIRCLE_GLOW[idx]} active:scale-95 hover:-translate-y-0.5 transition-all duration-200`}
+          >
+            <div className="absolute -left-2 -top-2 text-4xl opacity-20 select-none">🎓</div>
+            <div className="relative font-black text-[13.5px] leading-tight">{g}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Panel: بنك الأسئلة ──────────────────────────────────────
 function ExamPanelQuestionBank({ questions, setQuestions }) {
   const [search, setSearch]       = useState("");
@@ -878,32 +957,27 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        <Field label="الصف">
-          <select value={grade} onChange={e => { setGrade(e.target.value); setUnit(""); setLesson(""); resetPick(); }}
-            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
-            <option value="">— اختر —</option>
-            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-          </select>
-        </Field>
-        <Field label="الوحدة">
-          <select value={unit} onChange={e => { setUnit(e.target.value); setLesson(""); resetPick(); }} disabled={!grade}
-            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
-            <option value="">— اختر —</option>
-            {Array.from({ length: maxUnits }, (_, i) => i + 1).map(u => <option key={u} value={u}>وحدة {u}</option>)}
-          </select>
-        </Field>
-        <Field label="الدرس">
-          <select value={lesson} onChange={e => { setLesson(e.target.value); resetPick(); }} disabled={!unit}
-            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
-            <option value="">— اختر —</option>
-            {Array.from({ length: LESSONS_COUNT }, (_, i) => i + 1).map(l => <option key={l} value={l}>درس {l}</option>)}
-          </select>
-        </Field>
-      </div>
-
-      {grade === "ثالثة ثانوي" && (
-        <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+      {!grade ? (
+        <div className="space-y-3">
+          <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">اختاري الصف</div>
+          <GradeCardsPicker onSelect={g => { setGrade(g); setUnit(""); setLesson(""); resetPick(); }} />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <span style={PICKER_FONT} className="text-white font-extrabold text-sm">{grade}</span>
+            <button type="button" onClick={() => { setGrade(""); setUnit(""); setLesson(""); resetPick(); }} className="text-blue-400 text-xs">🔄 تغيير الصف</button>
+          </div>
+          {grade === "ثالثة ثانوي" && (
+            <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+          )}
+          <div className="space-y-3">
+            <CircleFilterBox title="اختاري الوحدة" icon="📘" count={maxUnits} value={unit}
+              onChange={u => { setUnit(String(u)); setLesson(""); resetPick(); }} />
+            <CircleFilterBox title="اختاري الدرس" icon="📖" count={LESSONS_COUNT} value={lesson}
+              onChange={l => { setLesson(String(l)); resetPick(); }} disabled={!unit} />
+          </div>
+        </div>
       )}
 
       {/* اختيار الامتحان (لو موجود أكتر من امتحان لنفس الدرس) أو نموذج تسجيل امتحان جديد */}
@@ -1622,17 +1696,7 @@ function ExamPanelDashboard({ questions, webExams, centerExams, setCenterExams, 
   );
 }
 
-// ─── ألوان مميزة لكل صف في تقرير الأخطاء ──────────────────────
-const GRADE_COLORS = [
-  "from-blue-600 to-indigo-700",
-  "from-emerald-600 to-teal-700",
-  "from-amber-600 to-orange-700",
-  "from-rose-600 to-pink-700",
-  "from-violet-600 to-purple-700",
-  "from-cyan-600 to-blue-700",
-];
-
-// ─── تقرير الأخطاء: صف (6 مستطيلات) ← وحدة/درس ← جدول أخطاء
+// ─── تقرير الأخطاء: صف (بطاقات) ← وحدة/درس (دوائر) ← جدول أخطاء
 // الطلاب، بوصف السؤال (لو متسجّل من قسم "الامتحانات") بدل رقمه ─────
 function ExamMistakesReport({ students, centerExams }) {
   const [grade,  setGrade]  = useState("");
@@ -1669,44 +1733,24 @@ function ExamMistakesReport({ students, centerExams }) {
   // الشاشة 1: اختيار الصف — 6 مستطيلات (من أولى إعدادي لثالثة ثانوي)
   if (!grade) return (
     <div className="space-y-4">
-      <div className="text-white font-black text-sm">اختاري الصف</div>
-      <div className="grid grid-cols-2 gap-3">
-        {GRADES_LIST.map((g, i) => (
-          <button key={g} onClick={() => setGrade(g)}
-            className={`bg-gradient-to-br ${GRADE_COLORS[i % GRADE_COLORS.length]} rounded-2xl p-4 text-white text-right shadow-md active:scale-95 transition-transform`}>
-            <div className="text-2xl mb-1">🎓</div>
-            <div className="font-black text-sm leading-tight">{g}</div>
-          </button>
-        ))}
-      </div>
+      <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">اختاري الصف</div>
+      <GradeCardsPicker onSelect={setGrade} />
     </div>
   );
 
-  // الشاشة 2: مستطيل اختيار الوحدة والدرس
+  // الشاشة 2: صناديق دوائر اختيار الوحدة والدرس
   if (!unit || !lesson) return (
     <div className="space-y-4">
       <button onClick={resetToGrades} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الصف</button>
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-        <div className="text-white font-black text-sm">{grade} — اختاري الوحدة والدرس</div>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="الوحدة">
-            <select value={unit} onChange={e => { setUnit(e.target.value); setLesson(""); }}
-              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
-              <option value="">— اختر —</option>
-              {Array.from({ length: maxUnits }, (_, i) => i + 1).map(u => <option key={u} value={u}>وحدة {u}</option>)}
-            </select>
-          </Field>
-          <Field label="الدرس">
-            <select value={lesson} onChange={e => setLesson(e.target.value)} disabled={!unit}
-              className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
-              <option value="">— اختر —</option>
-              {Array.from({ length: LESSONS_COUNT }, (_, i) => i + 1).map(l => <option key={l} value={l}>درس {l}</option>)}
-            </select>
-          </Field>
-        </div>
-        {grade === "ثالثة ثانوي" && (
-          <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
-        )}
+      <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">{grade} — اختاري الوحدة والدرس</div>
+      {grade === "ثالثة ثانوي" && (
+        <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+      )}
+      <div className="space-y-3">
+        <CircleFilterBox title="اختاري الوحدة" icon="📘" count={maxUnits} value={unit}
+          onChange={u => { setUnit(String(u)); setLesson(""); }} />
+        <CircleFilterBox title="اختاري الدرس" icon="📖" count={LESSONS_COUNT} value={lesson}
+          onChange={l => setLesson(String(l))} disabled={!unit} />
       </div>
     </div>
   );
