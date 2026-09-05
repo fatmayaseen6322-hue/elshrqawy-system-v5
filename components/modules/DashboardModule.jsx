@@ -637,7 +637,7 @@ export function AsalAI({ sectionRefs, students, finRecords, attRecords }) {
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
-export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, settings, role = "admin", setStudents, addActivity, activityLog, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone }) {
+export default function DashboardModule({ students: studentsProp, finRecords: finRecordsProp, attRecords: attRecordsProp, webExams, setWebExams, settings, role = "admin", setStudents, setFinRecords, setAttRecords, addActivity, activityLog, jumpTo, onJumpDone, showToast, sectionJump, onSectionJumpDone }) {
   const students   = (studentsProp || []).filter(s => !isBlocked(s));
   const finRecords = finRecordsProp || [];
   const attRecords = attRecordsProp || [];
@@ -652,6 +652,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [showExams, setShowExams] = useState(false);
   const [examsGrade, setExamsGrade] = useState(null);
   const [showDup, setShowDup] = useState(false);
+  const [confirmDeleteDup, setConfirmDeleteDup] = useState(null);
 
   // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
   // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
@@ -694,6 +695,23 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   // فيختفوا من القايمة نهائيًا وميرجعوش تاني.
   const confirmNotDup = (ids) => {
     setStudents?.(p => p.map(x => ids.includes(x.id) ? { ...x, dupConfirmed: true } : x));
+  };
+  // ── حذف نهائي مباشر من هنا (بدل زرار ✓ اللي بيخفي بس من القايمة من
+  // غير ما يمسح حاجة فعليًا) — ده اللي كان بيسبب رجوع نفس الاسم كل مرة:
+  // ✓ بتشيل التحذير من "برج المراقبة" بس الطالب الزيادة بيفضل موجود
+  // بنفس الاسم في كل الصفحات التانية. الزرار ده بيمسح الطالب فعليًا +
+  // كل سجلاته (حضور/مصاريف/امتحانات) نهائيًا، زي "بلوك" بالظبط.
+  const hardDeleteDup = (s) => {
+    setStudents?.(p => (p || []).filter(x => x.id !== s.id));
+    setFinRecords?.(p => (p || []).filter(r => r.studentId !== s.id));
+    setAttRecords?.(p => (p || []).filter(r => r.studentId !== s.id));
+    setWebExams?.(p => (p || []).map(e => ({
+      ...e,
+      results:  (e.results  || []).filter(r => r.studentId !== s.id),
+      cheating: (e.cheating || []).filter(r => r.studentId !== s.id),
+    })));
+    addActivity?.("حذف نهائي", `${s.name} — تكرار اتحذف من برج المراقبة مع كل سجلاته`);
+    showToast?.(`✓ تم حذف ${s.name} نهائيًا مع كل سجلاته`, "success");
   };
   const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
 
@@ -931,23 +949,30 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
                       <span className="text-white text-sm font-bold">{list[0].name} — {list.length} طالب بنفس الاسم</span>
                       <button
                         onClick={() => confirmNotDup(list.map(s => s.id))}
-                        title="مش تكرار فعلي (مثلاً إخوات) — اخفِ من القايمة"
+                        title="دول فعلاً أشخاص مختلفين (مثلاً إخوات بنفس الاسم) — اخفِ التحذير بس من غير ما تمسح حد"
                         className="shrink-0 w-7 h-7 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold hover:bg-emerald-600/30 transition-colors">
                         ✓
                       </button>
                     </div>
+                    <div className="text-amber-300/80 text-[11px] px-3 pt-1.5">✓ = دول أشخاص مختلفين فعلاً (منفصل عن الحذف). 🗑 = مسح الطالب ده نهائيًا لأنه نسخة زيادة.</div>
                     <div className="divide-y divide-slate-700/40">
                       {list.map((s, si) => (
                         <div key={si} className="px-3 py-2 flex items-center justify-between text-xs">
-                          <div className="text-slate-300">{s.grade} — مجموعة {s.group}</div>
+                          <div className="text-slate-300">{s.grade} — مجموعة {s.group} · {s.id}</div>
                           <div className="flex items-center gap-2">
                             {s.phone && <span className="text-slate-500">{s.phone}</span>}
                             {isBlocked(s) && <span className="text-amber-400 font-bold">🚫 بلوك</span>}
                             <button
                               onClick={() => confirmNotDup([s.id])}
-                              title="الطالب ده مش تكرار — اخفِ بس ده"
+                              title="الطالب ده شخص مختلف فعلاً — اخفِ التحذير بس من غير حذف"
                               className="shrink-0 w-6 h-6 rounded-md bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold hover:bg-emerald-600/30 transition-colors">
                               ✓
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteDup(s)}
+                              title="نسخة زيادة — احذفه نهائيًا هو وكل سجلاته"
+                              className="shrink-0 w-6 h-6 rounded-md bg-red-700/25 border border-red-600/30 text-red-300 flex items-center justify-center font-bold hover:bg-red-700/35 transition-colors">
+                              🗑
                             </button>
                           </div>
                         </div>
@@ -976,6 +1001,19 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {confirmDeleteDup && (
+          <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5 w-full max-w-xs space-y-4">
+              <div className="text-white text-sm text-center">حذف {confirmDeleteDup.name} ({confirmDeleteDup.grade} — مجموعة {confirmDeleteDup.group}) نهائيًا؟</div>
+              <div className="text-red-400 text-xs text-center">هيتشال هو وكل سجلات الحضور والمصاريف والامتحانات بتاعته — الخطوة دي نهائية</div>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmDeleteDup(null)} className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm">إلغاء</button>
+                <button onClick={() => { hardDeleteDup(confirmDeleteDup); setConfirmDeleteDup(null); }} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold">🗑 حذف نهائي</button>
+              </div>
+            </div>
           </div>
         )}
       </div>
