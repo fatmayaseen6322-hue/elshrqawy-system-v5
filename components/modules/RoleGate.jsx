@@ -35,10 +35,35 @@ export default function RoleGate({ settings, onEnter }) {
     if (!role) { setErr("اختر الدور أولاً"); return; }
     if (!pw) { setErr("اكتب كلمة المرور"); return; }
     setLoading(true);
-    const ok = await checkPwd(pw, settings?.[role.pwdKey]);
+
+    if (role.key === "admin") {
+      const ok = await checkPwd(pw, settings?.password);
+      setLoading(false);
+      if (!ok) { setErr("كلمة المرور غلط"); return; }
+      onEnter({ role: "admin", label: role.label, icon: role.icon, name: null });
+      return;
+    }
+
+    // Assist: كل مستلم ممكن يكون ليه باسورد شخصي خاص بيه (من الإعدادات →
+    // كلمة سر الاسيست) — لو الباسورد المكتوب اتطابق مع حد منهم، بيدخل
+    // النظام باسمه فعليًا (وده اللي بيتسجل تلقائي بعد كده في المصاريف
+    // والحضور بدل ما يختار كل مرة). لو مفيش تطابق، نرجع لباسورد الاسيست
+    // العام القديم (لدعم النظام القديم لحد ما تتحدد باسوردات شخصية).
+    const namedReceivers = (settings?.receivers || []).filter(r => r.active !== false && r.password);
+    let matched = null;
+    for (const r of namedReceivers) {
+      if (await checkPwd(pw, r.password)) { matched = r; break; }
+    }
+    if (matched) {
+      setLoading(false);
+      onEnter({ role: "assist", label: matched.name, icon: role.icon, name: matched.name });
+      return;
+    }
+
+    const okShared = await checkPwd(pw, settings?.cashierPassword);
     setLoading(false);
-    if (!ok) { setErr("كلمة المرور غلط"); return; }
-    onEnter({ role: role.key, label: role.label, icon: role.icon });
+    if (!okShared) { setErr("كلمة المرور غلط"); return; }
+    onEnter({ role: "assist", label: role.label, icon: role.icon, name: null });
   };
 
   return (

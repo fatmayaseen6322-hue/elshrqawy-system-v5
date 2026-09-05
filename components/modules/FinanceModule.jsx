@@ -166,10 +166,10 @@ function UndoPasswordGate({ undoHash, onUnlock, onCancel }) {
 // ══════════════════════════════════════════════════════════════
 // FINANCE ROW (نفس آلية العرض القديمة: اسم / مبلغ / مستلم / وقت / تعديل / طباعة / تراجع)
 // ══════════════════════════════════════════════════════════════
-function FinRow({ student, index, record, globalReceiver, activeReceivers, onSave, onUndo, passwordEnabled, financePassword, undoPassword, centerName, highlighted, role = "admin" }) {
+function FinRow({ student, index, record, globalReceiver, activeReceivers, lockedReceiver, onSave, onUndo, passwordEnabled, financePassword, undoPassword, centerName, highlighted, role = "admin" }) {
   const [amount,      setAmount]      = useState(record ? record.amount : (student._defaultFee || 0));
-  const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (globalReceiver?.id || null));
-  const [pickTime,    setPickTime]    = useState(""); // ⏱ وقت اختيار المستلم (قبل الحفظ)
+  const [receiverId,  setReceiverId]  = useState(record ? record.receiverId : (lockedReceiver ? lockedReceiver.id : (globalReceiver?.id || null)));
+  const [pickTime,    setPickTime]    = useState(lockedReceiver && !record ? nowStr() : ""); // ⏱ وقت اختيار المستلم (قبل الحفظ)
   const [saved,       setSaved]       = useState(!!record);
   const [editing,     setEditing]     = useState(false);
   const [showPw,      setShowPw]      = useState(false);
@@ -182,8 +182,8 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
   }, [highlighted]);
 
   useEffect(() => {
-    if (!saved && globalReceiver) setReceiverId(globalReceiver.id);
-  }, [globalReceiver]);
+    if (!saved && globalReceiver && !lockedReceiver) setReceiverId(globalReceiver.id);
+  }, [globalReceiver, lockedReceiver]);
 
   const receiverName = (activeReceivers || []).find(r => r.id === receiverId)?.name || "—";
 
@@ -253,8 +253,8 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
     setSaved(false);
     setEditing(false);
     setAmount(student._defaultFee || 0);
-    setReceiverId(globalReceiver?.id || null);
-    setPickTime("");
+    setReceiverId(lockedReceiver ? lockedReceiver.id : (globalReceiver?.id || null));
+    setPickTime(lockedReceiver ? nowStr() : "");
   };
 
   const canPrint = saved && localRecord !== null;
@@ -284,12 +284,14 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
           </div>
         </td>
         <td className="px-2 py-3" style={{ minWidth: "100px" }}>
-          {editing || !saved
-            ? <select value={receiverId || ""} onChange={e => pickReceiver(e.target.value)} className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
-                <option value="">اختر</option>
-                {(activeReceivers || []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            : <span className="text-slate-300 text-xs">{receiverName}</span>
+          {lockedReceiver
+            ? <span className="text-slate-300 text-xs">{lockedReceiver.name}</span>
+            : (editing || !saved)
+              ? <select value={receiverId || ""} onChange={e => pickReceiver(e.target.value)} className="w-full bg-slate-700 border border-slate-600/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                  <option value="">اختر</option>
+                  {(activeReceivers || []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              : <span className="text-slate-300 text-xs">{receiverName}</span>
           }
         </td>
         <td className="px-2 py-3">
@@ -335,7 +337,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, onSav
   );
 }
 
-export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", jumpTo, onJumpDone, financeMode = null, setFinanceMode }) {
+export default function FinanceModule({ students, settings, finRecords, setFinRecords, setStudents, addActivity, role = "admin", currentUserName = null, jumpTo, onJumpDone, financeMode = null, setFinanceMode }) {
   const safeStudents = (students || []).filter(s => !isBlocked(s));
   const safeSettings = settings   || {};
   const safeRecords  = finRecords || [];
@@ -350,6 +352,10 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const effMonth = financeMode === "past" ? regMonth : curMonth;
   const effYear  = financeMode === "past" ? regYear  : curYear;
   const activeReceivers = (safeSettings.receivers || []).filter(r => r.active !== false);
+  // لو اللي فاتح البرنامج داخل بباسورد شخصي خاص بيه (مربوط باسمه في أسماء
+  // المستلمين) — المستلم بيتسجل تلقائي باسمه في كل الصفوف، من غير ما
+  // يحتاج يختار من القايمة كل مرة.
+  const lockedReceiver = currentUserName ? (activeReceivers || []).find(r => r.name === currentUserName) || null : null;
   // (Assist بقى بياخد نفس شاشة/عملية المستر بالكامل بدل الشاشة المبسطة اللي كانت بتاعته لوحده)
 
   // ══════════════ فلاتر الصف/المجموعة/السجل + حالة الجدول ══════════════
@@ -434,6 +440,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     if (financeMode !== "past") return [];
     return monthRecords;
   }, [financeMode, monthRecords]);
+
+  // ── نفس الطلاب اللي دفعوا، بس بشكل جدول كامل قابل للتعديل (زي جدول
+  // الشهر الحالي بالظبط: مستلم/وقت/مبلغ/تعديل/طباعة/تراجع) — عشان لو
+  // حصل خطأ في تسجيل طالب في شهر قديم يبقى ممكن تصليحه من هنا مباشرة.
+  // بيظهر للمستر بس (role === "admin").
+  const pastPaidTableStudents = useMemo(() => {
+    if (financeMode !== "past") return [];
+    return baseTableStudents.filter(s => monthRecords.some(r => r.studentId === s.id));
+  }, [baseTableStudents, financeMode, monthRecords]);
 
   // ── "تسجيل الشهور الماضية": الجدول يعرض المتأخرين عن الشهر/السنة المختارين بس (مش كل الطلاب) ──
   const tableStudents = useMemo(() => {
@@ -770,37 +785,77 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             </div>
 
             {pastPaidOpen && (
-              <div className="mt-3 bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse" style={{ minWidth: "260px" }}>
-                    <thead>
-                      <tr className="bg-slate-900/80 border-b border-slate-700/60">
-                        <th className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>
-                          اسم الطالب — دفعوا شهر {MONTHS_AR[regMonth - 1]} {regYear}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pastPaidStudents.length === 0 ? (
-                        <tr>
-                          <td className="px-3 py-6 text-center text-slate-500 text-sm">
-                            محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
-                          </td>
-                        </tr>
-                      ) : pastPaidStudents.map(r => (
-                        <tr key={r.id} className="border-b border-slate-700/20">
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Av name={r.studentName} size="sm" />
-                              <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              role === "admin" ? (
+                <div className="mt-3">
+                  {pastPaidTableStudents.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500 text-sm bg-slate-900/60 border border-slate-700/30 rounded-xl">
+                      محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
+                    </div>
+                  ) : (
+                    <div className="bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
+                          <thead>
+                            <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
+                              {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
+                                <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pastPaidTableStudents.map((s, i) => (
+                              <FinRow
+                                key={s.id} student={s} index={i} record={getRecord(s.id)}
+                                globalReceiver={globalReceiver} activeReceivers={activeReceivers}
+                                lockedReceiver={lockedReceiver}
+                                onSave={handleSave} onUndo={handleUndo}
+                                passwordEnabled={safeSettings.financePasswordEnabled}
+                                financePassword={safeSettings.financePassword}
+                                undoPassword={safeSettings.financeUndoPassword}
+                                centerName={safeSettings.centerName || "مركز تعليمي"}
+                                highlighted={highlightId === s.id}
+                                role={role}
+                              />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className="mt-3 bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse" style={{ minWidth: "260px" }}>
+                      <thead>
+                        <tr className="bg-slate-900/80 border-b border-slate-700/60">
+                          <th className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>
+                            اسم الطالب — دفعوا شهر {MONTHS_AR[regMonth - 1]} {regYear}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pastPaidStudents.length === 0 ? (
+                          <tr>
+                            <td className="px-3 py-6 text-center text-slate-500 text-sm">
+                              محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
+                            </td>
+                          </tr>
+                        ) : pastPaidStudents.map(r => (
+                          <tr key={r.id} className="border-b border-slate-700/20">
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Av name={r.studentName} size="sm" />
+                                <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
             )}
           </div>
         )
@@ -903,6 +958,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                         <FinRow
                           key={s.id} student={s} index={i} record={getRecord(s.id)}
                           globalReceiver={globalReceiver} activeReceivers={activeReceivers}
+                          lockedReceiver={lockedReceiver}
                           onSave={handleSave} onUndo={handleUndo}
                           passwordEnabled={safeSettings.financePasswordEnabled}
                           financePassword={safeSettings.financePassword}

@@ -55,7 +55,7 @@ const stCfg = {
 //  - يوم قديم: بتفتح تلقائي كـ"جدول عرض فقط" (اسم/حالة/سبب)، ومحدش
 //    يقدر يعدّل فيها غير المستر (role === "admin") وبعد ما يدخل الباسورد.
 // ══════════════════════════════════════════════════════════════
-export default function AttendanceModule({ students, setStudents, attRecords, setAttRecords, settings, role = "admin", addActivity, jumpTo, onJumpDone }) {
+export default function AttendanceModule({ students, setStudents, attRecords, setAttRecords, settings, role = "admin", currentUserName = null, addActivity, jumpTo, onJumpDone }) {
   const [grade,     setGrade]     = useState(GRADES_LIST[2]);
   const [group,     setGroup]     = useState("A");
   const [date,      setDate]      = useState(TODAY);
@@ -129,6 +129,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     const recs = (attRecords || []).filter(r => r.grade === logGrade && r.group === logGroup && r.date === logDate);
     return Object.fromEntries(recs.map(r => [r.studentId, r]));
   }, [attRecords, logGrade, logGroup, logDate]);
+  // أسماء كل اللي سجّلوا حضور/غياب في اليوم/المجموعة دي (ممكن يكون فيه
+  // أكتر من اسم لو حد عدّل بعد حد تاني) — بتظهر فوق الجدول مباشرة.
+  const logTakenByList = useMemo(() => {
+    const names = new Set(Object.values(logRecordsMap).map(r => r?.takenBy).filter(Boolean));
+    return [...names];
+  }, [logRecordsMap]);
 
   // نفس إصلاح "الطلاب المنقولين" بس لصفحة الدفتر
   const logStudentsForDisplay = useMemo(() => {
@@ -345,7 +351,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       let list = prev || [];
       const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
       const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
-      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft, time: newTime };
+      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null };
       return idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
     });
 
@@ -394,7 +400,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
         const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
         if (newStatus) {
-          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime };
+          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null };
           list = idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
         } else if (idx >= 0) {
           list = list.filter((_, i) => i !== idx);
@@ -579,6 +585,11 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
               {logDateIdx >= 0 ? `سجل ${logDateIdx + 1} من ${logDatesList.length}` : `${logDatesList.length} يوم مسجَّل — دوس → عشان تشوف آخرهم`}
             </div>
           )}
+          {logTakenByList.length > 0 && (
+            <div className="text-amber-400/90 text-[11px] text-center font-bold">
+              👤 سجّله: {logTakenByList.join("، ")}
+            </div>
+          )}
         </div>
 
         {logStudentsForDisplay.length === 0 ? (
@@ -591,6 +602,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                   <th className="text-right px-3 py-2.5">الطالب</th>
                   <th className="text-center px-3 py-2.5">الحالة</th>
                   <th className="text-right px-3 py-2.5">السبب</th>
+                  <th className="text-right px-3 py-2.5">المسؤول</th>
                 </tr>
               </thead>
               <tbody>
@@ -615,6 +627,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                             : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
                         </td>
                         <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.reason || "—"}</td>
+                        <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.takenBy || "—"}</td>
                       </tr>
                     );
                   });
