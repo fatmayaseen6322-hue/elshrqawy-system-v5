@@ -1,0 +1,64 @@
+name: بناء نسخة الأندرويد (APK)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Add Android platform
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build APK (debug, installable directly)
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ElshrqawySystem_${{ steps.version.outputs.version }}.apk
+
+      - name: Create Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mobile-v${{ steps.version.outputs.version }}
+          name: "مركز الشرقاوي - نسخة الأندرويد v${{ steps.version.outputs.version }}"
+          body: "تحميل مباشر لنسخة الأندرويد (APK) من برنامج مركز الشرقاوي. لازم تفعيل تثبيت التطبيقات من مصادر غير معروفة على التليفون."
+          files: ElshrqawySystem_${{ steps.version.outputs.version }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
