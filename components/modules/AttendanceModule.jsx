@@ -45,6 +45,35 @@ const stCfg = {
 };
 
 // ══════════════════════════════════════════════════════════════
+// سهم اتجاه (SVG بدل رمز يونيكود) — الأسهم النصية زي → و ← عندها
+// خاصية Bidi_Mirrored في اليونيكود فبتتقلب تلقائيًا جوه أي سياق RTL
+// (زي صفحتنا كلها)، وده كان بيخلي زرار "اللي قبل كده" يبان بشكل
+// عكس المفروض وحاسس المستخدم إنه "مش شغال". SVG رسم ثابت مالوش
+// أي مفهوم Bidi خالص، فبيفضل ثابت الاتجاه في أي سياق.
+// ══════════════════════════════════════════════════════════════
+function ChevronIcon({ dir }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round">
+      {dir === "right" ? <polyline points="9 5 16 12 9 19" /> : <polyline points="15 5 8 12 15 19" />}
+    </svg>
+  );
+}
+
+// اختصار اسم الصف عشان يتظبط جوه دايرة صغيرة — بيحاول يفهم النمط
+// المعتاد "ترتيب + مرحلة" (أولى/ثانية/ثالثة + إعدادي/ثانوي) ويحوّله
+// لرقم + حرف المرحلة، ولو الصف مخصص وماتوافقش النمط بياخد أول حرفين بس.
+const ORDINAL_MAP = { "أولى": "1", "ثانية": "2", "ثالثة": "3", "رابعة": "4", "خامسة": "5", "سادسة": "6" };
+const shortGradeLabel = (g = "") => {
+  const parts = g.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    const num = ORDINAL_MAP[parts[0]] || parts[0][0] || "";
+    const lvl = parts[1][0] || "";
+    return `${num}${lvl}`;
+  }
+  return g.slice(0, 3) || "-";
+};
+
+// ══════════════════════════════════════════════════════════════
 // MODULE 1: ATTENDANCE
 // attRecords + setAttRecords (زي finRecords بالظبط) — سجل غياب لكل
 // طالب في كل يوم، فيه status + reason (سبب الغياب/التأخير الاختياري)
@@ -101,10 +130,29 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     return dates.length ? dates.sort().slice(-1)[0] : TODAY;
   };
 
+  // آخر صف/مجموعة اتاخد فيها غياب فعليًا النهاردة بالذات (مش أي يوم) —
+  // بيعتمد على حقل ts (وقت الحفظ) لو موجود عشان يبقى دقيق مع أكتر من
+  // مجموعة اتسجّلت النهاردة، ولو السجلات قديمة من غير ts بيرجع لترتيب
+  // ظهورها في المصفوفة (آخر واحد اتضاف).
+  const lastGroupTakenToday = () => {
+    const todays = (attRecords || []).filter(r => r.date === TODAY);
+    if (!todays.length) return null;
+    const withTs = todays.filter(r => r.ts);
+    const best = withTs.length ? withTs.reduce((a, b) => (b.ts > a.ts ? b : a)) : todays[todays.length - 1];
+    return { grade: best.grade, group: best.group };
+  };
+
   const openLog = () => {
-    setLogGrade(grade);
-    setLogGroup(group);
-    setLogDate(lastRecordedLogDate(grade, group));
+    const last = lastGroupTakenToday();
+    if (last) {
+      setLogGrade(last.grade);
+      setLogGroup(last.group);
+      setLogDate(TODAY);
+    } else {
+      setLogGrade(grade);
+      setLogGroup(group);
+      setLogDate(lastRecordedLogDate(grade, group));
+    }
     setLogOpen(true);
   };
 
@@ -351,7 +399,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       let list = prev || [];
       const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
       const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
-      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null };
+      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
       return idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
     });
 
@@ -400,7 +448,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
         const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
         if (newStatus) {
-          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null };
+          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
           list = idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
         } else if (idx >= 0) {
           list = list.filter((_, i) => i !== idx);
@@ -551,33 +599,50 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           <div className="text-white font-black text-sm">📔 سجل الغياب</div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2">
-          <div className="grid grid-cols-2 gap-2 items-stretch">
-            <Sel value={logGrade} onChange={e => handleLogGradeChange(e.target.value)}>
-              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-            </Sel>
-            <Sel value={logGroup} onChange={e => handleLogGroupChange(e.target.value)}>
-              {logGrpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
-            </Sel>
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3.5 space-y-3">
+          {/* دواير الصفوف — الست صفوف جنب بعض في صف واحد، دوس على أي واحدة تفتح مجموعتها */}
+          <div className="grid grid-cols-6 gap-1.5">
+            {GRADES_LIST.map(g => (
+              <button key={g} onClick={() => handleLogGradeChange(g)} title={g}
+                className={`aspect-square rounded-full flex items-center justify-center text-[11px] font-black border-2 transition-all duration-150 ${
+                  logGrade === g
+                    ? "bg-gradient-to-br from-blue-600 to-violet-700 border-blue-400 text-white shadow-lg shadow-blue-500/30 scale-105"
+                    : "bg-slate-900/50 border-slate-700/50 text-slate-400 hover:border-slate-500 hover:text-slate-200"
+                }`}>
+                {shortGradeLabel(g)}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* الأسهم بتاخد direction:"ltr" عشان ما تتعكسش تلقائي جوه سياق RTL
-                (رموز الأسهم عندها خاصية Bidi_Mirrored فبيقلبها المتصفح
-                لوحدها في صفحة RTL، فكانت تبان بعكس اتجاهها وتحس إنها معطلة) */}
+          <div className="text-center text-white text-xs font-bold">{logGrade}</div>
+
+          {/* مستطيلات صغيرة للمجموعة */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            {logGrpList.map(g => (
+              <button key={g} onClick={() => handleLogGroupChange(g)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                  logGroup === g
+                    ? "bg-blue-600/25 border-blue-500/60 text-blue-200"
+                    : "bg-slate-900/40 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-500"
+                }`}>
+                مجموعة {g}
+              </button>
+            ))}
+          </div>
+
+          {/* اليوم + الأسهم جنب بعض في صف واحد مضغوط */}
+          <div className="flex items-center justify-center gap-1.5">
             <button onClick={goPrevLogDate} disabled={!hasPrevLogDate}
               title="السجل اللي قبل كده"
-              style={{ direction: "ltr" }}
-              className="w-9 h-9 shrink-0 rounded-xl bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-30 flex items-center justify-center text-base">
-              →
+              className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
+              <ChevronIcon dir="right" />
             </button>
-            <div className="flex-1 min-w-0">
+            <div className="shrink-0 max-w-[150px]">
               <DatePicker value={logDate} onChange={setLogDate} max={TODAY} />
             </div>
             <button onClick={goNextLogDate} disabled={!hasNextLogDate}
               title="السجل اللي بعد كده"
-              style={{ direction: "ltr" }}
-              className="w-9 h-9 shrink-0 rounded-xl bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-30 flex items-center justify-center text-base">
-              ←
+              className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
+              <ChevronIcon dir="left" />
             </button>
           </div>
           {logDatesList.length > 0 && (
