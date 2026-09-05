@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { SIDEBAR_NAV, TODAY } from "./constants";
 import { fmt, waLink, lsGet, lsSet } from "./utils";
 import useAppData from "./hooks/useAppData";
@@ -10,17 +10,32 @@ import PrintStatusToast               from "./components/ui/PrintStatusToast";
 import { EV_CHOOSE_PRINTER }          from "./utils/print/printRouter";
 
 // Modules
-import AttendanceModule from "./components/modules/AttendanceModule";
-import StudentsModule   from "./components/modules/StudentsModule";
-import BlockModule      from "./components/modules/BlockModule";
-import FinanceModule    from "./components/modules/FinanceModule";
-import ExamsModule      from "./components/modules/ExamsModule";
-import DashboardModule  from "./components/modules/DashboardModule";
-import WhatsappModule   from "./components/modules/WhatsappModule";
-import CallModule       from "./components/modules/CallModule";
-import SettingsModule   from "./components/modules/SettingsModule";
+// ── تحميل كسول (lazy) لكل موديول: بدل ما التطبيق يحمّل كود كل الصفحات
+// (حضور/مصاريف/امتحانات/داشبورد...) مرة واحدة عند الفتح، كل صفحة بقت
+// بتتحمّل بس أول مرة الشخص يفتحها فعليًا — ده بيقلل حجم الكود اللي
+// الموبايل لازم يحمّله وقت فتح البرنامج بشكل كبير، وبالتالي يفتح أسرع.
+const AttendanceModule = lazy(() => import("./components/modules/AttendanceModule"));
+const StudentsModule   = lazy(() => import("./components/modules/StudentsModule"));
+const BlockModule      = lazy(() => import("./components/modules/BlockModule"));
+const FinanceModule    = lazy(() => import("./components/modules/FinanceModule"));
+const ExamsModule      = lazy(() => import("./components/modules/ExamsModule"));
+const DashboardModule  = lazy(() => import("./components/modules/DashboardModule"));
+const WhatsappModule   = lazy(() => import("./components/modules/WhatsappModule"));
+const CallModule       = lazy(() => import("./components/modules/CallModule"));
+const SettingsModule   = lazy(() => import("./components/modules/SettingsModule"));
+const StudentPortal    = lazy(() => import("./components/StudentPortal"));
+// RoleGate صغير وبيظهر أول حاجة عند فتح البرنامج (شاشة الدخول) — بيفضل
+// يتحمّل فورًا (مش lazy) عشان شاشة الدخول تظهر من غير أي تأخير/فلاش تحميل.
 import RoleGate, { ROLE_PERMS } from "./components/modules/RoleGate";
-import StudentPortal            from "./components/StudentPortal";
+
+// ── شاشة تحميل بسيطة بتظهر أثناء تحميل كود أي صفحة lazy لأول مرة ──
+function ModuleLoading() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <div className="w-8 h-8 border-2 border-slate-600 border-t-blue-500 rounded-full animate-spin" />
+    </div>
+  );
+}
 
 // ══════════════════════════════════════════════════════════════
 // ROOT APP
@@ -208,7 +223,11 @@ export default function App() {
   // عند الطالب) فوق النسخة السحابية الحقيقية بالغلط.
   const portalParams = new URLSearchParams(window.location.search);
   if (portalParams.get("portal") === "1") {
-    return <StudentPortal grade={portalParams.get("grade") || ""} group={portalParams.get("group") || ""} />;
+    return (
+      <Suspense fallback={<ModuleLoading />}>
+        <StudentPortal grade={portalParams.get("grade") || ""} group={portalParams.get("group") || ""} />
+      </Suspense>
+    );
   }
 
   const [theme, setTheme]             = useTheme();
@@ -628,6 +647,7 @@ export default function App() {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl mx-auto">
+            <Suspense fallback={<ModuleLoading />}>
             {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} currentUserName={currentRole.name || null} addActivity={addActivity} jumpTo={attendanceJump} onJumpDone={() => setAttendanceJump(null)} />}
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} centerExams={centerExams || []} settings={settings} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} />}
             {safePage === "addStudent" && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} settings={settings} addActivity={addActivity} startAdd onDone={() => setPage("students")} />}
@@ -637,6 +657,7 @@ export default function App() {
             {safePage === "call"       && <CallModule       students={students || []} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} attRecords={attRecords || []} />}
             {safePage === "block"      && <BlockModule      students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} setWebExams={setWebExams} addActivity={addActivity} />}
+            </Suspense>
           </div>
         </main>
       </div>
@@ -675,7 +696,11 @@ export default function App() {
       )}
       {/* Print Status Toast — يظهر تلقائياً عند أي طباعة */}
       <PrintStatusToast />
-      {showSettings && <SettingsModule settings={settings} setSettings={setSettings} students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} examQs={examQs || []} setExamQs={setExamQs} cloudBackupState={cloudBackupState} backupToCloud={backupToCloud} restoreFromCloud={restoreFromCloud} addActivity={addActivity} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <Suspense fallback={<ModuleLoading />}>
+          <SettingsModule settings={settings} setSettings={setSettings} students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} examQs={examQs || []} setExamQs={setExamQs} cloudBackupState={cloudBackupState} backupToCloud={backupToCloud} restoreFromCloud={restoreFromCloud} addActivity={addActivity} onClose={() => setShowSettings(false)} />
+        </Suspense>
+      )}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
