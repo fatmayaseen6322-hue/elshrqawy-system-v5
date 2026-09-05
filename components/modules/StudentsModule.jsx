@@ -264,6 +264,9 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
 
     const currentMonthPaid = isMonthPaid(currentMonthNum, currentYearNum);
+    // اتسجّل في نفس الشهر الحالي؟ لسه ما جالوش شهر كامل يتحاسب عليه —
+    // يبقى مايتكتبش "غير مدفوع" (بتوحي بدَين متأخر)، يتكتب "لم يحضر" بس.
+    const joinedThisMonth = joinYearNum === currentYearNum && joinMonthNum === currentMonthNum;
 
     const overdueMonths = [];
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
@@ -352,8 +355,18 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
 
           {/* المصاريف مدموجة هنا: الشهر الحالي + الشهور المتأخرة + تعديل في خط واحد */}
           <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1">
-            <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${currentMonthPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
-              {currentMonthPaid ? `✓ ${MONTHS_AR[currentMonthNum - 1]} مدفوع` : `✗ ${MONTHS_AR[currentMonthNum - 1]} غير مدفوع`}
+            <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${
+              currentMonthPaid
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                : joinedThisMonth
+                  ? "bg-slate-700/40 border-slate-600/30 text-slate-300"
+                  : "bg-red-500/10 border-red-500/20 text-red-400"
+            }`}>
+              {currentMonthPaid
+                ? `✓ ${MONTHS_AR[currentMonthNum - 1]} مدفوع`
+                : joinedThisMonth
+                  ? `⏳ لم يحضر ${MONTHS_AR[currentMonthNum - 1]}`
+                  : `✗ ${MONTHS_AR[currentMonthNum - 1]} غير مدفوع`}
             </div>
             <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${overdueMonths.length > 0 ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"}`}>
               {overdueMonths.length > 0 ? `⚠️ متأخر: ${overdueMonths.join("، ")}` : "✓ لا يوجد شهور متأخرة"}

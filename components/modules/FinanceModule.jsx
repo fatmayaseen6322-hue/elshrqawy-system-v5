@@ -33,6 +33,18 @@ function getExpectedFeeForMonth(student, month, year, gradeFees) {
   return base;
 }
 
+// ── هل الطالب كان متسجّل بالفعل في هذا الشهر/السنة؟ (عشان طالب اتسجّل
+// في شهر 9 مثلًا ما يتحسبش "متأخر" في شهر 8 اللي قبل ما ينضم أصلًا) ──
+function hasJoinedByMonth(student, month, year) {
+  const parts = (student?.joinDate || "").split("-");
+  if (parts.length !== 3) return true; // مفيش تاريخ انضمام مسجّل — افترض قديم
+  const joinYear  = parseInt(parts[0], 10);
+  const joinMonth = parseInt(parts[1], 10);
+  if (joinYear > year) return false;
+  if (joinYear === year && joinMonth > month) return false;
+  return true;
+}
+
 // ── حساب الشهور المتأخرة لطالب واحد (نفس منطق ملف الطالب والداشبورد) ──
 function getOverdueInfo(student, finRecords) {
   const [curYearStr, curMonthStr] = TODAY.split("-");
@@ -516,6 +528,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const tableStudents = useMemo(() => {
     if (financeMode !== "past") return baseTableStudents;
     return baseTableStudents.filter(s =>
+      hasJoinedByMonth(s, effMonth, effYear) &&
       !isMonthBlocked(s, effMonth, effYear) &&
       !monthRecords.some(r => r.studentId === s.id)
     );
@@ -599,6 +612,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     const months = [];
     for (let m = startMonth; m <= maxMonth; m++) {
       const hasLate = safeStudents.some(s =>
+        hasJoinedByMonth(s, m, regYear) &&
         !isMonthBlocked(s, m, regYear) &&
         !safeRecords.some(r => r.studentId === s.id && r.month === m && r.year === regYear)
       );
@@ -624,6 +638,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     return GRADES_LIST.filter(g => {
       const gradeStudents = safeStudents.filter(s => s && s.grade === g);
       return gradeStudents.some(s =>
+        hasJoinedByMonth(s, regMonth, regYear) &&
         !isMonthBlocked(s, regMonth, regYear) &&
         !safeRecords.some(r => r.studentId === s.id && r.month === regMonth && r.year === regYear)
       );
@@ -639,6 +654,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       const gradeStudents = safeStudents.filter(s => s && s.grade === g);
       map[g] = gradeStudents
         .filter(s =>
+          hasJoinedByMonth(s, regMonth, regYear) &&
           !isMonthBlocked(s, regMonth, regYear) &&
           !safeRecords.some(r => r.studentId === s.id && r.month === regMonth && r.year === regYear)
         )
