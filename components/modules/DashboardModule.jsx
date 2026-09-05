@@ -10,9 +10,11 @@ const fmt  = n => (n || 0).toLocaleString("en-US") + " ج";
 const fmtM = n => (n || 0).toLocaleString("en-US");
 
 // ══════════════════════════════════════════════════════════════
-// كشف التكرار: طلاب بنفس الاسم (بغض النظر عن الصف)، أو نفس رقم
-// التليفون مسجّل لأكتر من طالب — بيشمل الطلاب النشطين والمحظورين
-// (البلوك) كمان عشان يمسك التكرار الناتج عن استيراد قديم أو غلطة يدوية.
+// كشف التكرار: طلاب بنفس الاسم *وفي نفس الصف بالظبط* (بغض النظر عن
+// المجموعة) — لو طالبين بنفس الاسم في صفوف مختلفة، ده طبيعي (إخوات في
+// سنين مختلفة مثلاً) ومش بيتحسب تكرار أصلاً. أو نفس رقم التليفون مسجّل
+// لأكتر من طالب — بيشمل الطلاب النشطين والمحظورين (البلوك) كمان عشان
+// يمسك التكرار الناتج عن استيراد قديم أو غلطة يدوية.
 // ══════════════════════════════════════════════════════════════
 function buildDuplicatesData(allStudents) {
   allStudents = allStudents || [];
@@ -20,13 +22,13 @@ function buildDuplicatesData(allStudents) {
   // الاسم) بيتشالوا من كشف التكرار تمامًا وميظهروش تاني.
   const relevant = allStudents.filter(s => !s?.dupConfirmed);
 
-  const byName = {};
+  const byNameGrade = {};
   relevant.forEach(s => {
-    if (!s?.name?.trim()) return;
-    const key = normalizeAr(s.name).toLowerCase();
-    (byName[key] ||= []).push(s);
+    if (!s?.name?.trim() || !s?.grade) return;
+    const key = normalizeAr(s.name).toLowerCase() + "__" + s.grade; // نفس الاسم + نفس الصف بالظبط
+    (byNameGrade[key] ||= []).push(s);
   });
-  const dupNames = Object.values(byName).filter(list => list.length > 1);
+  const dupNames = Object.values(byNameGrade).filter(list => list.length > 1);
 
   const byPhone = {};
   relevant.forEach(s => {
@@ -946,10 +948,10 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
                 {dupData.dupNames.map((list, i) => (
                   <div key={i} className="bg-slate-800/60 border border-red-500/20 rounded-2xl overflow-hidden">
                     <div className="px-3 py-2 bg-red-500/10 flex items-center justify-between gap-2">
-                      <span className="text-white text-sm font-bold">{list[0].name} — {list.length} طالب بنفس الاسم</span>
+                      <span className="text-white text-sm font-bold">{list[0].name} — {list[0].grade} — {list.length} طالب بنفس الاسم في نفس الصف</span>
                       <button
                         onClick={() => confirmNotDup(list.map(s => s.id))}
-                        title="دول فعلاً أشخاص مختلفين (مثلاً إخوات بنفس الاسم) — اخفِ التحذير بس من غير ما تمسح حد"
+                        title="دول فعلاً أشخاص مختلفين (مثلاً إخوات بنفس الاسم في نفس الصف) — اخفِ التحذير بس من غير ما تمسح حد"
                         className="shrink-0 w-7 h-7 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold hover:bg-emerald-600/30 transition-colors">
                         ✓
                       </button>
