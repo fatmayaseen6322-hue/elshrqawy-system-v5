@@ -1769,8 +1769,8 @@ function ExamPanelErrorsHub({ questions, webExams, centerExams, setCenterExams, 
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
 const PANELS = [
-  { key: "errors",     icon: "🟦", label: "التصحيح",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
-  { key: "correction", icon: "🟥", label: "الأخطاء",    desc: "تقرير أخطاء الطلاب حسب الصف والوحدة والدرس",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
+  { key: "errors",     icon: "🟦", label: "التصحيح",    desc: "تقرير أخطاء الطلاب حسب الصف والوحدة والدرس + لوحة تصحيح الأوراق",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
+  { key: "correction", icon: "🟥", label: "الأخطاء",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
   { key: "exams",      icon: "📝", label: "الامتحانات", desc: "رفع امتحان (Word/PDF/صورة) لكل صف ووحدة ودرس", color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
   { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
 ];
@@ -2147,8 +2147,8 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
           </div>
         </div>
 
-        {activePanel === "errors"     && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
-        {activePanel === "correction" && <ExamPanelErrorsHub     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "errors"     && <ExamPanelErrorsHub     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "correction" && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "exams"      && <ExamUploadLinked       students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
