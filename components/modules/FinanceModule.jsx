@@ -769,7 +769,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 </div>
               ))}
             </div>
-            <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
+            {role === "admin" && (
+              <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
+            )}
           </div>
         ) : (
           // ── صف متاختار: كل حاجة في صف واحد أفقي (رجوع / المصاريف / الإجمالي / عرض سجل المصاريف) ──
@@ -782,12 +784,22 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
               <div className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white text-center whitespace-nowrap">
                 💰 {selGrade}
               </div>
-              <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-slate-700/40 whitespace-nowrap">
-                <span className="text-slate-400 text-[10px] font-bold">إجمالي:</span>
-                <span className="font-black text-emerald-400" style={{ fontSize: "15px", direction: "ltr" }}>
-                  {fmtM(currentGradeTotals[selGrade] || 0)} <span className="text-slate-500 text-[10px] font-bold">ج</span>
-                </span>
-              </div>
+              {role === "admin" && (
+                <>
+                  <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-red-500/30 whitespace-nowrap">
+                    <span className="text-red-400 text-[10px] font-bold">المطلوب:</span>
+                    <span className="font-black text-red-400" style={{ fontSize: "15px", direction: "ltr" }}>
+                      {fmtM(currentGradeRequired[selGrade] || 0)} <span className="text-red-400/60 text-[10px] font-bold">ج</span>
+                    </span>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-slate-700/40 whitespace-nowrap">
+                    <span className="text-slate-400 text-[10px] font-bold">إجمالي:</span>
+                    <span className="font-black text-emerald-400" style={{ fontSize: "15px", direction: "ltr" }}>
+                      {fmtM(currentGradeTotals[selGrade] || 0)} <span className="text-slate-500 text-[10px] font-bold">ج</span>
+                    </span>
+                  </div>
+                </>
+              )}
               <button onClick={() => setDayReportOpen(true)}
                 className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-blue-500/15 border border-blue-500/25 text-blue-300 hover:bg-blue-500/25 transition-all whitespace-nowrap">
                 📅 عرض سجل المصاريف
@@ -831,7 +843,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             )}
             {pastLateMonths.length > 0 && (
             <>
-            <TotalBanner label={`⏰ إجمالي المتأخر شهر ${MONTHS_AR[regMonth - 1]} ${regYear} (كل الصفوف)`} value={pastLateGrandTotal} tone="red" />
+            {role === "admin" && (
+              <TotalBanner label={`⏰ إجمالي المتأخر شهر ${MONTHS_AR[regMonth - 1]} ${regYear} (كل الصفوف)`} value={pastLateGrandTotal} tone="red" />
+            )}
             <div className="text-xs text-slate-400 font-bold mb-1 pt-1">
               الصفوف المتأخرة في شهر {MONTHS_AR[regMonth - 1]} {regYear}
             </div>
@@ -848,23 +862,29 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             )}
           </div>
         ) : (
-          // ── صف متاختار: رجوع / (أغسطس — الصف، مصغّرة) / زرار "دفعوا" ──
+          // ── صف متاختار: كل حاجة في صف واحد أفقي (رجوع / الشهر والصف / الإجمالي / دفعوا) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
               <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); setPastPaidOpen(false); }}
-                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+                className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
                 ⬅️ رجوع
               </button>
-              <div className="px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center whitespace-nowrap">
+              <div className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white text-center whitespace-nowrap">
                 🗓️ {MONTHS_AR[regMonth - 1]} — {selGrade}
               </div>
+              {role === "admin" && (
+                <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-red-500/30 whitespace-nowrap">
+                  <span className="text-red-400 text-[10px] font-bold">إجمالي:</span>
+                  <span className="font-black text-red-400" style={{ fontSize: "15px", direction: "ltr" }}>
+                    {fmtM(pastLateGradeTotals[selGrade] || 0)} <span className="text-red-400/60 text-[10px] font-bold">ج</span>
+                  </span>
+                </div>
+              )}
               <button onClick={() => setPastPaidOpen(o => !o)}
-                className={`flex-1 px-3 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${pastPaidOpen ? "bg-emerald-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}>
+                className={`shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${pastPaidOpen ? "bg-emerald-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}>
                 ✅ دفعوا
               </button>
             </div>
-
-            <TotalBanner label={`⏰ إجمالي متأخر ${selGrade} — ${MONTHS_AR[regMonth - 1]}`} value={pastLateGradeTotals[selGrade] || 0} tone="red" />
 
             {pastPaidOpen && (
               role === "admin" ? (
@@ -946,7 +966,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: مستطيلات الصفوف اللي فيها متأخرين بس (زي تسجيل الشهور الماضية) ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">⏰ المتأخر في الشهر الحالي — اختر الصف</div>
-            <TotalBanner label="⏰ إجمالي المتأخر هذا الشهر (كل الصفوف)" value={lateGrandTotal} tone="red" />
+            {role === "admin" && (
+              <TotalBanner label="⏰ إجمالي المتأخر هذا الشهر (كل الصفوف)" value={lateGrandTotal} tone="red" />
+            )}
             {lateGradesWithDebt.length === 0 ? (
               <div className="text-center py-6 text-slate-600">
                 <div className="text-3xl mb-2">🎉</div>
@@ -969,7 +991,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 ⏰ المتأخر في الشهر الحالي — {selGrade}
               </div>
             </div>
-            <TotalBanner label={`⏰ إجمالي متأخر ${selGrade}`} value={lateGradeTotals[selGrade] || 0} tone="red" />
+            {role === "admin" && (
+              <TotalBanner label={`⏰ إجمالي متأخر ${selGrade}`} value={lateGradeTotals[selGrade] || 0} tone="red" />
+            )}
           </div>
         )
       )}
