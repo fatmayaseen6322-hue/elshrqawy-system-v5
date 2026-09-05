@@ -256,14 +256,18 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
     const [curYearStr, curMonthStr] = TODAY.split("-");
     const currentYearNum  = parseInt(curYearStr, 10);
     const currentMonthNum = parseInt(curMonthStr, 10);
-    const [joinYearStr, joinMonthStr] = (s.joinDate || TODAY).split("-");
+    const [joinYearStr, joinMonthStr, joinDayStr] = (s.joinDate || TODAY).split("-");
     const joinYearNum  = parseInt(joinYearStr, 10);
     const joinMonthNum = parseInt(joinMonthStr, 10);
+    const joinDayNum   = parseInt(joinDayStr, 10);
 
     const studentFinRecords = (finRecords || []).filter(r => r.studentId === s.id);
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
 
-    const currentMonthPaid = isMonthPaid(currentMonthNum, currentYearNum);
+    // اتسجّل بعد يوم 25 من الشهر الحالي نفسه؟ → مفيش مصاريف مطلوبة منه خالص عن الشهر ده
+    const feeWaivedThisMonth = joinYearNum === currentYearNum && joinMonthNum === currentMonthNum && joinDayNum > 25;
+    const currentMonthActuallyPaid = isMonthPaid(currentMonthNum, currentYearNum);
+    const currentMonthPaid = currentMonthActuallyPaid || feeWaivedThisMonth;
 
     const overdueMonths = [];
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
@@ -353,7 +357,11 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
           {/* المصاريف مدموجة هنا: الشهر الحالي + الشهور المتأخرة + تعديل في خط واحد */}
           <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1">
             <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${currentMonthPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
-              {currentMonthPaid ? `✓ ${MONTHS_AR[currentMonthNum - 1]} مدفوع` : `✗ لم يحضر ${MONTHS_AR[currentMonthNum - 1]}`}
+              {currentMonthActuallyPaid
+                ? `✓ ${MONTHS_AR[currentMonthNum - 1]} مدفوع`
+                : feeWaivedThisMonth
+                  ? `✓ لا يوجد مصاريف على ${MONTHS_AR[currentMonthNum - 1]}`
+                  : `✗ لم يحضر ${MONTHS_AR[currentMonthNum - 1]}`}
             </div>
             <div className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border whitespace-nowrap ${overdueMonths.length > 0 ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"}`}>
               {overdueMonths.length > 0 ? `⚠️ متأخر: ${overdueMonths.join("، ")}` : "✓ لا يوجد شهور متأخرة"}

@@ -16,10 +16,12 @@ import { Av, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
 // ── حساب "الرسوم المطلوبة" لطالب في شهر/سنة معينين ──
 // القاعدة: لو الطالب اتسجّل (joinDate) في نفس الشهر/السنة اللي بنحسب
-// عليهم، وبعد يوم 15 من الشهر، فالمطلوب في هذا الشهر بالذات هو نص
-// الرسوم الشهرية المسجلة لصفه (مقربة لأقرب رقم صحيح) — وبعد كده أي شهر
-// تاني (بما فيه الشهر اللي بعده) بيتحاسب عادي بالرسوم الكاملة.
-// لو اتسجّل يوم 15 نفسه أو قبله، الشهر ده بيتحاسب كامل زي العادي.
+// عليهم:
+//   - وبعد يوم 25 من الشهر → مفيش مصاريف مطلوبة خالص عن هذا الشهر (صفر).
+//   - وبعد يوم 15 (وحتى 25) من الشهر → نص الرسوم الشهرية المسجلة لصفه
+//     (مقربة لأقرب رقم صحيح).
+// وبعد كده أي شهر تاني (بما فيه الشهر اللي بعده) بيتحاسب عادي بالرسوم
+// الكاملة. لو اتسجّل يوم 15 نفسه أو قبله، الشهر ده بيتحاسب كامل زي العادي.
 function getExpectedFeeForMonth(student, month, year, gradeFees) {
   const base = Math.max(0, (gradeFees?.[student?.grade] || 0) - (student?.discount || 0));
   const parts = (student?.joinDate || "").split("-");
@@ -27,8 +29,9 @@ function getExpectedFeeForMonth(student, month, year, gradeFees) {
   const joinYear  = parseInt(parts[0], 10);
   const joinMonth = parseInt(parts[1], 10);
   const joinDay   = parseInt(parts[2], 10);
-  if (joinYear === year && joinMonth === month && joinDay > 15) {
-    return Math.round(base / 2);
+  if (joinYear === year && joinMonth === month) {
+    if (joinDay > 25) return 0;
+    if (joinDay > 15) return Math.round(base / 2);
   }
   return base;
 }
@@ -49,6 +52,7 @@ function getOverdueInfo(student, finRecords) {
   const overdueMonths = [];
   for (let m = startMonth; m <= currentMonthNum; m++) {
     if (isMonthBlocked(student, m, currentYearNum)) continue; // شهر بلوك — مش دَين
+    if (joinYearNum === currentYearNum && m === joinMonthNum && parseInt((student.joinDate || "").split("-")[2], 10) > 25) continue; // اتسجّل بعد يوم 25 — مفيش مصاريف مطلوبة
     if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(MONTHS_AR[m - 1]);
   }
   return {
@@ -541,6 +545,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   // الصف/المجموعة، مع المبلغ الصحيح المطلوب فعليًا عن الشهر الحالي ──
   const isCurrentMonthUnpaid = (s) =>
     !isMonthBlocked(s, curMonth, curYear) &&
+    getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees) > 0 &&
     !safeRecords.some(r => r.studentId === s.id && r.month === curMonth && r.year === curYear && (r.amount || 0) > 0);
 
   const adminLateStudents = useMemo(() => {

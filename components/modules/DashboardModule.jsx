@@ -116,11 +116,16 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
     const fee = Math.max(0, (gradeFees?.[s.grade] || 0) - (s.discount || 0));
-    // لو اتسجّل بعد يوم 15 من شهر الانضمام، الشهر ده بس بيتحاسب بنص
-    // الرسوم — نفس منطق صفحة المصاريف (getExpectedFeeForMonth).
-    const feeForMonth = m => (joinYearNum === currentYearNum && m === joinMonthNum && joinDayNum > 15)
-      ? Math.round(fee / 2)
-      : fee;
+    // لو اتسجّل بعد يوم 25 من شهر الانضمام، الشهر ده مفيهوش مصاريف
+    // خالص (صفر). لو بعد يوم 15 (وحتى 25)، الشهر ده بيتحاسب بنص الرسوم
+    // — نفس منطق صفحة المصاريف (getExpectedFeeForMonth).
+    const feeForMonth = m => {
+      if (joinYearNum === currentYearNum && m === joinMonthNum) {
+        if (joinDayNum > 25) return 0;
+        if (joinDayNum > 15) return Math.round(fee / 2);
+      }
+      return fee;
+    };
     let total = 0;
     for (let m = startMonth; m <= currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) total += feeForMonth(m);
     return total;
