@@ -502,11 +502,16 @@ function ExamPanelUpload({ centerExams, setCenterExams }) {
   const handle = e => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const maxSize = 20 * 1024 * 1024;
-    if (f.size > maxSize) { setToast({ msg: "الملف أكبر من 20MB", type: "error" }); e.target.value = ""; return; }
     setFile(f);
     if (!examName) setExamName(f.name.replace(/\.[^/.]+$/, ""));
     e.target.value = "";
+  };
+
+  const [dragOver, setDragOver] = useState(false);
+  const acceptDropped = f => {
+    if (!f) return;
+    setFile(f);
+    if (!examName) setExamName(f.name.replace(/\.[^/.]+$/, ""));
   };
 
   const handleSubmit = () => {
@@ -551,11 +556,14 @@ function ExamPanelUpload({ centerExams, setCenterExams }) {
       {/* Upload zone */}
       <div
         onClick={() => ref.current?.click()}
-        className="border-2 border-dashed border-slate-600/60 hover:border-blue-500/50 rounded-2xl p-8 text-center cursor-pointer transition-colors group"
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); acceptDropped(e.dataTransfer.files?.[0]); }}
+        className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors group ${dragOver ? "border-blue-500 bg-blue-500/10" : "border-slate-600/60 hover:border-blue-500/50"}`}
       >
         <div className="text-5xl mb-3">📁</div>
-        <div className="text-slate-300 font-medium group-hover:text-white transition-colors">اضغط لاختيار الملف</div>
-        <div className="text-slate-600 text-xs mt-1">PDF · DOCX · XLSX · حد أقصى 20MB</div>
+        <div className="text-slate-300 font-medium group-hover:text-white transition-colors">اسحبي الملف هنا أو اضغطي لاختياره</div>
+        <div className="text-slate-600 text-xs mt-1">PDF · DOCX · XLSX</div>
       </div>
       <input ref={ref} type="file" accept=".pdf,.docx,.xlsx,.doc" className="hidden" onChange={handle} />
 
@@ -1960,8 +1968,6 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
 
   const acceptFile = async f => {
     if (!f) return;
-    const maxSize = 20 * 1024 * 1024;
-    if (f.size > maxSize) { setToast({ msg: "الملف أكبر من 20MB", type: "error" }); return; }
     const ext = f.name.split(".").pop().toLowerCase();
     if (!EXAM_ACCEPT.includes(ext)) { setToast({ msg: "الصيغة غير مدعومة — Word أو PDF أو صورة فقط", type: "error" }); return; }
 
@@ -2065,7 +2071,7 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
             <div className="text-slate-300 font-medium group-hover:text-white transition-colors">
               {analyzing ? "بيقرأ الامتحان تلقائيًا دلوقتي... استني شوية" : "اسحبي الملف هنا أو اضغطي للفتح من اللابتوب"}
             </div>
-            <div className="text-slate-600 text-xs mt-1">Word · PDF · صورة — حد أقصى 20MB</div>
+            <div className="text-slate-600 text-xs mt-1">Word · PDF · صورة</div>
             <div className="text-blue-400 text-xs mt-2">هيتربط بـ {grade} — وحدة {unit} — درس {lesson}</div>
           </div>
           <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden" onChange={e => { acceptFile(e.target.files?.[0]); e.target.value = ""; }} />
