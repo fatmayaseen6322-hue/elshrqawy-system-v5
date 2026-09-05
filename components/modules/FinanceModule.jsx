@@ -441,6 +441,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     return monthRecords;
   }, [financeMode, monthRecords]);
 
+  // ── نفس الطلاب اللي دفعوا، بس بشكل جدول كامل قابل للتعديل (زي جدول
+  // الشهر الحالي بالظبط: مستلم/وقت/مبلغ/تعديل/طباعة/تراجع) — عشان لو
+  // حصل خطأ في تسجيل طالب في شهر قديم يبقى ممكن تصليحه من هنا مباشرة.
+  // بيظهر للمستر بس (role === "admin").
+  const pastPaidTableStudents = useMemo(() => {
+    if (financeMode !== "past") return [];
+    return baseTableStudents.filter(s => monthRecords.some(r => r.studentId === s.id));
+  }, [baseTableStudents, financeMode, monthRecords]);
+
   // ── "تسجيل الشهور الماضية": الجدول يعرض المتأخرين عن الشهر/السنة المختارين بس (مش كل الطلاب) ──
   const tableStudents = useMemo(() => {
     if (financeMode !== "past") return baseTableStudents;
@@ -776,37 +785,77 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             </div>
 
             {pastPaidOpen && (
-              <div className="mt-3 bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse" style={{ minWidth: "260px" }}>
-                    <thead>
-                      <tr className="bg-slate-900/80 border-b border-slate-700/60">
-                        <th className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>
-                          اسم الطالب — دفعوا شهر {MONTHS_AR[regMonth - 1]} {regYear}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pastPaidStudents.length === 0 ? (
-                        <tr>
-                          <td className="px-3 py-6 text-center text-slate-500 text-sm">
-                            محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
-                          </td>
-                        </tr>
-                      ) : pastPaidStudents.map(r => (
-                        <tr key={r.id} className="border-b border-slate-700/20">
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Av name={r.studentName} size="sm" />
-                              <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              role === "admin" ? (
+                <div className="mt-3">
+                  {pastPaidTableStudents.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500 text-sm bg-slate-900/60 border border-slate-700/30 rounded-xl">
+                      محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
+                    </div>
+                  ) : (
+                    <div className="bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
+                          <thead>
+                            <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
+                              {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
+                                <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pastPaidTableStudents.map((s, i) => (
+                              <FinRow
+                                key={s.id} student={s} index={i} record={getRecord(s.id)}
+                                globalReceiver={globalReceiver} activeReceivers={activeReceivers}
+                                lockedReceiver={lockedReceiver}
+                                onSave={handleSave} onUndo={handleUndo}
+                                passwordEnabled={safeSettings.financePasswordEnabled}
+                                financePassword={safeSettings.financePassword}
+                                undoPassword={safeSettings.financeUndoPassword}
+                                centerName={safeSettings.centerName || "مركز تعليمي"}
+                                highlighted={highlightId === s.id}
+                                role={role}
+                              />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className="mt-3 bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse" style={{ minWidth: "260px" }}>
+                      <thead>
+                        <tr className="bg-slate-900/80 border-b border-slate-700/60">
+                          <th className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>
+                            اسم الطالب — دفعوا شهر {MONTHS_AR[regMonth - 1]} {regYear}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pastPaidStudents.length === 0 ? (
+                          <tr>
+                            <td className="px-3 py-6 text-center text-slate-500 text-sm">
+                              محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
+                            </td>
+                          </tr>
+                        ) : pastPaidStudents.map(r => (
+                          <tr key={r.id} className="border-b border-slate-700/20">
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Av name={r.studentName} size="sm" />
+                                <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
             )}
           </div>
         )
