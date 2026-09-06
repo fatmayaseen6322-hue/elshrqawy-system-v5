@@ -1842,6 +1842,450 @@ function ExamMistakesReport({ students, centerExams }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// 🆕 تصحيح مبسّط: صف ← وحدة/درس ← اختيار امتحان (مستطيل) ← طالب
+// ← صفحة تصحيح (كله صح / كله غلط / دوسة على السؤال = غلط)
+// بيستخدم نفس مصدر البيانات القديم (student.examErrors) عشان أي
+// بيانات أخطاء متسجّلة قبل كده تفضل محفوظة وتظهر تاني عادي —
+// إضافة/إزالة بس بالنسبة للسؤال اللي بتتغيّر حالته.
+// ══════════════════════════════════════════════════════════════
+function ExamPickerBox({ exams, onSelect, onCreateNew, allowCreate }) {
+  return (
+    <div className="space-y-2">
+      <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">اختاري الامتحان</div>
+      {exams.length === 0 ? (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-3 text-amber-300 text-xs text-center space-y-2">
+          <div>⚠️ لا يوجد امتحان مسجَّل لهذه الوحدة/الدرس بعد</div>
+          {allowCreate && <Btn variant="danger" className="w-full" onClick={onCreateNew}>➕ تسجيل امتحان جديد</Btn>}
+        </div>
+      ) : (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
+          {exams.map((ex, i) => (
+            <button key={ex.id} type="button" onClick={() => onSelect(ex.id)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
+              <span className="text-xl shrink-0">{fileKindIcon(ex.fileName || "")}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-xs font-bold truncate">امتحان {i + 1}{ex.fileName ? ` — ${ex.fileName}` : " — يدوي"}</div>
+                <div className="text-slate-500 text-xs">{ex.numQuestions || 0} سؤال · {ex.date}</div>
+              </div>
+              <span className="text-slate-500 text-xs shrink-0">اختيار ›</span>
+            </button>
+          ))}
+          {allowCreate && (
+            <button type="button" onClick={onCreateNew} className="w-full px-3 py-2.5 text-emerald-400 text-xs font-bold hover:bg-slate-800 transition-colors">➕ تسجيل امتحان جديد</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, setCenterExams }) {
+  const [grade,   setGrade]   = useState("");
+  const [unit,    setUnit]    = useState("");
+  const [lesson,  setLesson]  = useState("");
+  const [examId,  setExamId]  = useState("");
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newNumQ, setNewNumQ] = useState(20);
+  const [openStudent, setOpenStudent] = useState(null);
+
+  const maxUnits = grade ? unitsCountFor(grade) : 0;
+  const gradeStudents = useMemo(() => students.filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
+
+  const examsForLesson = useMemo(() =>
+    (centerExams || [])
+      .filter(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+    [centerExams, grade, unit, lesson]
+  );
+  const selectedExam = examsForLesson.find(e => e.id === examId) || null;
+
+  const resetToGrades   = () => { setGrade("");  setUnit("");  setLesson("");  setExamId(""); setCreatingNew(false); };
+  const resetUnitLesson = () => { setUnit("");   setLesson(""); setExamId(""); setCreatingNew(false); };
+  const resetExam       = () => { setExamId(""); setCreatingNew(false); };
+
+  const createManualExam = () => {
+    const id = genExamId();
+    const exam = {
+      id, grade, unit, lesson,
+      fileName: newName.trim() || null,
+      date: TODAY,
+      numQuestions: Math.max(1, parseInt(newNumQ) || 1),
+      pointsPerQuestion: 1,
+      manual: true,
+    };
+    setCenterExams(p => [exam, ...(p || [])]);
+    setExamId(id);
+    setCreatingNew(false);
+    setNewName(""); setNewNumQ(20);
+  };
+
+  const errCountFor = s => selectedExam
+    ? new Set((s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).map(e => e.q)).size
+    : 0;
+
+  // ── صفحة تصحيح الطالب ──
+  if (openStudent && selectedExam) {
+    return (
+      <StudentCorrectionPage
+        student={gradeStudents.find(s => s.id === openStudent.id) || openStudent}
+        grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
+        setStudents={setStudents} addActivity={addActivity}
+        onBack={() => setOpenStudent(null)}
+      />
+    );
+  }
+
+  // ── الشاشة 1: اختيار الصف ──
+  if (!grade) return (
+    <div className="space-y-3">
+      <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">اختاري الصف</div>
+      <GradeCardsPicker onSelect={setGrade} />
+    </div>
+  );
+
+  // ── الشاشة 2: مستطيل الوحدة + مستطيل الدرس ──
+  if (!unit || !lesson) return (
+    <div className="space-y-4">
+      <button onClick={resetToGrades} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الصف</button>
+      <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">{grade}</div>
+      {grade === "ثالثة ثانوي" && (
+        <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+      )}
+      <div className="space-y-3">
+        <CircleFilterBox title="اختاري الوحدة" icon="📘" count={maxUnits} value={unit}
+          onChange={u => { setUnit(String(u)); setLesson(""); resetExam(); }} />
+        <CircleFilterBox title="اختاري الدرس" icon="📖" count={LESSONS_COUNT} value={lesson}
+          onChange={l => { setLesson(String(l)); resetExam(); }} disabled={!unit} />
+      </div>
+    </div>
+  );
+
+  // ── الشاشة 3: مستطيل اختيار الامتحان (أو تسجيل امتحان جديد) ──
+  if (!selectedExam) return (
+    <div className="space-y-4">
+      <button onClick={resetUnitLesson} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الوحدة/الدرس</button>
+      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 text-blue-300 text-xs text-center">
+        {grade} — وحدة {unit} — درس {lesson}
+      </div>
+      {creatingNew ? (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+          <div className="text-white font-black text-sm">➕ تسجيل امتحان جديد لهذا الدرس</div>
+          <Field label="اسم الامتحان (اختياري)">
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: امتحان الأسبوع 2"
+              className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none" />
+          </Field>
+          <Field label="عدد أسئلة الامتحان">
+            <input type="number" min={1} max={100} value={newNumQ} onChange={e => setNewNumQ(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
+          </Field>
+          <div className="flex gap-2">
+            <Btn variant="ghost" className="flex-1" onClick={() => setCreatingNew(false)}>رجوع</Btn>
+            <Btn variant="success" className="flex-1" onClick={createManualExam}>بدء التصحيح</Btn>
+          </div>
+        </div>
+      ) : (
+        <ExamPickerBox exams={examsForLesson} onSelect={setExamId} onCreateNew={() => setCreatingNew(true)} allowCreate />
+      )}
+    </div>
+  );
+
+  // ── الشاشة 4: قائمة طلاب الصف ──
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-1">
+        <button onClick={resetExam} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الامتحان</button>
+        <button onClick={resetToGrades} className="text-slate-500 text-xs">تغيير الصف</button>
+      </div>
+      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 text-blue-300 text-xs text-center">
+        {selectedExam.fileName || "امتحان يدوي"} — {selectedExam.numQuestions} سؤال — {grade} — و{unit} د{lesson}
+      </div>
+
+      {gradeStudents.length === 0
+        ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
+        : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
+            {gradeStudents.map(s => {
+              const n = errCountFor(s);
+              return (
+                <button key={s.id} onClick={() => setOpenStudent(s)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
+                  <Av name={s.name} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
+                    <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
+                  </div>
+                  {n > 0 && <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{n} غلط</span>}
+                  <span className="text-slate-500 text-xs shrink-0">تصحيح ›</span>
+                </button>
+              );
+            })}
+          </div>
+      }
+    </div>
+  );
+}
+
+// ── صفحة تصحيح طالب واحد: كله صح / كله غلط / دوسة على السؤال ──
+function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents, addActivity, onBack }) {
+  const numQ = exam?.numQuestions || 0;
+  const matches = e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === (exam?.id || null);
+  const errors = (student.examErrors || []).filter(matches);
+  const wrongSet = useMemo(() => new Set(errors.map(e => e.q)), [errors]);
+
+  const setAll = (allWrong) => {
+    setStudents(prev => (prev || []).map(s => {
+      if (s.id !== student.id) return s;
+      const others = (s.examErrors || []).filter(e => !matches(e));
+      const newOnes = allWrong
+        ? Array.from({ length: numQ }, (_, i) => i + 1).map(q => ({ id: Date.now() + Math.random() + q, grade, unit, lesson, q, p: 1, examId: exam?.id || null, ts: new Date().toISOString() }))
+        : [];
+      return { ...s, examErrors: [...others, ...newOnes] };
+    }));
+    addActivity?.(allWrong ? "تصحيح: كله غلط" : "تصحيح: كله صح", `${student.name} — و${unit} - د${lesson}`);
+  };
+
+  const toggleQuestion = (q) => {
+    setStudents(prev => (prev || []).map(s => {
+      if (s.id !== student.id) return s;
+      const isWrong = (s.examErrors || []).some(e => matches(e) && e.q === q);
+      const others = (s.examErrors || []).filter(e => !(matches(e) && e.q === q));
+      const newErrors = isWrong
+        ? others
+        : [...others, { id: Date.now() + Math.random(), grade, unit, lesson, q, p: 1, examId: exam?.id || null, ts: new Date().toISOString() }];
+      return { ...s, examErrors: newErrors };
+    }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع لقائمة الطلاب</button>
+
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 flex items-center gap-3">
+        <Av name={student.name} size="sm" />
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-black text-sm truncate">{student.name}</div>
+          <div className="text-slate-500 text-xs">{exam?.fileName || "امتحان يدوي"} — {numQ} سؤال</div>
+        </div>
+        <div className="text-red-400 text-xs font-bold shrink-0">{wrongSet.size} غلط</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Btn variant="success" onClick={() => setAll(false)}>✅ كله صح</Btn>
+        <Btn variant="danger" onClick={() => setAll(true)}>❌ كله غلط</Btn>
+      </div>
+
+      {numQ === 0 ? (
+        <div className="text-center py-8 text-slate-600 text-sm">لا يوجد عدد أسئلة مسجَّل لهذا الامتحان</div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-xs text-slate-400 text-center">دوسي على السؤال اللي غلط فيه — دوسة تانية عليه تلغي التسجيل</div>
+          <div className="grid grid-cols-4 gap-2">
+            {Array.from({ length: numQ }, (_, i) => i + 1).map(q => {
+              const wrong = wrongSet.has(q);
+              return (
+                <button key={q} onClick={() => toggleQuestion(q)}
+                  className={`aspect-square rounded-xl flex items-center justify-center text-sm font-black transition-all active:scale-90 ${
+                    wrong
+                      ? "bg-red-600 text-white shadow-[0_4px_14px_-4px_rgba(220,38,38,0.6)]"
+                      : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
+                  {q}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 🆕 عرض الأخطاء: صف ← وحدة/درس ← اختيار امتحان (مستطيل) ← طالب
+// ← صفحة تعرض أرقام الأسئلة الغلط + زر نسخ + زر طباعة
+// ══════════════════════════════════════════════════════════════
+function ExamErrorsFlow({ students, centerExams }) {
+  const [grade,  setGrade]  = useState("");
+  const [unit,   setUnit]   = useState("");
+  const [lesson, setLesson] = useState("");
+  const [examId, setExamId] = useState("");
+  const [openStudent, setOpenStudent] = useState(null);
+
+  const maxUnits = grade ? unitsCountFor(grade) : 0;
+  const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
+
+  const examsForLesson = useMemo(() =>
+    (centerExams || [])
+      .filter(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+    [centerExams, grade, unit, lesson]
+  );
+  const selectedExam = examsForLesson.find(e => e.id === examId) || null;
+
+  const resetToGrades   = () => { setGrade("");  setUnit("");  setLesson("");  setExamId(""); };
+  const resetUnitLesson = () => { setUnit("");   setLesson(""); setExamId(""); };
+  const resetExam       = () => { setExamId(""); };
+
+  const errQsFor = s => selectedExam
+    ? [...new Set((s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).map(e => e.q))].sort((a, b) => a - b)
+    : [];
+
+  if (openStudent && selectedExam) {
+    return (
+      <StudentErrorsViewPage
+        student={gradeStudents.find(s => s.id === openStudent.id) || openStudent}
+        grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
+        qs={errQsFor(gradeStudents.find(s => s.id === openStudent.id) || openStudent)}
+        onBack={() => setOpenStudent(null)}
+      />
+    );
+  }
+
+  if (!grade) return (
+    <div className="space-y-3">
+      <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">اختاري الصف</div>
+      <GradeCardsPicker onSelect={setGrade} />
+    </div>
+  );
+
+  if (!unit || !lesson) return (
+    <div className="space-y-4">
+      <button onClick={resetToGrades} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الصف</button>
+      <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">{grade}</div>
+      {grade === "ثالثة ثانوي" && (
+        <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
+      )}
+      <div className="space-y-3">
+        <CircleFilterBox title="اختاري الوحدة" icon="📘" count={maxUnits} value={unit}
+          onChange={u => { setUnit(String(u)); setLesson(""); resetExam(); }} />
+        <CircleFilterBox title="اختاري الدرس" icon="📖" count={LESSONS_COUNT} value={lesson}
+          onChange={l => { setLesson(String(l)); resetExam(); }} disabled={!unit} />
+      </div>
+    </div>
+  );
+
+  if (!selectedExam) return (
+    <div className="space-y-4">
+      <button onClick={resetUnitLesson} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الوحدة/الدرس</button>
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-red-300 text-xs text-center">
+        {grade} — وحدة {unit} — درس {lesson}
+      </div>
+      <ExamPickerBox exams={examsForLesson} onSelect={setExamId} allowCreate={false} />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-1">
+        <button onClick={resetExam} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الامتحان</button>
+        <button onClick={resetToGrades} className="text-slate-500 text-xs">تغيير الصف</button>
+      </div>
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-red-300 text-xs text-center">
+        {selectedExam.fileName || "امتحان يدوي"} — {grade} — و{unit} د{lesson}
+      </div>
+
+      {gradeStudents.length === 0 ? (
+        <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
+      ) : (
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
+          {gradeStudents.map(s => {
+            const qs = errQsFor(s);
+            return (
+              <button key={s.id} onClick={() => setOpenStudent(s)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
+                <Av name={s.name} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
+                  <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
+                </div>
+                {qs.length > 0
+                  ? <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{qs.length} غلط</span>
+                  : <span className="text-xs px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 shrink-0">✓ كله صح</span>}
+                <span className="text-slate-500 text-xs shrink-0">عرض ›</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── صفحة عرض أخطاء طالب واحد + نسخ + طباعة ──
+function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, onBack }) {
+  const [toast, setToast] = useState(null);
+
+  const descFor = q => {
+    const d = exam?.questionMeta?.[q];
+    return d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
+  };
+
+  const doCopy = () => {
+    const text = `${student.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(q => `- ${descFor(q)}`).join("\n")}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(
+        () => setToast({ msg: "✓ اتنسخت الأسئلة الغلط", type: "success" }),
+        () => setToast({ msg: "تعذّر النسخ", type: "error" })
+      );
+    }
+  };
+
+  const doPrint = () => {
+    const w = window.open("", "_blank", "width=480,height=640");
+    if (!w) return;
+    w.document.write(`
+      <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${student.name}</title>
+      <style>
+        body{font-family:Tajawal,Arial,sans-serif;padding:20px;color:#111}
+        h2{margin:0 0 4px}
+        .meta{color:#555;font-size:13px;margin-bottom:16px}
+        ol{padding-inline-start:20px}
+        li{margin-bottom:8px;font-size:14px}
+      </style></head><body>
+      <h2>${student.name}</h2>
+      <div class="meta">${grade} — وحدة ${unit} — درس ${lesson} — ${exam?.fileName || "امتحان يدوي"}</div>
+      <ol>${qs.map(q => `<li>${descFor(q)}</li>`).join("")}</ol>
+      </body></html>
+    `);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 300);
+  };
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع لقائمة الطلاب</button>
+
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 flex items-center gap-3">
+        <Av name={student.name} size="sm" />
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-black text-sm truncate">{student.name}</div>
+          <div className="text-slate-500 text-xs">{grade} — و{unit} د{lesson}</div>
+        </div>
+        <div className="text-red-400 text-xs font-bold shrink-0">{qs.length} غلط</div>
+      </div>
+
+      {qs.length === 0 ? (
+        <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">✅</div><div className="text-sm">مفيش أخطاء مسجَّلة لهذا الطالب في هذا الامتحان</div></div>
+      ) : (
+        <div className="space-y-1.5">
+          {qs.map(q => (
+            <div key={q} className="text-xs text-slate-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              أخطأ في: <span className="text-red-300 font-medium">{descFor(q)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Btn variant="ghost" onClick={doCopy}>📋 نسخ الأسئلة الغلط</Btn>
+        <Btn variant="ghost" onClick={doPrint}>🖨️ طباعة</Btn>
+      </div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
 const PANELS = [
@@ -2223,8 +2667,8 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
           </div>
         </div>
 
-        {activePanel === "errors"     && <ExamPanelDashboard      questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
-        {activePanel === "correction" && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
+        {activePanel === "errors"     && <ExamCorrectionFlow     students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
+        {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} />}
         {activePanel === "exams"      && <ExamUploadLinked       students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
