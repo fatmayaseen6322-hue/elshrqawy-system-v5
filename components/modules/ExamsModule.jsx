@@ -692,6 +692,9 @@ function ExamPanelUpload({ centerExams, setCenterExams }) {
 // "ثالثة ثانوي" حالة استثنائية: 8 وحدات × 6 دروس ────────────────
 const unitsCountFor = grade => grade === "ثالثة ثانوي" ? 8 : 4;
 const LESSONS_COUNT = 6;
+// عدد "نقط" (أجزاء) السؤال الواحد — افتراضيًا نقطة واحدة، إلا لو المستر
+// حدّد إن السؤال ده مركّب من أكتر من نقطة عبر exam.questionParts[q].
+const partsForQuestion = (exam, q) => Math.max(1, Math.min(9, parseInt(exam?.questionParts?.[q]) || 1));
 
 // ─── ورقة تسجيل خطأ سؤال لطالب معيّن ────────────────────────
 // exam بييجي جاهز من ExamErrorEntry (سواء امتحان مرفوع فعليًا أو امتحان
@@ -1903,7 +1906,7 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
   const resetExam       = () => { setExamId(""); setCreatingNew(false); };
 
   const errCountFor = s => selectedExam
-    ? new Set((s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).map(e => e.q)).size
+    ? new Set((s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).map(e => `${e.q}:${e.p || 1}`)).size
     : 0;
 
   // ── صفحة تصحيح الطالب ──
@@ -1976,6 +1979,8 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
         {selectedExam.fileName || "امتحان يدوي"} — {selectedExam.numQuestions} سؤال — {grade} — و{unit} د{lesson}
       </div>
 
+      <ExamPartsConfig exam={selectedExam} setCenterExams={setCenterExams} numQ={selectedExam.numQuestions || 0} />
+
       {gradeStudents.length === 0
         ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
         : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
@@ -2000,33 +2005,68 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
   );
 }
 
-// ── صفحة تصحيح طالب واحد: كله صح / كله غلط / دوسة على السؤال ──
+// ── مستطيل صغير قابل للطي: ضبط عدد "نقط" (أجزاء) كل سؤال —
+// افتراضيًا كل سؤال نقطة واحدة، تقدري تزوّدي أي سؤال مركّب ✏️ ──
+function ExamPartsConfig({ exam, setCenterExams, numQ }) {
+  const [open, setOpen] = useState(false);
+  if (!numQ) return null;
+  const parts = exam.questionParts || {};
+
+  const setPart = (q, val) => {
+    const v = Math.max(1, Math.min(9, parseInt(val) || 1));
+    setCenterExams(p => (p || []).map(e => e.id === exam.id ? { ...e, questionParts: { ...(e.questionParts || {}), [q]: v } } : e));
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <button onClick={() => setOpen(o => !o)} className="text-[11px] text-amber-400 flex items-center gap-1">
+        ⚙️ سؤال فيه أكتر من نقطة؟ اضبطي عدد النقط هنا {open ? "▲" : "▼"}
+      </button>
+      {open && (
+        <div className="bg-slate-900/60 border border-slate-700/40 rounded-xl p-2 max-h-40 overflow-y-auto grid grid-cols-4 gap-1.5">
+          {Array.from({ length: numQ }, (_, i) => i + 1).map(q => (
+            <div key={q} className="flex items-center gap-1 bg-slate-800/60 rounded-lg px-1.5 py-1">
+              <span className="text-[10px] text-slate-400 shrink-0">س{q}</span>
+              <input type="number" min={1} max={9} value={parts[q] || 1}
+                onChange={e => setPart(q, e.target.value)}
+                className="w-8 bg-slate-900 border border-slate-700/50 rounded text-white text-[10px] text-center focus:outline-none" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── صفحة تصحيح طالب واحد: كله صح / كله غلط / دوسة على السؤال (أو نقطة السؤال) ──
 function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents, addActivity, onBack }) {
   const numQ = exam?.numQuestions || 0;
   const matches = e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === (exam?.id || null);
   const errors = (student.examErrors || []).filter(matches);
-  const wrongSet = useMemo(() => new Set(errors.map(e => e.q)), [errors]);
+  const wrongSet = useMemo(() => new Set(errors.map(e => `${e.q}:${e.p || 1}`)), [errors]);
 
   const setAll = (allWrong) => {
     setStudents(prev => (prev || []).map(s => {
       if (s.id !== student.id) return s;
       const others = (s.examErrors || []).filter(e => !matches(e));
       const newOnes = allWrong
-        ? Array.from({ length: numQ }, (_, i) => i + 1).map(q => ({ id: Date.now() + Math.random() + q, grade, unit, lesson, q, p: 1, examId: exam?.id || null, ts: new Date().toISOString() }))
+        ? Array.from({ length: numQ }, (_, i) => i + 1).flatMap(q =>
+            Array.from({ length: partsForQuestion(exam, q) }, (_, pi) => pi + 1).map(p =>
+              ({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() })))
         : [];
       return { ...s, examErrors: [...others, ...newOnes] };
     }));
     addActivity?.(allWrong ? "تصحيح: كله غلط" : "تصحيح: كله صح", `${student.name} — و${unit} - د${lesson}`);
   };
 
-  const toggleQuestion = (q) => {
+  const toggleQuestion = (q, p) => {
     setStudents(prev => (prev || []).map(s => {
       if (s.id !== student.id) return s;
-      const isWrong = (s.examErrors || []).some(e => matches(e) && e.q === q);
-      const others = (s.examErrors || []).filter(e => !(matches(e) && e.q === q));
+      const isWrong = (s.examErrors || []).some(e => matches(e) && e.q === q && (e.p || 1) === p);
+      const others = (s.examErrors || []).filter(e => !(matches(e) && e.q === q && (e.p || 1) === p));
       const newErrors = isWrong
         ? others
-        : [...others, { id: Date.now() + Math.random(), grade, unit, lesson, q, p: 1, examId: exam?.id || null, ts: new Date().toISOString() }];
+        : [...others, { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() }];
       return { ...s, examErrors: newErrors };
     }));
   };
@@ -2053,18 +2093,38 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
         <div className="text-center py-8 text-slate-600 text-sm">لا يوجد عدد أسئلة مسجَّل لهذا الامتحان</div>
       ) : (
         <div className="space-y-2">
-          <div className="text-xs text-slate-400 text-center">دوسي على السؤال اللي غلط فيه — دوسة تانية عليه تلغي التسجيل</div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="text-[11px] text-slate-500 text-center">دوسي على السؤال (أو على نقطة السؤال لو مركّب) اللي غلط فيه — دوسة تانية تلغي التسجيل</div>
+          <div className="flex flex-wrap gap-1.5 justify-center">
             {Array.from({ length: numQ }, (_, i) => i + 1).map(q => {
-              const wrong = wrongSet.has(q);
+              const parts = partsForQuestion(exam, q);
+              if (parts <= 1) {
+                const wrong = wrongSet.has(`${q}:1`);
+                return (
+                  <button key={q} onClick={() => toggleQuestion(q, 1)}
+                    className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-xs font-black transition-all active:scale-90 ${
+                      wrong
+                        ? "bg-red-600 text-white shadow-[0_3px_10px_-3px_rgba(220,38,38,0.6)]"
+                        : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
+                    {q}
+                  </button>
+                );
+              }
               return (
-                <button key={q} onClick={() => toggleQuestion(q)}
-                  className={`aspect-square rounded-xl flex items-center justify-center text-sm font-black transition-all active:scale-90 ${
-                    wrong
-                      ? "bg-red-600 text-white shadow-[0_4px_14px_-4px_rgba(220,38,38,0.6)]"
-                      : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
-                  {q}
-                </button>
+                <div key={q} className="flex items-center gap-1 bg-slate-800/50 border border-slate-700/40 rounded-lg px-1.5 py-1 shrink-0">
+                  <span className="text-[10px] text-slate-500 font-bold">{q}</span>
+                  {Array.from({ length: parts }, (_, pi) => pi + 1).map(p => {
+                    const wrong = wrongSet.has(`${q}:${p}`);
+                    return (
+                      <button key={p} onClick={() => toggleQuestion(q, p)}
+                        className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black transition-all active:scale-90 ${
+                          wrong
+                            ? "bg-red-600 text-white"
+                            : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
           </div>
@@ -2101,7 +2161,10 @@ function ExamErrorsFlow({ students, centerExams }) {
   const resetExam       = () => { setExamId(""); };
 
   const errQsFor = s => selectedExam
-    ? [...new Set((s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).map(e => e.q))].sort((a, b) => a - b)
+    ? (s.examErrors || [])
+        .filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id)
+        .map(e => ({ q: e.q, p: e.p || 1 }))
+        .sort((a, b) => a.q - b.q || a.p - b.p)
     : [];
 
   if (openStudent && selectedExam) {
@@ -2189,13 +2252,15 @@ function ExamErrorsFlow({ students, centerExams }) {
 function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, onBack }) {
   const [toast, setToast] = useState(null);
 
-  const descFor = q => {
+  const descFor = ({ q, p }) => {
+    const totalParts = partsForQuestion(exam, q);
     const d = exam?.questionMeta?.[q];
-    return d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
+    const base = d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
+    return totalParts > 1 ? `${base} — نقطة ${p}` : base;
   };
 
   const doCopy = () => {
-    const text = `${student.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(q => `- ${descFor(q)}`).join("\n")}`;
+    const text = `${student.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(x => `- ${descFor(x)}`).join("\n")}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(
         () => setToast({ msg: "✓ اتنسخت الأسئلة الغلط", type: "success" }),
@@ -2218,7 +2283,7 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, onBack 
       </style></head><body>
       <h2>${student.name}</h2>
       <div class="meta">${grade} — وحدة ${unit} — درس ${lesson} — ${exam?.fileName || "امتحان يدوي"}</div>
-      <ol>${qs.map(q => `<li>${descFor(q)}</li>`).join("")}</ol>
+      <ol>${qs.map(x => `<li>${descFor(x)}</li>`).join("")}</ol>
       </body></html>
     `);
     w.document.close();
@@ -2243,9 +2308,9 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, onBack 
         <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">✅</div><div className="text-sm">مفيش أخطاء مسجَّلة لهذا الطالب في هذا الامتحان</div></div>
       ) : (
         <div className="space-y-1.5">
-          {qs.map(q => (
-            <div key={q} className="text-xs text-slate-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              أخطأ في: <span className="text-red-300 font-medium">{descFor(q)}</span>
+          {qs.map(x => (
+            <div key={`${x.q}:${x.p}`} className="text-xs text-slate-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              أخطأ في: <span className="text-red-300 font-medium">{descFor(x)}</span>
             </div>
           ))}
         </div>
