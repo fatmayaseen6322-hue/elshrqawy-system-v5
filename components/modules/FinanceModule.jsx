@@ -698,17 +698,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   // ── "المتأخر في الشهر الحالي": الصفوف اللي فيها طلاب ما دفعوش الشهر
   // الحالي بالتحديد بس (نفس معيار isCurrentMonthUnpaid فوق) ──
   const lateGradesWithDebt = useMemo(() => {
-    if (financeMode !== "late") return GRADES_LIST;
     return GRADES_LIST.filter(g => {
       const gradeStudents = safeStudents.filter(s => s && s.grade === g);
       return gradeStudents.some(s => isCurrentMonthUnpaid(s));
     });
-  }, [financeMode, safeStudents, safeRecords, curMonth, curYear]);
+  }, [safeStudents, safeRecords, curMonth, curYear]);
 
   // ── إجمالي المبلغ المطلوب فعليًا عن الشهر الحالي بس (مش أي دَين
   // متراكم من شهور سابقة) لكل صف + إجمالي عام ──
   const lateGradeTotals = useMemo(() => {
-    if (financeMode !== "late") return {};
     const map = {};
     GRADES_LIST.forEach(g => {
       const gradeStudents = safeStudents.filter(s => s && s.grade === g);
@@ -717,7 +715,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         .reduce((a, s) => a + getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees), 0);
     });
     return map;
-  }, [financeMode, safeStudents, safeRecords, curMonth, curYear, safeSettings.gradeFees]);
+  }, [safeStudents, safeRecords, curMonth, curYear, safeSettings.gradeFees]);
 
   const lateGrandTotal = useMemo(
     () => Object.values(lateGradeTotals).reduce((a, v) => a + v, 0),
@@ -745,20 +743,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           <button onClick={() => setFinanceMode?.("past")} className={cardCls}>
             <span className="text-4xl">🗓️</span>
             <span className="text-base">الشهر الماضي</span>
-            <span className="text-xs text-slate-500 font-normal">تسجيل دفعة لشهر سابق</span>
-          </button>
-        </div>
-
-        {/* تحت: المتأخر (شهر حالي / شهور ماضية) جنب بعض */}
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => setFinanceMode?.("late")} className={cardCls}>
-            <span className="text-4xl">⏰</span>
-            <span className="text-base">المتأخر في الشهر الحالي</span>
-            <span className="text-xs text-slate-500 font-normal">المتأخرين في سداد الشهر الحالي</span>
-          </button>
-          <button onClick={() => setFinanceMode?.("past")} className={cardCls}>
-            <span className="text-4xl">🗓️</span>
-            <span className="text-base">المتأخر في الشهور الماضية</span>
             <span className="text-xs text-slate-500 font-normal">تسجيل دفعة لشهر سابق</span>
           </button>
         </div>
@@ -793,6 +777,12 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   <span className="text-amber-300 text-xs font-black">مطلوب: {fmtM(currentGradeRequired[g] || 0)}</span>
                 </button>
               ))}
+              <button
+                onClick={() => setFinanceMode?.("late")}
+                className="flex items-center justify-between px-3 py-2 rounded-xl bg-red-900/20 border border-red-700/30 hover:bg-red-900/30 hover:border-red-600/40 transition-all text-right">
+                <span className="text-red-300 text-xs font-bold">⏰ المتأخرين في الشهر الحالي</span>
+                {role === "admin" && <span className="text-red-400 text-xs font-black">{fmtM(lateGrandTotal || 0)}</span>}
+              </button>
             </div>
             {role === "admin" && (
               <>
@@ -884,8 +874,18 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                 <div className="text-sm">كل الصفوف مسدّدة شهر {MONTHS_AR[regMonth - 1]} {regYear}</div>
               </div>
             ) : (
-              <GradeCircles grades={pastLateGrades} value={selGrade} showLabel={false}
-                onChange={g => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }} />
+              <div className="grid grid-cols-2 gap-1.5">
+                {pastLateGrades.map(g => (
+                  <button key={g}
+                    onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
+                    className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/40 border border-slate-700/40 hover:bg-emerald-600/15 hover:border-emerald-500/40 transition-all text-right">
+                    <span className="text-slate-300 text-xs font-bold">{g}</span>
+                    {role === "admin" && (
+                      <span className="text-amber-300 text-xs font-black">متأخر: {fmtM(pastLateGradeTotals[g] || 0)}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
             </>
             )}
