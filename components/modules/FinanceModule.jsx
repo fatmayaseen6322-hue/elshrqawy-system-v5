@@ -238,7 +238,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
   const [showPw,      setShowPw]      = useState(false);
   const [showUndoPw,  setShowUndoPw]  = useState(false);
   const [localRecord, setLocalRecord] = useState(record || null);
-  const [received,    setReceived]    = useState(record ? record.received === true : false); // ✓ تأكيد استلام المستلم فعليًا للمبلغ — افتراضي فاضي دايمًا لأي سجل قديم أو جديد لحد ما حد يضغط عليه
+  const [received,    setReceived]    = useState(record ? (record.received === undefined ? true : record.received === true) : false); // ✓ الدفعات القديمة (قبل الميزة دي) تتحسب مستلمة تلقائي، والدفعات الجديدة فاضية لحد ما تتأكد
   const [showRecvPw,  setShowRecvPw]  = useState(false);
   const rowRef = useRef(null);
 
