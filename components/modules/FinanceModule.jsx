@@ -1062,7 +1062,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                     <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
                       <thead className="sticky top-0">
                         <tr className="led-thead bg-slate-900 border-b border-slate-700/60">
-                          {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","الساعة"].map((h, i) => (
+                          {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","تم الاستلام","الساعة"].map((h, i) => (
                             <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px", width: i === 0 ? "100%" : "auto" }}>{h}</th>
                           ))}
                         </tr>
@@ -1080,6 +1080,14 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${((r.year || 0) < curYear || ((r.year || 0) === curYear && (r.month || 0) < curMonth)) ? "text-red-400" : "text-blue-400"}`} style={{ fontSize: "25px" }}>{r.month || "—"}</td>
                             <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
                             <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
+                            <td className="px-3 py-2.5 text-center">
+                              <button
+                                onClick={() => setFinRecords?.(prev => (prev || []).map(x => x.id === r.id ? { ...x, received: !x.received } : x))}
+                                title={r.received ? "تم تأكيد الاستلام — اضغط للإلغاء" : "اضغط لتأكيد إن المستلم استلم فعلاً"}
+                                className={`w-7 h-7 rounded-lg border text-sm font-bold ${r.received ? "bg-emerald-600/30 border-emerald-500/50 text-emerald-300" : "bg-slate-800/60 border-slate-600/40 text-slate-500"}`}>
+                                {r.received ? "✓" : ""}
+                              </button>
+                            </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{fmtTime12(r.timestamp)}</td>
                           </tr>
                         ))}
