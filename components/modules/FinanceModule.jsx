@@ -238,7 +238,8 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
   const [showPw,      setShowPw]      = useState(false);
   const [showUndoPw,  setShowUndoPw]  = useState(false);
   const [localRecord, setLocalRecord] = useState(record || null);
-  const [received,    setReceived]    = useState(record ? !!record.received : false); // ✓ تأكيد استلام المستلم فعليًا للمبلغ
+  const [received,    setReceived]    = useState(record ? record.received === true : false); // ✓ تأكيد استلام المستلم فعليًا للمبلغ — افتراضي فاضي دايمًا لأي سجل قديم أو جديد لحد ما حد يضغط عليه
+  const [showRecvPw,  setShowRecvPw]  = useState(false);
   const rowRef = useRef(null);
 
   useEffect(() => {
@@ -262,15 +263,24 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
     received: recv,
   });
 
-  // ── تأكيد/إلغاء إن المستلم استلم المبلغ فعليًا (منفصل عن مجرد ظهور اسمه) ──
-  const toggleReceived = () => {
-    const newVal = !received;
+  // ── تأكيد استلام المستلم للمبلغ فعليًا: أول ضغطة (من فاضي → صح) متاحة لأي حد
+  // بيسجل الدفعة عادي. لكن بمجرد ما تتحط علامة الصح، تبقى قفل تمامًا —
+  // مفيش رجوع أو تغيير غير من المستر بباسورده الخاص. ──
+  const doSetReceived = newVal => {
     setReceived(newVal);
     if (localRecord) {
       const rec = { ...localRecord, received: newVal };
       onSave(rec);
       setLocalRecord(rec);
     }
+  };
+  const requestToggleReceived = () => {
+    if (received) setShowRecvPw(true); // اتحطت قبل كده — لازم باسورد المستر لأي تعديل
+    else doSetReceived(true);          // أول تأكيد — متاح مباشرة
+  };
+  const unlockReceivedPw = (pw, setErr) => {
+    if (pw === financePassword) { setShowRecvPw(false); doSetReceived(false); }
+    else setErr("كلمة مرور المستر غير صحيحة");
   };
 
   // ── حفظ تلقائي بالكامل: مفيش زرار حفظ خالص — بمجرد ما المبلغ والمستلم
@@ -353,6 +363,9 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
       {showUndoPw && (
         <UndoPasswordGate undoHash={undoPassword} onUnlock={confirmUndo} onCancel={() => setShowUndoPw(false)} />
       )}
+      {showRecvPw && (
+        <FinancePasswordGate onUnlock={unlockReceivedPw} onCancel={() => setShowRecvPw(false)} />
+      )}
       <tr ref={rowRef} className={`border-b transition-colors ${bgCls} ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}>
         <td className="px-3 py-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -379,9 +392,9 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
         </td>
         <td className="px-2 py-3 text-center">
           <button
-            onClick={toggleReceived}
+            onClick={requestToggleReceived}
             disabled={!saved}
-            title={!saved ? "لسه ما اتسجلش" : (received ? "تم تأكيد الاستلام — اضغط للإلغاء" : "اضغط لتأكيد إن المستلم استلم المبلغ فعلاً")}
+            title={!saved ? "لسه ما اتسجلش" : (received ? "🔒 مؤكد — تعديله يحتاج باسورد المستر" : "اضغط لتأكيد إن المستلم استلم المبلغ فعلاً")}
             className={`w-8 h-8 rounded-lg border text-sm font-bold disabled:opacity-30 ${received ? "bg-emerald-600/30 border-emerald-500/50 text-emerald-300" : "bg-slate-800/60 border-slate-600/40 text-slate-500"}`}>
             {received ? "✓" : ""}
           </button>
