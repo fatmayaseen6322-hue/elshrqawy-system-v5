@@ -2437,8 +2437,10 @@ function normalizeDigits(s) {
 }
 
 // تقسيم النص الخام لأسئلة (heuristic): بيدوّر على "سؤال ١" أو "س1" أو
-// رقم في أول السطر متبوع بنقطة/قوس، وبيطلّع وصف قصير لكل سؤال + عدد النقط
-// المتكرر لو لقاه (زي "٥ درجات" أو "10 points").
+// رقم في أول السطر متبوع بنقطة/قوس، وبيطلّع نص السؤال الكامل (مش أول سطر
+// بس) لحد ما يوصل لبداية الاختيارات (أ/ب/ج/د أو A/B/C/D) أو للسؤال اللي
+// بعده، + عدد النقط المتكرر لو لقاه (زي "٥ درجات" أو "10 points").
+const EXAM_OPTION_LINE_RE = /^(?:[أابجدهوABCD])\s*[\)\.\-:]/;
 function parseQuestionsFromText(rawText) {
   const text = normalizeDigits(String(rawText || "").replace(/\r/g, ""));
   if (!text.trim()) return { numQuestions: 0, questionMeta: {}, pointsPerQuestion: 0 };
@@ -2455,8 +2457,12 @@ function parseQuestionsFromText(rawText) {
       const start = m.index + m[0].length;
       const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
       const segment = text.slice(start, end);
-      const firstLine = segment.split("\n").map(l => l.trim()).find(l => l.length > 0) || "";
-      const desc = firstLine.replace(/\s+/g, " ").trim().slice(0, 60);
+      const lines = segment.split("\n").map(l => l.trim()).filter(Boolean);
+      // وقفي عند أول سطر شكله بداية اختيارات (أ- ب- ج- د- / A) B) C) D))
+      // عشان السؤال يطلع كامل من غير ما تختلط بيه الاختيارات.
+      const stopIdx = lines.findIndex(l => EXAM_OPTION_LINE_RE.test(l));
+      const questionLines = stopIdx === -1 ? lines : lines.slice(0, stopIdx);
+      const desc = (questionLines.length ? questionLines : lines).join(" ").replace(/\s+/g, " ").trim().slice(0, 500);
       if (desc) questionMeta[qn] = desc;
     }
   }
