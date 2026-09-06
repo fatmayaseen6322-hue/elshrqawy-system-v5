@@ -2544,6 +2544,19 @@ function parseQuestionsFromText(rawText) {
     }
   }
 
+  // 🆕 لو مفيش ترقيم واضح للأسئلة جوه الملف (زي ملفات فيها أسئلة "فسر / دلل"
+  // متتالية كل واحدة في فقرة لوحدها من غير رقم قبلها) — اعتبري كل فقرة
+  // (سطر مفصول بسطر فاضي، أو سطر عادي لو مفيش أسطر فاضية) سؤال مستقل
+  // بالترتيب اللي هو موجود بيه في الملف (سؤال 1، 2، 3...).
+  if (Object.keys(questionMeta).length === 0) {
+    let paragraphs = text.split(/\n\s*\n/).map(p => p.replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (paragraphs.length < 2) {
+      paragraphs = text.split("\n").map(p => p.replace(/\s+/g, " ").trim()).filter(Boolean);
+    }
+    const qLines = paragraphs.filter(p => p.length >= 4 && !EXAM_OPTION_LINE_RE.test(p));
+    qLines.forEach((line, i) => { questionMeta[i + 1] = line.slice(0, 500); });
+  }
+
   const qNumbers = Object.keys(questionMeta).map(Number);
   const numQuestions = qNumbers.length > 0 ? Math.max(...qNumbers) : 0;
 
