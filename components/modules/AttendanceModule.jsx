@@ -42,6 +42,7 @@ const stCfg = {
   p: { label: "حاضر",  color: "bg-emerald-500", border: "border-emerald-500", text: "text-emerald-400", icon: "✓"  },
   a: { label: "غائب",  color: "bg-red-500",     border: "border-red-500",     text: "text-red-400",    icon: "✗"  },
   l: { label: "متأخر", color: "bg-amber-500",   border: "border-amber-500",   text: "text-amber-400",  icon: "⏰" },
+  t: { label: "مؤجل",  color: "bg-sky-500",     border: "border-sky-500",     text: "text-sky-400",    icon: "🔁" },
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -263,6 +264,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
 
   const safeAttRecords = attRecords || [];
   const grpList     = GROUPS_MAP[grade] || ["A"];
+  // ══════════════════════════════════════════════════════════════
+  // 🔁 "مؤجل" — بس للصفوف اللي فيها مجموعتين. otherGrp هي المجموعة
+  // التانية اللي هيتنقل لها الطالب في حصة النهاردة/اليوم المختار بس.
+  // ══════════════════════════════════════════════════════════════
+  const hasTwoGroups = grpList.length > 1;
+  const otherGrp = grpList.find(g => g !== group) || null;
   const grpStudents = useMemo(
     () => sortStudentsList((students || []).filter(s => s && s.grade === grade && s.group === group && !isBlocked(s))),
     [students, grade, group]
@@ -302,7 +309,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     [safeAttRecords, grade, group, date]
   );
   const existingMap = useMemo(
-    () => Object.fromEntries(recordsForSession.map(r => [r.studentId, { status: r.status, reason: r.reason || "", time: r.time || null }])),
+    () => Object.fromEntries(recordsForSession.map(r => [r.studentId, { status: r.status, reason: r.reason || "", time: r.time || null, guestFrom: r.guestFrom || null }])),
     [recordsForSession]
   );
   const hasExistingSession = recordsForSession.length > 0;
@@ -312,14 +319,16 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   // اتنقل لصف/مجموعة تانية (أو اتحذف) — سجله القديم لازم يفضل ظاهر هنا
   // عشان "لا يختفي" من يوم كان مسجَّل فيه، حتى لو مش من ضمن طلاب
   // الصف/المجموعة الحاليين.
+  // ملحوظة: الشرط بقى شغال في كل الحالات (مش بس يوم قديم) عشان الطالب
+  // اللي بيتنقل بـ"مؤجل" لمجموعة تانية النهاردة يظهر في حصة المجموعة
+  // التانية على طول، مش بس لو رجعنا نراجع يوم قديم.
   const grpStudentsForDisplay = useMemo(() => {
-    if (!isOldDate) return grpStudents;
     const currentIds = new Set(grpStudents.map(s => s.id));
     const extra = recordsForSession
       .filter(r => !currentIds.has(r.studentId))
       .map(r => (students || []).find(s => s.id === r.studentId) || { id: r.studentId, name: "طالب سابق (نُقل أو حُذف)" });
     return [...grpStudents, ...extra];
-  }, [grpStudents, recordsForSession, students, isOldDate]);
+  }, [grpStudents, recordsForSession, students]);
 
   // فتح تلقائي: كل ما يتغيّر الصف/المجموعة/اليوم، السيشن بتتظبط من السجلات
   // الموجودة (لو فيه) من غير الحاجة لأي ضغط زرار.
@@ -370,11 +379,15 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       const oldSt = existingMap[s.id]?.status || null;
       const newSt = sessionSnapshot[s.id]?.status || null;
       if (oldSt === newSt) return s;
+      // ملحوظة: حالة "مؤجل" (t) ما بتتحسبش لا حضور ولا غياب ولا تأخير
+      // ولا حتى ضمن إجمالي الحصص (total) — لأنها مجرد نقل للحصة، مش
+      // حكم على حضور الطالب فعليًا.
+      const isCounted = v => v === "p" || v === "a" || v === "l";
       let present = s.present || 0, absent = s.absent || 0, late = s.late || 0, total = s.total || 0;
       if (oldSt === "p") present--; if (oldSt === "a") absent--; if (oldSt === "l") late--;
-      if (oldSt && !newSt) total--;
+      if (isCounted(oldSt) && !isCounted(newSt)) total--;
       if (newSt === "p") present++; if (newSt === "a") absent++; if (newSt === "l") late++;
-      if (!oldSt && newSt) total++;
+      if (!isCounted(oldSt) && isCounted(newSt)) total++;
       return { ...s, present: Math.max(0, present), absent: Math.max(0, absent), late: Math.max(0, late), total: Math.max(0, total) };
     }));
 
@@ -415,6 +428,48 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     persistAttendance([id], newSession);
     return newSession;
   });
+
+  // ══════════════════════════════════════════════════════════════
+  // 🔁 "مؤجل" — نقل حصة طالب واحد بس ليوم واحد بس من مجموعته الحالية
+  // لمجموعة تانية من نفس الصف (بيظهر بس لو الصف فيه مجموعتين).
+  // - في مجموعته الأصلية: بتتسجل حالته "مؤجل" (ما تتحسبش حضور/غياب).
+  // - في المجموعة التانية: بيتحط له "مكان" في حصة نفس اليوم عشان
+  //   يظهر في قايمة الطلاب هناك ويتقدر المُدرّس يسجّله حاضر/غايب/متأخر
+  //   لما ياخد حصته فعليًا في المجموعة التانية.
+  // ══════════════════════════════════════════════════════════════
+  const toggleTransfer = (id) => {
+    if (!otherGrp) return;
+    const cur = session[id] || {};
+
+    if (cur.status === "t") {
+      // إلغاء التأجيل
+      const newSession = { ...session, [id]: { ...cur, status: null, time: null } };
+      setSession(newSession);
+      persistAttendance([id], newSession);
+      // احذف "مكان" الطالب من المجموعة التانية بس لو محدش سجّله فعليًا هناك لسه
+      setAttRecords(prev => (prev || []).filter(r =>
+        !(r.studentId === id && r.date === date && r.grade === grade && r.group === otherGrp && r.guestFrom === group && !r.status)
+      ));
+      return;
+    }
+
+    const newSession = { ...session, [id]: { ...cur, status: "t", time: null } };
+    setSession(newSession);
+    persistAttendance([id], newSession);
+
+    setAttRecords(prev => {
+      const list = prev || [];
+      const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === otherGrp);
+      if (idx >= 0) {
+        if (list[idx].guestFrom) return list;
+        return [...list.slice(0, idx), { ...list[idx], guestFrom: group }, ...list.slice(idx + 1)];
+      }
+      const rec = { id: genAttId(), studentId: id, grade, group: otherGrp, date, status: null, reason: "", time: null, guestFrom: group, takenBy: currentUserName || null, ts: Date.now() };
+      return [...list, rec];
+    });
+
+    addActivity?.("تأجيل حصة (نقل مجموعة)", `${grade} - من مجموعة ${group} إلى ${otherGrp} - ${date}`);
+  };
 
   const setReasonFor = (id, text) => setSession(prev => ({
     ...prev, [id]: { ...(prev[id] || {}), reason: text }
@@ -475,6 +530,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     p: Object.values(session).filter(v => v?.status === "p").length,
     a: Object.values(session).filter(v => v?.status === "a").length,
     l: Object.values(session).filter(v => v?.status === "l").length,
+    t: Object.values(session).filter(v => v?.status === "t").length,
   };
 
   // فتح وضع التعديل ليوم قديم — لازم باسورد المستر، ومتاح للمستر بس
@@ -749,8 +805,13 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       )}
 
       {grpStudentsForDisplay.length > 0 && <>
-        <div className="grid grid-cols-3 gap-1.5">
-          {[{ k: "p", l: "حاضر", v: counts.p }, { k: "a", l: "غائب", v: counts.a }, { k: "l", l: "متأخر", v: counts.l }].map(x => (
+        <div className={`grid ${hasTwoGroups ? "grid-cols-4" : "grid-cols-3"} gap-1.5`}>
+          {[
+            { k: "p", l: "حاضر", v: counts.p },
+            { k: "a", l: "غائب", v: counts.a },
+            { k: "l", l: "متأخر", v: counts.l },
+            ...(hasTwoGroups ? [{ k: "t", l: "مؤجل", v: counts.t }] : [])
+          ].map(x => (
             <div key={x.k} className={`rounded-lg py-2 text-center border ${stCfg[x.k].border}/30 ${stCfg[x.k].color}/10`}>
               <div className={`text-lg font-black ${stCfg[x.k].text}`}>{x.v}</div>
               <div className="text-slate-500 text-[12px]">{x.l}</div>
@@ -791,7 +852,13 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                             </div>
                           : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.reason || "—"}</td>
+                      <td className="px-3 py-2.5 text-slate-400 text-xs">
+                        {rec?.status === "t" && otherGrp
+                          ? <span className="text-sky-400 font-bold">🔁 نُقل لمجموعة {otherGrp}</span>
+                          : rec?.guestFrom
+                            ? <span className="text-sky-400 font-bold">🔁 منقول من مجموعة {rec.guestFrom}</span>
+                            : (rec?.reason || "—")}
+                      </td>
                     </tr>
                   );
                 })}
@@ -827,13 +894,19 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
               const time = session[s.id]?.time || "";
               return (
                 <div key={s.id} className={`rounded-2xl border transition-all duration-200 ${st ? "border-slate-600/50" : "border-slate-700/40"} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
-                  <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl ${st === "p" ? "bg-emerald-500/5" : st === "a" ? "bg-red-500/5" : st === "l" ? "bg-amber-500/5" : "bg-slate-800/60"}`}>
+                  <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl ${st === "p" ? "bg-emerald-500/5" : st === "a" ? "bg-red-500/5" : st === "l" ? "bg-amber-500/5" : st === "t" ? "bg-sky-500/5" : "bg-slate-800/60"}`}>
                     {role !== "assist" && (
                       <div className="w-6 h-6 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">{i + 1}</div>
                     )}
                     <Av name={s.name} size="sm" />
                     <div className="flex-1 min-w-0">
                       <div className="text-white text-sm font-bold break-words">{s.name}</div>
+                      {session[s.id]?.guestFrom && (
+                        <div className="text-sky-400 text-[11px] font-bold truncate">🔁 منقول من مجموعة {session[s.id].guestFrom} (اليوم بس)</div>
+                      )}
+                      {st === "t" && otherGrp && (
+                        <div className="text-sky-400 text-[11px] font-bold truncate">🔁 هيتنقل لمجموعة {otherGrp} النهاردة</div>
+                      )}
                       <div className="text-slate-500 text-[12px] truncate">{s.present || 0}/{s.total || 0} ({pct(s.present || 0, s.total || 0)}%)</div>
                     </div>
                     <div className="flex gap-1 shrink-0">
@@ -847,6 +920,13 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                           {icon}
                         </button>
                       ))}
+                      {hasTwoGroups && !session[s.id]?.guestFrom && (
+                        <button onClick={() => toggleTransfer(s.id)}
+                          title={`مؤجل — نقل الحصة لمجموعة ${otherGrp}`}
+                          className={`w-9 h-9 rounded-lg text-sm font-bold border flex items-center justify-center transition-colors ${st === "t" ? "bg-sky-500/20 text-sky-300 border-sky-500/40" : "border-slate-700/50 text-slate-500 hover:text-white"}`}>
+                          🔁
+                        </button>
+                      )}
                     </div>
                     {(st === "a" || st === "l") && (
                       <div className="flex-1 min-w-0 flex items-center gap-1.5">
