@@ -395,7 +395,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
             onClick={requestToggleReceived}
             disabled={!saved}
             title={!saved ? "لسه ما اتسجلش" : (received ? "🔒 مؤكد — تعديله يحتاج باسورد المستر" : "اضغط لتأكيد إن المستلم استلم المبلغ فعلاً")}
-            className={`w-8 h-8 rounded-lg border text-sm font-bold disabled:opacity-30 ${received ? "bg-emerald-600/30 border-emerald-500/50 text-emerald-300" : "bg-slate-800/60 border-slate-600/40 text-slate-500"}`}>
+            className={`w-8 h-8 rounded-lg border-2 text-sm font-bold disabled:opacity-30 ${received ? "bg-emerald-600/30 border-emerald-500/50 text-emerald-300" : "bg-slate-800/60 border-red-500/70 text-slate-500"}`}>
             {received ? "✓" : ""}
           </button>
         </td>
