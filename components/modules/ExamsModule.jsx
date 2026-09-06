@@ -1710,10 +1710,10 @@ function ExamMistakesReport({ students, centerExams }) {
 
   const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
 
-  // وصف السؤال: من questionMeta اللي اتسجّل وقت رفع الامتحان لو موجود، وإلا رقم السؤال زي ما هو
+  // وصف السؤال: رقم السؤال دايمًا + نص السؤال (لو متسجّل من ملف الوورد وقت رفع الامتحان)
   const descFor = q => {
     const d = linkedExam?.questionMeta?.[q];
-    return d && d.trim() ? d.trim() : `سؤال ${q}`;
+    return d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
   };
 
   // كل طالب في الصف له أخطاء مسجَّلة (من قسم "التصحيح") في نفس الوحدة/الدرس ده
