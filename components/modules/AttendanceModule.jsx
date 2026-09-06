@@ -828,7 +828,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
               return (
                 <div key={s.id} className={`rounded-2xl border transition-all duration-200 ${st ? "border-slate-600/50" : "border-slate-700/40"} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
                   <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl ${st === "p" ? "bg-emerald-500/5" : st === "a" ? "bg-red-500/5" : st === "l" ? "bg-amber-500/5" : "bg-slate-800/60"}`}>
-                    <div className="w-6 h-6 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">{i + 1}</div>
+                    {role !== "assist" && (
+                      <div className="w-6 h-6 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">{i + 1}</div>
+                    )}
                     <Av name={s.name} size="sm" />
                     <div className="flex-1 min-w-0">
                       <div className="text-white text-sm font-bold break-words">{s.name}</div>

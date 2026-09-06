@@ -295,7 +295,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
       <tr ref={rowRef} className={`border-b transition-colors ${bgCls} ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}>
         <td className="px-3 py-3">
           <div className="flex items-center gap-2 min-w-0">
-            {typeof index === "number" && (
+            {typeof index === "number" && role !== "assist" && (
               <span className="text-slate-500 font-bold text-xs shrink-0">{index + 1}.</span>
             )}
             <Av name={student.name} size="sm" />
@@ -507,6 +507,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     () => Object.values(currentGradeTotals).reduce((a, v) => a + v, 0),
     [currentGradeTotals]
   );
+
+  // ── إجمالي "المطلوب" الكلي لكل الصفوف + الإجمالي "المتبقي" (لسه ما
+  // اتدفعش) عن الشهر الحالي — بيتحدّثوا اتوماتيك مع أي تغيير في عدد
+  // الطلاب الموجودين فعليًا أو الدفعات المسجّلة (للمستر بس) ──
+  const currentGrandRequired = useMemo(
+    () => Object.values(currentGradeRequired).reduce((a, v) => a + v, 0),
+    [currentGradeRequired]
+  );
+  const currentGrandRemaining = Math.max(0, currentGrandRequired - currentGrandTotal);
 
   // ── إجمالي المحصّل فعليًا عن الشهر/السنة المختارين في "الشهر الماضي"
   // لكل صف + إجمالي عام ──
@@ -775,18 +784,22 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           // ── مفيش صف متاختار: اعرض 6 مستطيلات للصفوف ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
             <div className="text-xs text-slate-400 font-bold mb-1">💰 الشهر الحالي — اختر الصف</div>
-            <GradeCircles value={selGrade} showLabel={false}
-              onChange={g => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }} />
             <div className="grid grid-cols-2 gap-1.5">
               {GRADES_LIST.map(g => (
-                <div key={g} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/40 border border-slate-700/40">
+                <button key={g}
+                  onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
+                  className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/40 border border-slate-700/40 hover:bg-emerald-600/15 hover:border-emerald-500/40 transition-all text-right">
                   <span className="text-slate-300 text-xs font-bold">{g}</span>
                   <span className="text-amber-300 text-xs font-black">مطلوب: {fmtM(currentGradeRequired[g] || 0)}</span>
-                </div>
+                </button>
               ))}
             </div>
             {role === "admin" && (
-              <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
+              <>
+                <TotalBanner label="💰 إجمالي المحصّل هذا الشهر (كل الصفوف)" value={currentGrandTotal} tone="emerald" />
+                <TotalBanner label="📊 إجمالي المطلوب هذا الشهر (كل الصفوف)" value={currentGrandRequired} tone="amber" />
+                <TotalBanner label="🔴 الإجمالي المتبقي (لسه ما اتدفعش) هذا الشهر" value={currentGrandRemaining} tone="red" />
+              </>
             )}
           </div>
         ) : (
@@ -1050,11 +1063,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
       {tableOpen && selGrade && financeMode !== "late" && (
         <>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{baseTableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>
-            <div className="bg-emerald-900/20 border border-emerald-700/20 rounded-xl p-3 text-center"><div className="text-emerald-400 font-black text-lg">{paidCount}</div><div className="text-xs text-slate-500">دفعوا</div></div>
+          {role === "admin" ? (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-slate-800/60 border border-slate-700/30 rounded-xl p-3 text-center"><div className="text-white font-black text-lg">{baseTableStudents.length}</div><div className="text-xs text-slate-500">الطلاب</div></div>
+              <div className="bg-emerald-900/20 border border-emerald-700/20 rounded-xl p-3 text-center"><div className="text-emerald-400 font-black text-lg">{paidCount}</div><div className="text-xs text-slate-500">دفعوا</div></div>
+              <div className="bg-red-900/20 border border-red-700/20 rounded-xl p-3 text-center"><div className="text-red-400 font-black text-lg">{lateCount}</div><div className="text-xs text-slate-500">متأخر</div></div>
+            </div>
+          ) : (
             <div className="bg-red-900/20 border border-red-700/20 rounded-xl p-3 text-center"><div className="text-red-400 font-black text-lg">{lateCount}</div><div className="text-xs text-slate-500">متأخر</div></div>
-          </div>
+          )}
 
           {tableStudents.length === 0
             ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">{financeMode === "past" ? "🎉" : "📭"}</div><div className="text-sm">{financeMode === "past" ? "مفيش طلاب متأخرين عن الشهر ده" : "لا يوجد طلاب لهذا الاختيار"}</div></div>
