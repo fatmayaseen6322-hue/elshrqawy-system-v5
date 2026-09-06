@@ -238,6 +238,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
   const [showPw,      setShowPw]      = useState(false);
   const [showUndoPw,  setShowUndoPw]  = useState(false);
   const [localRecord, setLocalRecord] = useState(record || null);
+  const [received,    setReceived]    = useState(record ? !!record.received : false); // ✓ تأكيد استلام المستلم فعليًا للمبلغ
   const rowRef = useRef(null);
 
   useEffect(() => {
@@ -250,7 +251,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
 
   const receiverName = (activeReceivers || []).find(r => r.id === receiverId)?.name || "—";
 
-  const buildRec = (recvId, recvName, amt = amount) => ({
+  const buildRec = (recvId, recvName, amt = amount, recv = received) => ({
     id: record?.id || localRecord?.id || genFinId(),
     studentId: student.id, studentName: student.name,
     grade: student.grade, group: student.group,
@@ -258,7 +259,19 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
     amount: parseInt(amt) || 0,
     receiverId: recvId, receiverName: recvName,
     timestamp: nowStr(), note: "",
+    received: recv,
   });
+
+  // ── تأكيد/إلغاء إن المستلم استلم المبلغ فعليًا (منفصل عن مجرد ظهور اسمه) ──
+  const toggleReceived = () => {
+    const newVal = !received;
+    setReceived(newVal);
+    if (localRecord) {
+      const rec = { ...localRecord, received: newVal };
+      onSave(rec);
+      setLocalRecord(rec);
+    }
+  };
 
   // ── حفظ تلقائي بالكامل: مفيش زرار حفظ خالص — بمجرد ما المبلغ والمستلم
   // يبقوا موجودين وصح، بيتسجل الدفعة على طول من غير أي ضغطة زرار.
@@ -324,6 +337,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
     setAmount(student._defaultFee || 0);
     setReceiverId(lockedReceiver ? lockedReceiver.id : (globalReceiver?.id || null));
     setPickTime(lockedReceiver ? nowStr() : "");
+    setReceived(false);
   };
 
   const canPrint = saved && localRecord !== null;
@@ -362,6 +376,15 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
                 </select>
               : <span className="text-slate-300 text-xs">{receiverName}</span>
           }
+        </td>
+        <td className="px-2 py-3 text-center">
+          <button
+            onClick={toggleReceived}
+            disabled={!saved}
+            title={!saved ? "لسه ما اتسجلش" : (received ? "تم تأكيد الاستلام — اضغط للإلغاء" : "اضغط لتأكيد إن المستلم استلم المبلغ فعلاً")}
+            className={`w-8 h-8 rounded-lg border text-sm font-bold disabled:opacity-30 ${received ? "bg-emerald-600/30 border-emerald-500/50 text-emerald-300" : "bg-slate-800/60 border-slate-600/40 text-slate-500"}`}>
+            {received ? "✓" : ""}
+          </button>
         </td>
         <td className="px-2 py-3">
           <span className="text-slate-500 text-xs whitespace-nowrap">{(editing || !saved) ? (pickTime || "—") : (localRecord?.timestamp || "—")}</span>
@@ -1141,7 +1164,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
                     <thead>
                       <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
-                        {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
+                        {["اسم الطالب","المستلم","تم الاستلام","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
                           <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
                         ))}
                       </tr>
@@ -1221,7 +1244,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                     <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
                       <thead className="sticky top-0">
                         <tr className="led-thead bg-slate-900 border-b border-slate-700/60">
-                          {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","تم الاستلام","الساعة"].map((h, i) => (
+                          {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","الساعة"].map((h, i) => (
                             <th key={h} className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px", width: i === 0 ? "100%" : "auto" }}>{h}</th>
                           ))}
                         </tr>
@@ -1239,14 +1262,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${((r.year || 0) < curYear || ((r.year || 0) === curYear && (r.month || 0) < curMonth)) ? "text-red-400" : "text-blue-400"}`} style={{ fontSize: "25px" }}>{r.month || "—"}</td>
                             <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
                             <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
-                            <td className="px-3 py-2.5 text-center">
-                              <button
-                                onClick={() => setFinRecords?.(prev => (prev || []).map(x => x.id === r.id ? { ...x, received: !x.received } : x))}
-                                title={r.received ? "تم تأكيد الاستلام — اضغط للإلغاء" : "اضغط لتأكيد إن المستلم استلم فعلاً"}
-                                className={`w-7 h-7 rounded-lg border text-sm font-bold ${r.received ? "bg-emerald-600/30 border-emerald-500/50 text-emerald-300" : "bg-slate-800/60 border-slate-600/40 text-slate-500"}`}>
-                                {r.received ? "✓" : ""}
-                              </button>
-                            </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{fmtTime12(r.timestamp)}</td>
                           </tr>
                         ))}
