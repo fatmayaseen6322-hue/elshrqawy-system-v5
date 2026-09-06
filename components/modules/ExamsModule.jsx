@@ -1885,8 +1885,6 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
   const [lesson,  setLesson]  = useState("");
   const [examId,  setExamId]  = useState("");
   const [creatingNew, setCreatingNew] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newNumQ, setNewNumQ] = useState(20);
   const [openStudent, setOpenStudent] = useState(null);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
@@ -1903,22 +1901,6 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
   const resetToGrades   = () => { setGrade("");  setUnit("");  setLesson("");  setExamId(""); setCreatingNew(false); };
   const resetUnitLesson = () => { setUnit("");   setLesson(""); setExamId(""); setCreatingNew(false); };
   const resetExam       = () => { setExamId(""); setCreatingNew(false); };
-
-  const createManualExam = () => {
-    const id = genExamId();
-    const exam = {
-      id, grade, unit, lesson,
-      fileName: newName.trim() || null,
-      date: TODAY,
-      numQuestions: Math.max(1, parseInt(newNumQ) || 1),
-      pointsPerQuestion: 1,
-      manual: true,
-    };
-    setCenterExams(p => [exam, ...(p || [])]);
-    setExamId(id);
-    setCreatingNew(false);
-    setNewName(""); setNewNumQ(20);
-  };
 
   const errCountFor = s => selectedExam
     ? new Set((s.examErrors || []).filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id).map(e => e.q)).size
@@ -1969,20 +1951,13 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
         {grade} — وحدة {unit} — درس {lesson}
       </div>
       {creatingNew ? (
-        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
-          <div className="text-white font-black text-sm">➕ تسجيل امتحان جديد لهذا الدرس</div>
-          <Field label="اسم الامتحان (اختياري)">
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: امتحان الأسبوع 2"
-              className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none" />
-          </Field>
-          <Field label="عدد أسئلة الامتحان">
-            <input type="number" min={1} max={100} value={newNumQ} onChange={e => setNewNumQ(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
-          </Field>
-          <div className="flex gap-2">
-            <Btn variant="ghost" className="flex-1" onClick={() => setCreatingNew(false)}>رجوع</Btn>
-            <Btn variant="success" className="flex-1" onClick={createManualExam}>بدء التصحيح</Btn>
-          </div>
+        <div className="space-y-2">
+          <ExamFileUploadInline
+            grade={grade} unit={unit} lesson={lesson}
+            setCenterExams={setCenterExams}
+            onDone={id => { setExamId(id); setCreatingNew(false); }}
+          />
+          <Btn variant="ghost" className="w-full" onClick={() => setCreatingNew(false)}>رجوع</Btn>
         </div>
       ) : (
         <ExamPickerBox exams={examsForLesson} onSelect={setExamId} onCreateNew={() => setCreatingNew(true)} allowCreate />
@@ -2288,10 +2263,12 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, onBack 
 // ══════════════════════════════════════════════════════════════
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
+// 🆕 3 مستطيلات بس دلوقتي (بعد إعادة الهيكلة): التصحيح / الأخطاء / الويب.
+// رفع الامتحان (الملف) بقى خطوة مدموجة جوه "التصحيح" نفسها (زرار
+// "تسجيل امتحان جديد" في مستطيل اختيار الامتحان) بدل ما يكون بانل مستقل.
 const PANELS = [
-  { key: "errors",     icon: "🟦", label: "التصحيح",    desc: "تصحيح أوراق الامتحانات (اختيار من متعدد)",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
-  { key: "correction", icon: "🟥", label: "الأخطاء",    desc: "تسجيل خطأ كل سؤال لكل طالب + تقرير الأخطاء + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
-  { key: "exams",      icon: "📝", label: "الامتحانات", desc: "رفع امتحان (Word/PDF/صورة) لكل صف ووحدة ودرس", color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
+  { key: "errors",     icon: "🟦", label: "التصحيح",    desc: "تصحيح أوراق الامتحانات + تسجيل امتحان جديد (Word/PDF/صورة)",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
+  { key: "correction", icon: "🟥", label: "الأخطاء",    desc: "عرض أخطاء كل طالب + نسخ وطباعة",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
   { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
 ];
 
@@ -2438,49 +2415,34 @@ function parseQuestionsFromText(rawText) {
   return { numQuestions, questionMeta, pointsPerQuestion };
 }
 
-function ExamUploadLinked({ students, centerExams, setCenterExams }) {
-  const [grade,  setGrade]  = useState("");
-  const [unit,   setUnit]   = useState("");
-  const [lesson, setLesson] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-  const [toast, setToast]   = useState(null);
-  const [numQuestions, setNumQuestions] = useState(20);
+// ══════════════════════════════════════════════════════════════
+// رفع/تسجيل امتحان جديد مدموج جوه مستطيل "التصحيح" (بدل بانل مستقل)
+// نفس منطق القراءة التلقائية (OCR/Word/PDF) لكن للصف/الوحدة/الدرس
+// اللي المستخدم مختارهم بالفعل من الدوائر فوق.
+// ══════════════════════════════════════════════════════════════
+function ExamFileUploadInline({ grade, unit, lesson, setCenterExams, onDone }) {
+  const [dragOver, setDragOver]     = useState(false);
+  const [analyzing, setAnalyzing]   = useState(false);
+  const [toast, setToast]           = useState(null);
+  const [numQuestions, setNumQuestions]           = useState(20);
   const [pointsPerQuestion, setPointsPerQuestion] = useState(4);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [manualName, setManualName] = useState("");
   const ref = useRef(null);
 
-  const maxUnits = grade ? unitsCountFor(grade) : 0;
-  const ready = grade && unit && lesson;
-
-  const existing = (centerExams || []).filter(e => e.grade === grade && String(e.unit) === String(unit) && String(e.lesson) === String(lesson));
-
-  // بيقرأ الملف فعليًا (Word / PDF / صورة) مجانًا بالكامل جوه المتصفح —
-  // من غير أي API مدفوع أو مفتاح — ويرجّع عدد الأسئلة ووصف قصير لكل سؤال.
-  // docx → mammoth (نص حقيقي) | صورة → Tesseract OCR | pdf → نص مباشر
-  // أو OCR لو الملف صورة ممسوحة ضوئيًا (شوفي extractTextFromPdf فوق).
   const analyzeExamFile = async (f, ext) => {
     const isImage = ["jpg", "jpeg", "png", "webp"].includes(ext);
     const isPdf = ext === "pdf";
     const isDocx = ext === "docx";
     if (!isImage && !isPdf && !isDocx) return { ok: false, reason: "unsupported" };
-
     try {
       let rawText = "";
       if (isDocx) rawText = await extractTextFromDocx(f);
       else if (isImage) rawText = await ocrRecognize(f);
       else if (isPdf) rawText = await extractTextFromPdf(f);
-
       if (!rawText || !rawText.trim()) return { ok: false, reason: "empty_text" };
-
       const { numQuestions, questionMeta, pointsPerQuestion } = parseQuestionsFromText(rawText);
       if (!numQuestions) return { ok: false, reason: "parse_error" };
-
-      return {
-        ok: true,
-        numQuestions: Math.max(1, numQuestions),
-        pointsPerQuestion: Math.max(1, pointsPerQuestion || 4),
-        questionMeta,
-      };
+      return { ok: true, numQuestions: Math.max(1, numQuestions), pointsPerQuestion: Math.max(1, pointsPerQuestion || 4), questionMeta };
     } catch {
       return { ok: false, reason: "error" };
     }
@@ -2521,131 +2483,62 @@ function ExamUploadLinked({ students, centerExams, setCenterExams }) {
     } else {
       setToast({ msg: "⚠️ مقدرتش أقرأ عدد الأسئلة تلقائيًا من الملف ده — عدّلي العدد يدويًا تحت لو مختلف", type: "error" });
     }
+    onDone(examId);
   };
 
-  const removeExam = id => setCenterExams(p => (p || []).filter(e => e.id !== id));
-  const [descOpenId, setDescOpenId] = useState(null); // أي امتحان مفتوح دلوقتي لتعديل وصف أسئلته
-
-  const updateExamCounts = (id, field, value) => {
-    setCenterExams(p => (p || []).map(e => e.id === id ? { ...e, [field]: Math.max(1, parseInt(value) || 1) } : e));
-  };
-
-  // وصف قصير اختياري لكل سؤال (زي "فسّر ليه..." أو "صح وغلط") — بيتحفظ
-  // في questionMeta عشان يظهر بدل رقم السؤال في تقرير "الأخطاء".
-  const updateQuestionDesc = (examId, q, text) => {
-    setCenterExams(p => (p || []).map(e => e.id === examId ? { ...e, questionMeta: { ...(e.questionMeta || {}), [q]: text } } : e));
+  const createManualExam = () => {
+    const id = genExamId();
+    const exam = {
+      id, grade, unit, lesson,
+      fileName: manualName.trim() || null,
+      date: TODAY,
+      numQuestions: Math.max(1, parseInt(numQuestions) || 1),
+      pointsPerQuestion: Math.max(1, parseInt(pointsPerQuestion) || 1),
+      manual: true,
+    };
+    setCenterExams(p => [exam, ...(p || [])]);
+    onDone(id);
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        <Field label="الصف">
-          <select value={grade} onChange={e => { setGrade(e.target.value); setUnit(""); setLesson(""); }}
-            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
-            <option value="">— اختر —</option>
-            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-          </select>
+    <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+      <div className="text-white font-black text-sm">➕ تسجيل امتحان جديد لهذا الدرس</div>
+      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 text-blue-300 text-xs text-center">
+        📷 لو رفعتِ الملف (صورة/PDF/Word)، هقرأ عدد الأسئلة والنقط تلقائيًا. الأرقام تحت دي بس قيمة مبدئية.
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="عدد الأسئلة (مبدئي)">
+          <input type="number" min={1} max={100} value={numQuestions} onChange={e => setNumQuestions(parseInt(e.target.value) || 1)}
+            className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
         </Field>
-        <Field label="الوحدة">
-          <select value={unit} onChange={e => setUnit(e.target.value)} disabled={!grade}
-            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
-            <option value="">— اختر —</option>
-            {Array.from({ length: maxUnits }, (_, i) => i + 1).map(u => <option key={u} value={u}>وحدة {u}</option>)}
-          </select>
-        </Field>
-        <Field label="الدرس">
-          <select value={lesson} onChange={e => setLesson(e.target.value)} disabled={!unit}
-            className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none disabled:opacity-40">
-            <option value="">— اختر —</option>
-            {Array.from({ length: LESSONS_COUNT }, (_, i) => i + 1).map(l => <option key={l} value={l}>درس {l}</option>)}
-          </select>
+        <Field label="النقط لكل سؤال (مبدئي)">
+          <input type="number" min={1} max={20} value={pointsPerQuestion} onChange={e => setPointsPerQuestion(parseInt(e.target.value) || 1)}
+            className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
         </Field>
       </div>
-      {grade === "ثالثة ثانوي" && (
-        <div className="text-amber-400 text-xs text-center">ملحوظة: ثالثة ثانوي عندها 8 وحدات (حالة استثنائية).</div>
-      )}
+      <div
+        onClick={() => !analyzing && ref.current?.click()}
+        onDragOver={e => { e.preventDefault(); if (!analyzing) setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); if (!analyzing) acceptFile(e.dataTransfer.files?.[0]); }}
+        className={`border-2 border-dashed rounded-2xl p-6 text-center transition-colors ${analyzing ? "opacity-60 cursor-wait" : "cursor-pointer"} ${dragOver ? "border-blue-500 bg-blue-500/10" : "border-slate-600/60 hover:border-blue-500/50"}`}
+      >
+        <div className="text-4xl mb-2">{analyzing ? "🔎" : "📁"}</div>
+        <div className="text-slate-300 text-sm">{analyzing ? "بيقرأ الامتحان تلقائيًا دلوقتي... استني شوية" : "اسحبي الملف هنا أو اضغطي للرفع"}</div>
+        <div className="text-slate-600 text-xs mt-1">Word · PDF · صورة</div>
+      </div>
+      <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden" onChange={e => { acceptFile(e.target.files?.[0]); e.target.value = ""; }} />
 
-      {ready ? (
-        <>
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2 text-blue-300 text-xs text-center">
-            📷 لو الملف صورة أو PDF، هقرأ عدد الأسئلة والنقط تلقائيًا من جوه الامتحان بعد الرفع. الأرقام تحت دي بس قيمة مبدئية.
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="عدد أسئلة الامتحان (مبدئي)">
-              <input type="number" min={1} max={100} value={numQuestions} onChange={e => setNumQuestions(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
-            </Field>
-            <Field label="عدد النقط في كل سؤال (مبدئي)">
-              <input type="number" min={1} max={20} value={pointsPerQuestion} onChange={e => setPointsPerQuestion(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-800 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none" />
-            </Field>
-          </div>
-          <div
-            onClick={() => !analyzing && ref.current?.click()}
-            onDragOver={e => { e.preventDefault(); if (!analyzing) setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); if (!analyzing) acceptFile(e.dataTransfer.files?.[0]); }}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors group ${analyzing ? "opacity-60 cursor-wait" : "cursor-pointer"} ${dragOver ? "border-blue-500 bg-blue-500/10" : "border-slate-600/60 hover:border-blue-500/50"}`}
-          >
-            <div className="text-5xl mb-3">{analyzing ? "🔎" : "📁"}</div>
-            <div className="text-slate-300 font-medium group-hover:text-white transition-colors">
-              {analyzing ? "بيقرأ الامتحان تلقائيًا دلوقتي... استني شوية" : "اسحبي الملف هنا أو اضغطي للفتح من اللابتوب"}
-            </div>
-            <div className="text-slate-600 text-xs mt-1">Word · PDF · صورة</div>
-            <div className="text-blue-400 text-xs mt-2">هيتربط بـ {grade} — وحدة {unit} — درس {lesson}</div>
-          </div>
-          <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden" onChange={e => { acceptFile(e.target.files?.[0]); e.target.value = ""; }} />
-
-          {existing.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-xs text-slate-400 font-bold px-1">الامتحانات المرفوعة لهذا الدرس ({existing.length})</div>
-              {existing.map(ex => (
-                <div key={ex.id} className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3 flex-wrap">
-                  <span className="text-2xl">{fileKindIcon(ex.fileName)}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm font-bold truncate">{ex.fileName}</div>
-                    <div className="text-slate-500 text-xs">{(ex.fileSize / 1024).toFixed(1)} KB — {ex.date}</div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <input type="number" min={1} max={100} value={ex.numQuestions || 20}
-                      onChange={e => updateExamCounts(ex.id, "numQuestions", e.target.value)}
-                      title="عدد الأسئلة"
-                      className="w-14 bg-slate-900 border border-slate-700/50 rounded-lg px-1 py-1 text-white text-xs text-center focus:outline-none" />
-                    <span className="text-slate-500 text-xs">×</span>
-                    <input type="number" min={1} max={20} value={ex.pointsPerQuestion || 4}
-                      onChange={e => updateExamCounts(ex.id, "pointsPerQuestion", e.target.value)}
-                      title="عدد النقط بكل سؤال"
-                      className="w-14 bg-slate-900 border border-slate-700/50 rounded-lg px-1 py-1 text-white text-xs text-center focus:outline-none" />
-                  </div>
-                  <button onClick={() => setDescOpenId(descOpenId === ex.id ? null : ex.id)} className="text-blue-400 text-xs px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 shrink-0 whitespace-nowrap">📋 وصف الأسئلة</button>
-                  <button onClick={() => removeExam(ex.id)} className="text-red-400 text-lg hover:text-red-300">🗑</button>
-
-                  {descOpenId === ex.id && (
-                    <div className="w-full space-y-1.5 pt-2 border-t border-slate-700/40 mt-1">
-                      <div className="text-slate-500 text-xs">
-                        وصف كل سؤال بيتقرأ تلقائيًا من الملف وقت الرفع (لو صورة/PDF) ويظهر بدل رقم السؤال في تقرير "الأخطاء" — تقدري تعدّلي أي وصف يدويًا هنا لو مش دقيق. سيبيه فاضي لو عايزة يفضل بالرقم.
-                      </div>
-                      {Array.from({ length: ex.numQuestions || 20 }, (_, i) => i + 1).map(q => (
-                        <div key={q} className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400 w-14 shrink-0">سؤال {q}</span>
-                          <input
-                            value={ex.questionMeta?.[q] || ""}
-                            onChange={e => updateQuestionDesc(ex.id, q, e.target.value)}
-                            placeholder="مثال: فسّر لماذا... / ما نتائج... / صح وغلط"
-                            className="flex-1 bg-slate-900 border border-slate-700/50 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="text-center py-10 text-slate-600"><div className="text-5xl mb-3">📤</div><div className="text-sm">اختاري الصف ثم الوحدة ثم الدرس عشان تقدري ترفعي الامتحان</div></div>
-      )}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-px bg-slate-700/40" />
+        <span className="text-slate-600 text-xs">أو تسجيل يدوي بدون ملف</span>
+        <div className="flex-1 h-px bg-slate-700/40" />
+      </div>
+      <Field label="اسم الامتحان (اختياري)">
+        <input value={manualName} onChange={e => setManualName(e.target.value)} placeholder="مثال: امتحان الأسبوع 2"
+          className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none" />
+      </Field>
+      <Btn variant="success" className="w-full" onClick={createManualExam}>بدء التصحيح بدون ملف</Btn>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
@@ -2669,7 +2562,6 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
 
         {activePanel === "errors"     && <ExamCorrectionFlow     students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} />}
-        {activePanel === "exams"      && <ExamUploadLinked       students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
     );
