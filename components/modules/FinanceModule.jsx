@@ -404,7 +404,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const [selGrade,         setSelGrade]         = useState("");
   const [selGroup,         setSelGroup]         = useState("");
   const [tableOpen,        setTableOpen]        = useState(false);
-  const [pastPaidOpen,     setPastPaidOpen]     = useState(false); // زرار "دفعوا" — يظهر أسماء اللي دفعوا الشهر المختار (تسجيل الشهور الماضية)
   const [globalReceiverId, setGlobalReceiverId] = useState(null);
   const [toast,            setToast]            = useState(null);
   const [highlightId,      setHighlightId]      = useState(null); // تمييز طالب جاي من بحث التوبار
@@ -534,21 +533,6 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     () => Object.values(pastCollectedGradeTotals).reduce((a, v) => a + v, 0),
     [pastCollectedGradeTotals]
   );
-
-  // ── زرار "دفعوا" (تسجيل الشهور الماضية): أسماء الطلاب اللي دفعوا فعلاً عن الشهر/السنة المختارين ──
-  const pastPaidStudents = useMemo(() => {
-    if (financeMode !== "past") return [];
-    return monthRecords;
-  }, [financeMode, monthRecords]);
-
-  // ── نفس الطلاب اللي دفعوا، بس بشكل جدول كامل قابل للتعديل (زي جدول
-  // الشهر الحالي بالظبط: مستلم/وقت/مبلغ/تعديل/طباعة/تراجع) — عشان لو
-  // حصل خطأ في تسجيل طالب في شهر قديم يبقى ممكن تصليحه من هنا مباشرة.
-  // بيظهر للمستر بس (role === "admin").
-  const pastPaidTableStudents = useMemo(() => {
-    if (financeMode !== "past") return [];
-    return baseTableStudents.filter(s => monthRecords.some(r => r.studentId === s.id));
-  }, [baseTableStudents, financeMode, monthRecords]);
 
   // ── "تسجيل الشهور الماضية": الجدول يعرض المتأخرين عن الشهر/السنة المختارين بس (مش كل الطلاب) ──
   const tableStudents = useMemo(() => {
@@ -891,102 +875,20 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             )}
           </div>
         ) : (
-          // ── صف متاختار: كل حاجة في صف واحد أفقي (رجوع / الشهر والصف / الإجمالي / دفعوا) ──
+          // ── صف متاختار: نفس آلية عرض "المتأخر في الشهر الحالي" بالظبط
+          // (رجوع / الشهر والصف / إجمالي) — بدون زرار "دفعوا" الإضافي ──
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); setPastPaidOpen(false); }}
-                className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setSelGrade(""); setSelGroup(""); setTableOpen(false); }}
+                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
                 ⬅️ رجوع
               </button>
-              <div className="shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white text-center whitespace-nowrap">
+              <div className="flex-1 px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center">
                 🗓️ {MONTHS_AR[regMonth - 1]} — {selGrade}
               </div>
-              {role === "admin" && (
-                <div className="shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-slate-900/70 border border-red-500/30 whitespace-nowrap">
-                  <span className="text-red-400 text-[10px] font-bold">إجمالي:</span>
-                  <span className="font-black text-red-400" style={{ fontSize: "15px", direction: "ltr" }}>
-                    {fmtM(pastLateGradeTotals[selGrade] || 0)} <span className="text-red-400/60 text-[10px] font-bold">ج</span>
-                  </span>
-                </div>
-              )}
-              <button onClick={() => setPastPaidOpen(o => !o)}
-                className={`shrink-0 px-2.5 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${pastPaidOpen ? "bg-emerald-500 text-white" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}>
-                ✅ دفعوا
-              </button>
             </div>
-
-            {pastPaidOpen && (
-              role === "admin" ? (
-                <div className="mt-3">
-                  {pastPaidTableStudents.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500 text-sm bg-slate-900/60 border border-slate-700/30 rounded-xl">
-                      محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
-                    </div>
-                  ) : (
-                    <div className="bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
-                          <thead>
-                            <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
-                              {["اسم الطالب","المستلم","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
-                                <th key={h} className="px-3 py-3 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "11px" }}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {pastPaidTableStudents.map((s, i) => (
-                              <FinRow
-                                key={s.id} student={s} index={i} record={getRecord(s.id)}
-                                globalReceiver={globalReceiver} activeReceivers={activeReceivers}
-                                lockedReceiver={lockedReceiver}
-                                onSave={handleSave} onUndo={handleUndo}
-                                passwordEnabled={safeSettings.financePasswordEnabled}
-                                financePassword={safeSettings.financePassword}
-                                undoPassword={safeSettings.financeUndoPassword}
-                                centerName={safeSettings.centerName || "مركز تعليمي"}
-                                highlighted={highlightId === s.id}
-                                role={role}
-                              />
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-3 bg-slate-900/60 border border-slate-700/30 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse" style={{ minWidth: "260px" }}>
-                      <thead>
-                        <tr className="bg-slate-900/80 border-b border-slate-700/60">
-                          <th className="px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "13px" }}>
-                            اسم الطالب — دفعوا شهر {MONTHS_AR[regMonth - 1]} {regYear}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pastPaidStudents.length === 0 ? (
-                          <tr>
-                            <td className="px-3 py-6 text-center text-slate-500 text-sm">
-                              محدش دفع شهر {MONTHS_AR[regMonth - 1]} {regYear} لغاية دلوقتي
-                            </td>
-                          </tr>
-                        ) : pastPaidStudents.map(r => (
-                          <tr key={r.id} className="border-b border-slate-700/20">
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Av name={r.studentName} size="sm" />
-                                <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )
+            {role === "admin" && (
+              <TotalBanner label={`⏰ إجمالي متأخر ${selGrade}`} value={pastLateGradeTotals[selGrade] || 0} tone="red" />
             )}
           </div>
         )
