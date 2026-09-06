@@ -97,6 +97,53 @@ function getOverdueAmount(student, finRecords, gradeFees) {
   return total;
 }
 
+// ══════════════════════════════════════════════════════════════
+// "كشف المصاريف" — كشف سنوي لكل طلاب صف معيّن: صف/عمود لكل شهر من
+// أغسطس (بداية السنة الدراسية) لحد يونيو اللي بعده = 11 شهر بالظبط.
+// ══════════════════════════════════════════════════════════════
+
+// شهور الكشف: أغسطس..ديسمبر من startYear، ويناير..يونيو من (startYear+1)
+function getStatementMonths(startYear) {
+  const months = [];
+  for (let m = 8; m <= 12; m++) months.push({ month: m, year: startYear });
+  for (let m = 1; m <= 6; m++) months.push({ month: m, year: startYear + 1 });
+  return months;
+}
+
+// تنسيق وقت الدفعة (YYYY-MM-DD HH:MM) لصيغة "يوم/شهر" بس، زي 6/9
+function fmtPayDay(ts) {
+  if (!ts) return "";
+  const parts = ts.split("-");
+  if (parts.length < 3) return "";
+  const day = (parts[2] || "").split(" ")[0];
+  return `${parseInt(day, 10)}/${parseInt(parts[1], 10)}`;
+}
+
+// حالة خانة كشف المصاريف لطالب/شهر معيّنين — بناءً على تاريخ الانضمام
+// بس (نفس قاعدة "نص المصاريف" الموجودة بالفعل في getExpectedFeeForMonth):
+//  - لسه ما انضمش لحد الشهر ده، أو اتسجّل في نفس الشهر بعد يوم 25 (مفيش
+//    شهر مطلوب أصلاً)                                          → "none" (ـ)
+//  - اتسجّل في نفس الشهر بين يوم 16 و25                         → "half" (نص شهر)
+//  - غير كده (شهر كامل عادي)                                    → "full"
+// وفي كل الحالات ما عدا "none"، لو فيه دفعة فعلية مسجّلة لنفس الشهر/السنة
+// بمبلغ أكبر من صفر، بيرجع ✓ + تاريخ يوم/شهر الدفعة الفعلي.
+function getStatementCell(student, month, year, finRecords) {
+  if (!hasJoinedByMonth(student, month, year)) return { kind: "none", paid: false, paidDate: null };
+
+  let kind = "full";
+  const parts = (student?.joinDate || "").split("-");
+  if (parts.length === 3) {
+    const jY = parseInt(parts[0], 10), jM = parseInt(parts[1], 10), jD = parseInt(parts[2], 10);
+    if (jY === year && jM === month) {
+      if (jD > 25) return { kind: "none", paid: false, paidDate: null };
+      if (jD > 15) kind = "half";
+    }
+  }
+
+  const rec = (finRecords || []).find(r => r.studentId === student.id && r.month === month && r.year === year && (r.amount || 0) > 0);
+  return { kind, paid: !!rec, paidDate: rec ? fmtPayDay(rec.timestamp) : null };
+}
+
 // ── تحويل وقت "HH:MM" (24 ساعة) من الـ timestamp لصيغة 12 ساعة + صباحًا/مساءً ──
 function fmtTime12(timestamp) {
   const timePart = (timestamp || "").slice(11, 16);
@@ -460,6 +507,15 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
   const grpList = selGrade ? (GROUPS_MAP[selGrade] || ["A"]) : [];
 
+  // ── "كشف المصاريف": 11 شهر من أغسطس السنة الدراسية الحالية لحد يونيو
+  // اللي بعده، وكل طلاب الصف المختار (المجموعتين مع بعض) ──
+  const statementStartYear = curMonth >= 8 ? curYear : curYear - 1;
+  const statementMonths = useMemo(() => getStatementMonths(statementStartYear), [statementStartYear]);
+  const statementStudents = useMemo(
+    () => (financeMode === "statement" && selGrade) ? sortStudentsList(safeStudents.filter(s => s && s.grade === selGrade)) : [],
+    [financeMode, selGrade, safeStudents]
+  );
+
   const baseTableStudents = useMemo(() => {
     if (!selGrade) return [];
     let list = safeStudents.filter(s => s && s.grade === selGrade);
@@ -731,12 +787,19 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           </button>
         </div>
 
-        {/* الآخر تحت الكل: سجل المعاملات */}
-        <button onClick={() => setFinanceMode?.("log")} className={cardCls + " py-6"}>
-          <span className="text-3xl">📒</span>
-          <span className="text-base">سجل المعاملات</span>
-          <span className="text-xs text-slate-500 font-normal">كل المعاملات في يوم معيّن</span>
-        </button>
+        {/* تحت: سجل المعاملات / كشف المصاريف جنب بعض */}
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => setFinanceMode?.("log")} className={cardCls}>
+            <span className="text-3xl">📒</span>
+            <span className="text-base">سجل المعاملات</span>
+            <span className="text-xs text-slate-500 font-normal">كل المعاملات في يوم معيّن</span>
+          </button>
+          <button onClick={() => setFinanceMode?.("statement")} className={cardCls}>
+            <span className="text-3xl">📊</span>
+            <span className="text-base">كشف المصاريف</span>
+            <span className="text-xs text-slate-500 font-normal">كشف سنوي لكل شهور الصف</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -892,6 +955,102 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             )}
           </div>
         )
+      ) : financeMode === "statement" ? (
+        !selGrade ? (
+          // ── مفيش صف متاختار: مستطيلات الصفوف — نفس فلاتر باقي الأقسام ──
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+            <div className="text-xs text-slate-400 font-bold mb-1">📊 كشف المصاريف — اختر الصف</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {GRADES_LIST.map(g => (
+                <button key={g} onClick={() => setSelGrade(g)}
+                  className="px-3 py-2.5 rounded-xl bg-slate-900/40 border border-slate-700/40 hover:bg-emerald-600/15 hover:border-emerald-500/40 transition-all text-slate-300 text-xs font-bold text-center">
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setSelGrade("")}
+                className="px-3 py-2.5 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all whitespace-nowrap">
+                ⬅️ رجوع
+              </button>
+              <div className="flex-1 px-3 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white text-center whitespace-nowrap">
+                📊 كشف المصاريف — {selGrade}
+              </div>
+            </div>
+
+            {statementStudents.length === 0 ? (
+              <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">👥</div>لا يوجد طلاب</div>
+            ) : (
+              <>
+                <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse" style={{ minWidth: `${120 + statementMonths.length * 58}px` }}>
+                      <thead>
+                        <tr className="led-thead bg-slate-900/90 border-b border-slate-700/60">
+                          <th className="sticky right-0 z-10 bg-slate-900 px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px" }}>
+                            الطالب
+                          </th>
+                          {statementMonths.map(({ month, year }) => (
+                            <th key={`${month}-${year}`} className="px-1.5 py-2.5 text-center text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "10.5px" }}>
+                              <div>{MONTHS_AR[month - 1]}</div>
+                              <div className="text-slate-600" style={{ fontSize: "9px" }}>{year}</div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {statementStudents.map((s, i) => (
+                          <tr key={s.id} className={`border-b border-slate-700/20 ${i % 2 === 0 ? "bg-slate-900/10" : ""} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
+                            <td className="sticky right-0 z-10 bg-slate-900/95 px-3 py-2.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Av name={s.name} size="sm" />
+                                <span className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</span>
+                              </div>
+                            </td>
+                            {statementMonths.map(({ month, year }) => {
+                              const cell = getStatementCell(s, month, year, safeRecords);
+                              return (
+                                <td key={`${month}-${year}`} className="px-1.5 py-2.5 text-center">
+                                  {cell.kind === "none" ? (
+                                    <span className="text-slate-600 font-bold">ـ</span>
+                                  ) : cell.kind === "half" ? (
+                                    <span className="inline-flex flex-col items-center leading-tight">
+                                      <span className={`font-bold ${cell.paid ? "text-emerald-400" : "text-sky-400"}`} style={{ fontSize: "14px" }}>
+                                        {cell.paid ? "✓/" : "/"}
+                                      </span>
+                                      {cell.paid && cell.paidDate && (
+                                        <span className="text-emerald-500/70" style={{ fontSize: "9px" }}>{cell.paidDate}</span>
+                                      )}
+                                    </span>
+                                  ) : cell.paid ? (
+                                    <span className="inline-flex flex-col items-center leading-tight">
+                                      <span className="text-emerald-400 font-bold" style={{ fontSize: "14px" }}>✓</span>
+                                      <span className="text-emerald-500/70" style={{ fontSize: "9px" }}>{cell.paidDate}</span>
+                                    </span>
+                                  ) : null}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="text-slate-500 text-[11px] leading-relaxed bg-slate-800/40 border border-slate-700/30 rounded-xl p-3">
+                  <span className="text-emerald-400 font-bold">✓ + تاريخ</span> = دفع (يوم/شهر الدفعة) ·{" "}
+                  <span className="text-sky-400 font-bold">/</span> = اتسجّل في نص الشهر ده ·{" "}
+                  <span className="text-slate-500 font-bold">ـ</span> = لسه ما انضمش الشهر ده ·{" "}
+                  خانة فاضية = لسه ما دفعش
+                </div>
+              </>
+            )}
+          </div>
+        )
       ) : (
         !selGrade ? (
           // ── مفيش صف متاختار: مستطيلات الصفوف اللي فيها متأخرين بس (زي تسجيل الشهور الماضية) ──
@@ -963,7 +1122,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             </div>
       )}
 
-      {tableOpen && selGrade && financeMode !== "late" && (
+      {tableOpen && selGrade && financeMode !== "late" && financeMode !== "statement" && (
         <>
           {role === "admin" ? (
             <div className="grid grid-cols-3 gap-2">
