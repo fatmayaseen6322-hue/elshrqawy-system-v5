@@ -333,7 +333,7 @@ function MonthlyChart({ finRecords }) {
 }
 
 // ── زرار تقارير PDF (#2) ──────────────────────────────────────
-function ReportButtons({ students, finRecords, settings }) {
+function ReportButtons({ students, finRecords, settings, role = "admin" }) {
   const cn = settings?.centerName || "مركز تعليمي";
   const [open, setOpen] = useState(false);
   const reports = [
@@ -343,9 +343,9 @@ function ReportButtons({ students, finRecords, settings }) {
     { label: "تقرير الغياب",       icon: "📋",
       run: () => { smartPrint({ docType:"absence", data:students,    centerName:cn }); setOpen(false); }
     },
-    { label: "تقرير الإيرادات",    icon: "💰",
+    ...(role === "admin" ? [{ label: "تقرير الإيرادات",    icon: "💰",
       run: () => { smartPrint({ docType:"revenue", data:finRecords,  centerName:cn }); setOpen(false); }
-    },
+    }] : []),
     { label: "تقرير الدرجات",      icon: "📝",
       run: () => { smartPrint({ docType:"scores",  data:students,    centerName:cn }); setOpen(false); }
     },
@@ -1174,7 +1174,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
         </button>
       )}
       {!isAssist && <MonthlyChart finRecords={finRecords} />}
-      <ReportButtons students={students} finRecords={finRecords} settings={settings} />
+      <ReportButtons students={students} finRecords={finRecords} settings={settings} role={role} />
       <AsalAI sectionRefs={refs} students={students} finRecords={finRecords} attRecords={attRecords} />
     </div>
   );
