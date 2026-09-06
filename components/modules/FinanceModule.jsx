@@ -1030,9 +1030,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             الطالب
                           </th>
                           {statementMonths.map(({ month, year }) => (
-                            <th key={`${month}-${year}`} className="px-1.5 py-2.5 text-center text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "10.5px" }}>
-                              <div>{MONTHS_AR[month - 1]}</div>
-                              <div className="text-slate-600" style={{ fontSize: "9px" }}>{year}</div>
+                            <th key={`${month}-${year}`} className="px-1.5 py-2.5 text-center text-slate-300 font-black whitespace-nowrap" style={{ fontSize: "20px" }}>
+                              <div>{month}</div>
+                              <div className="text-slate-500 font-bold" style={{ fontSize: "10px" }}>{year}</div>
                             </th>
                           ))}
                         </tr>
@@ -1051,22 +1051,24 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                               return (
                                 <td key={`${month}-${year}`} className="px-1.5 py-2.5 text-center">
                                   {cell.kind === "none" ? (
-                                    <span className="text-slate-600 font-bold">ـ</span>
+                                    <span className="text-slate-600 font-black" style={{ fontSize: "18px" }}>ـ</span>
                                   ) : cell.kind === "half" ? (
                                     <span className="inline-flex flex-col items-center leading-tight">
-                                      <span className={`font-bold ${cell.paid ? "text-emerald-400" : "text-sky-400"}`} style={{ fontSize: "14px" }}>
+                                      <span className={`font-black ${cell.paid ? "text-emerald-400" : "text-sky-400"}`} style={{ fontSize: "22px" }}>
                                         {cell.paid ? "✓/" : "/"}
                                       </span>
                                       {cell.paid && cell.paidDate && (
-                                        <span className="text-emerald-500/70" style={{ fontSize: "9px" }}>{cell.paidDate}</span>
+                                        <span className="text-emerald-400 font-bold" style={{ fontSize: "12px" }}>{cell.paidDate}</span>
                                       )}
                                     </span>
                                   ) : cell.paid ? (
                                     <span className="inline-flex flex-col items-center leading-tight">
-                                      <span className="text-emerald-400 font-bold" style={{ fontSize: "14px" }}>✓</span>
-                                      <span className="text-emerald-500/70" style={{ fontSize: "9px" }}>{cell.paidDate}</span>
+                                      <span className="text-emerald-400 font-black" style={{ fontSize: "24px", lineHeight: 1 }}>✓</span>
+                                      <span className="text-emerald-400 font-bold" style={{ fontSize: "12px" }}>{cell.paidDate}</span>
                                     </span>
-                                  ) : null}
+                                  ) : (
+                                    <span className="text-red-500 font-black" style={{ fontSize: "24px", lineHeight: 1 }}>✗</span>
+                                  )}
                                 </td>
                               );
                             })}
@@ -1079,9 +1081,9 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
 
                 <div className="text-slate-500 text-[11px] leading-relaxed bg-slate-800/40 border border-slate-700/30 rounded-xl p-3">
                   <span className="text-emerald-400 font-bold">✓ + تاريخ</span> = دفع (يوم/شهر الدفعة) ·{" "}
+                  <span className="text-red-500 font-bold">✗</span> = لسه ما دفعش الشهر ده ·{" "}
                   <span className="text-sky-400 font-bold">/</span> = اتسجّل في نص الشهر ده ·{" "}
-                  <span className="text-slate-500 font-bold">ـ</span> = لسه ما انضمش الشهر ده ·{" "}
-                  خانة فاضية = لسه ما دفعش
+                  <span className="text-slate-500 font-bold">ـ</span> = لسه ما انضمش الشهر ده
                 </div>
               </>
             )}
