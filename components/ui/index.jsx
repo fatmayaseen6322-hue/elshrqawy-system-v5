@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { pct, scC, isBlocked, shortGradeLabel } from "../../utils/index.js";
+import { pct, scC, isBlocked, shortGradeLabel, normalizeAr } from "../../utils/index.js";
 import { MONTHS_AR, GROUPS_MAP, GRADES_LIST, addCustomGrade } from "../../constants/index.js";
 
 // ══════════════════════════════════════════════════════════════
@@ -439,9 +439,10 @@ export function TopSearchBar({ students, onSelect }) {
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
+  const nq = normalizeAr(q).toLowerCase();
   const res = q.length === 0 ? [] : students.filter(s =>
     !isBlocked(s) && (
-      s.name?.toLowerCase().includes(q.toLowerCase()) ||
+      normalizeAr(s.name || "").toLowerCase().includes(nq) ||
       s.id?.toLowerCase().includes(q.toLowerCase()) ||
       String(s.phone || "").includes(q)
     )
