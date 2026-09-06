@@ -28,6 +28,7 @@ const KEYS = {
   liveSyncTs:  "app_live_sync_ts",    // #LiveSync (مزامنة تلقائية لحظية)
   trashedDup:  "app_trashed_dup_students", // #TrashDup — سلة مهملات حذف التكرار (شهرين)
   studentsSyncSnapshot: "app_live_sync_students_snapshot", // #LiveSyncFix — آخر نسخة طلاب اتزامنت فعليًا (لمنع رجوع المحذوف/البلوك)
+  settingsSyncSnapshot: "app_live_sync_settings_snapshot", // #LiveSyncFix2 — نفس الإصلاح بالظبط لكن للإعدادات (باسوردات المستلمين... إلخ)
 };
 
 const TRASH_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // شهرين (60 يوم)
@@ -425,8 +426,18 @@ export default function useAppData() {
       const lastSyncedJSON      = lsGet(KEYS.studentsSyncSnapshot, null);
       const studentsChangedLocally = lastSyncedJSON === null || currentStudentsJSON !== lastSyncedJSON;
 
+      // ── #LiveSyncFix2: نفس الإصلاح بالظبط بتاع الطلاب، لكن للإعدادات ──
+      // كان أي جهاز فاتح بنسخة قديمة من الإعدادات (مثلاً قبل ما تحطي
+      // باسورد شخصي لمستلم/اسيست معيّن) بيرفع نسخته القديمة كاملة عند أي
+      // تعديل بسيط تاني (حضور/مصاريف)، فيمسح الباسورد الجديد اللي
+      // اتحفظ من جهاز تاني من غير أي تنبيه. الحل: نفس فكرة الطلاب —
+      // الجهاز ميرفعش "settings" في السحابة إلا لو هو نفسه اللي عدّلها
+      // محليًا فعلاً (بالمقارنة بآخر نسخة اتزامنت معاه).
+      const currentSettingsJSON = JSON.stringify(lsGet(KEYS.settings, {}));
+      const lastSyncedSettingsJSON = lsGet(KEYS.settingsSyncSnapshot, null);
+      const settingsChangedLocally = lastSyncedSettingsJSON === null || currentSettingsJSON !== lastSyncedSettingsJSON;
+
       const payload = {
-        settings:    lsGet(KEYS.settings,    {}),
         // #StudentPortal: لازم البيانات دي كمان عشان بوابة الطالب (لينك المجموعة)
         // تقدر تعرض حضوره ومصاريفه ودرجاته لحظيًا من أي جهاز.
         finRecords:  lsGet(KEYS.finRecords,  []),
@@ -442,9 +453,13 @@ export default function useAppData() {
         payload.students = JSON.parse(currentStudentsJSON);
         lsSet(KEYS.studentsSyncSnapshot, currentStudentsJSON);
       }
-      // merge:true إجباري هنا — عشان لو حذفنا "students" من الـ payload
-      // (مفيش تعديل محلي فيها)، الحقل يفضل زي ما هو في السحابة بدل ما
-      // يتمسح تمامًا (setDoc من غير merge بيستبدل المستند بالكامل).
+      if (settingsChangedLocally) {
+        payload.settings = JSON.parse(currentSettingsJSON);
+        lsSet(KEYS.settingsSyncSnapshot, currentSettingsJSON);
+      }
+      // merge:true إجباري هنا — عشان لو حذفنا "students"/"settings" من الـ
+      // payload (مفيش تعديل محلي فيهم)، الحقل يفضل زي ما هو في السحابة
+      // بدل ما يتمسح تمامًا (setDoc من غير merge بيستبدل المستند بالكامل).
       await setDoc(doc(db, "elshrqawy_live_state", "main"), payload, { merge: true });
       setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });
     } catch (e) {
@@ -482,7 +497,15 @@ export default function useAppData() {
 
     isApplyingRemote.current = true;
     setStudents(cloud.students || []);
-    setSettings(prev => ({ ...prev, ...(cloud.settings || {}) }));
+    setSettings(prev => {
+      const merged = { ...prev, ...(cloud.settings || {}) };
+      // #LiveSyncFix2: نحدّث سناب شوت الإعدادات بنفس النسخة اللي قبلناها من
+      // السحابة، عشان لو الجهاز ده عمل push بعد كده من غير ما يلمس
+      // الإعدادات، ميرفعش نسخة قديمة (زي قبل ما تتحفظ باسوردات المستلمين)
+      // فتمسح تعديل حصل على جهاز تاني.
+      lsSet(KEYS.settingsSyncSnapshot, JSON.stringify(merged));
+      return merged;
+    });
     setFinRecords(cloud.finRecords || []);
     setAttRecords(cloud.attRecords || []);
     setWebExams(cloud.webExams || []);
