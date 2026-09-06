@@ -2138,7 +2138,7 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
 // 🆕 عرض الأخطاء: صف ← وحدة/درس ← اختيار امتحان (مستطيل) ← طالب
 // ← صفحة تعرض أرقام الأسئلة الغلط + زر نسخ + زر طباعة
 // ══════════════════════════════════════════════════════════════
-function ExamErrorsFlow({ students, centerExams }) {
+function ExamErrorsFlow({ students, centerExams, setCenterExams }) {
   const [grade,  setGrade]  = useState("");
   const [unit,   setUnit]   = useState("");
   const [lesson, setLesson] = useState("");
@@ -2173,6 +2173,7 @@ function ExamErrorsFlow({ students, centerExams }) {
         student={gradeStudents.find(s => s.id === openStudent.id) || openStudent}
         grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
         qs={errQsFor(gradeStudents.find(s => s.id === openStudent.id) || openStudent)}
+        setCenterExams={setCenterExams}
         onBack={() => setOpenStudent(null)}
       />
     );
@@ -2221,6 +2222,13 @@ function ExamErrorsFlow({ students, centerExams }) {
         {selectedExam.fileName || "امتحان يدوي"} — {grade} — و{unit} د{lesson}
       </div>
 
+      {examNeedsQuestionText(selectedExam) && setCenterExams && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 space-y-1.5">
+          <div className="text-amber-300 text-xs">⚠️ نص الأسئلة مش محفوظ لهذا الامتحان (اتسجّل قبل تفعيل قراءة النص) — ارفعي نفس ملف الامتحان تاني عشان يظهر السؤال نفسه بدل الرقم بس.</div>
+          <RescanQuestionsButton exam={selectedExam} setCenterExams={setCenterExams} />
+        </div>
+      )}
+
       {gradeStudents.length === 0 ? (
         <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
       ) : (
@@ -2248,8 +2256,70 @@ function ExamErrorsFlow({ students, centerExams }) {
   );
 }
 
+// امتحان محتاج إعادة رفع عشان نقرا نص الأسئلة؟ (اتسجّل قبل ميزة قراءة النص،
+// أو نص الأسئلة ناقص لأسئلة كتير منه)
+function examNeedsQuestionText(exam) {
+  if (!exam) return false;
+  const num = exam.numQuestions || 0;
+  if (!num) return false;
+  const have = Object.keys(exam.questionMeta || {}).length;
+  return have < Math.ceil(num / 2);
+}
+
+// ── زرار: رفع نفس ملف الامتحان تاني عشان نستخرج نص كل سؤال (mammoth/OCR/pdf.js)
+// ونضيفه لبيانات الامتحان المحفوظة، من غير ما نلمس أي بيانات أخطاء متسجّلة قبل كده ──
+function RescanQuestionsButton({ exam, setCenterExams }) {
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState(null);
+  const ref = useRef(null);
+
+  const handle = async (f) => {
+    if (!f) return;
+    const ext = f.name.split(".").pop().toLowerCase();
+    const isImage = ["jpg", "jpeg", "png", "webp"].includes(ext);
+    const isPdf = ext === "pdf";
+    const isDocx = ext === "docx";
+    if (!isImage && !isPdf && !isDocx) {
+      setToast({ msg: "الصيغة دي (Word قديم .doc) مش قابلة للقراءة التلقائية — حوّلي الملف لـ .docx", type: "error" });
+      return;
+    }
+    setBusy(true);
+    try {
+      let rawText = "";
+      if (isDocx) rawText = await extractTextFromDocx(f);
+      else if (isImage) rawText = await ocrRecognize(f);
+      else if (isPdf) rawText = await extractTextFromPdf(f);
+      const { questionMeta } = parseQuestionsFromText(rawText);
+      const n = questionMeta ? Object.keys(questionMeta).length : 0;
+      if (!n) {
+        setToast({ msg: "⚠️ مقدرتش أقرا نص الأسئلة من الملف ده", type: "error" });
+      } else {
+        setCenterExams(p => (p || []).map(e => e.id === exam.id
+          ? { ...e, questionMeta: { ...(e.questionMeta || {}), ...questionMeta } }
+          : e));
+        setToast({ msg: `✓ اتضاف نص ${n} سؤال — هيظهر بدل الرقم دلوقتي`, type: "success" });
+      }
+    } catch {
+      setToast({ msg: "⚠️ حصل خطأ أثناء قراءة الملف", type: "error" });
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div>
+      <button type="button" disabled={busy} onClick={() => ref.current?.click()}
+        className="text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded-lg px-2.5 py-1.5 disabled:opacity-50">
+        {busy ? "⏳ جاري القراءة..." : "📄 رفع ملف الامتحان تاني لقراءة نص الأسئلة"}
+      </button>
+      <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden"
+        onChange={e => { handle(e.target.files?.[0]); e.target.value = ""; }} />
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </div>
+  );
+}
+
 // ── صفحة عرض أخطاء طالب واحد + نسخ + طباعة ──
-function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, onBack }) {
+function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCenterExams, onBack }) {
   const [toast, setToast] = useState(null);
 
   const descFor = ({ q, p }) => {
@@ -2303,6 +2373,13 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, onBack 
         </div>
         <div className="text-red-400 text-xs font-bold shrink-0">{qs.length} غلط</div>
       </div>
+
+      {examNeedsQuestionText(exam) && setCenterExams && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 space-y-1.5">
+          <div className="text-amber-300 text-xs">⚠️ نص الأسئلة مش محفوظ لهذا الامتحان — ارفعي نفس الملف تاني عشان يظهر السؤال نفسه.</div>
+          <RescanQuestionsButton exam={exam} setCenterExams={setCenterExams} />
+        </div>
+      )}
 
       {qs.length === 0 ? (
         <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">✅</div><div className="text-sm">مفيش أخطاء مسجَّلة لهذا الطالب في هذا الامتحان</div></div>
@@ -2632,7 +2709,7 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
         </div>
 
         {activePanel === "errors"     && <ExamCorrectionFlow     students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
-        {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} />}
+        {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
     );
