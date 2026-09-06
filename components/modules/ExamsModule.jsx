@@ -1128,13 +1128,17 @@ function ExamErrorEntry({ students, setStudents, addActivity, centerExams, setCe
 }
 
 function ExamPanelAlerts({ students, setStudents, addActivity, centerExams, setCenterExams }) {
-  const [tab, setTab] = useState("record"); // record = تسجيل الأخطاء (الافتراضي الجديد) | notif = التنبيهات القديمة
+  const [tab, setTab] = useState("record"); // record = تسجيل الأخطاء (الافتراضي) | report = تقرير الأخطاء | notif = التنبيهات القديمة
   return (
     <div className="space-y-4">
       <div className="flex gap-1 bg-slate-800 rounded-xl p-1">
         <button onClick={() => setTab("record")}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "record" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
-          🎯 تسجيل أخطاء الأسئلة
+          🎯 تسجيل الأخطاء
+        </button>
+        <button onClick={() => setTab("report")}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "report" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
+          🧾 تقرير الأخطاء
         </button>
         <button onClick={() => setTab("notif")}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "notif" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
@@ -1142,6 +1146,7 @@ function ExamPanelAlerts({ students, setStudents, addActivity, centerExams, setC
         </button>
       </div>
       {tab === "record" && <ExamErrorEntry students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
+      {tab === "report" && <ExamMistakesReport students={students} centerExams={centerExams} />}
       {tab === "notif"  && <ExamPanelAlertsOld students={students} />}
     </div>
   );
@@ -1710,10 +1715,10 @@ function ExamMistakesReport({ students, centerExams }) {
 
   const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
 
-  // وصف السؤال: من questionMeta اللي اتسجّل وقت رفع الامتحان لو موجود، وإلا رقم السؤال زي ما هو
+  // وصف السؤال: رقم السؤال دايمًا + نص السؤال (لو متسجّل من ملف الوورد وقت رفع الامتحان)
   const descFor = q => {
     const d = linkedExam?.questionMeta?.[q];
-    return d && d.trim() ? d.trim() : `سؤال ${q}`;
+    return d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
   };
 
   // كل طالب في الصف له أخطاء مسجَّلة (من قسم "التصحيح") في نفس الوحدة/الدرس ده
@@ -1836,34 +1841,12 @@ function ExamMistakesReport({ students, centerExams }) {
   );
 }
 
-// ─── حاوية قسم "الأخطاء": تقرير الأخطاء (الافتراضي الجديد) + لوحة
-// التحكم القديمة (إحصائيات + تصحيح أوراق الامتحانات) في تاب تاني ───
-function ExamPanelErrorsHub({ questions, webExams, centerExams, setCenterExams, students }) {
-  const [tab, setTab] = useState("report");
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-1 bg-slate-800 rounded-xl p-1">
-        <button onClick={() => setTab("report")}
-          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "report" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
-          🧾 تقرير الأخطاء
-        </button>
-        <button onClick={() => setTab("dashboard")}
-          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${tab === "dashboard" ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
-          🎛️ لوحة التحكم
-        </button>
-      </div>
-      {tab === "report"    && <ExamMistakesReport students={students} centerExams={centerExams} />}
-      {tab === "dashboard" && <ExamPanelDashboard questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
-    </div>
-  );
-}
-
 // ══════════════════════════════════════════════════════════════
 // Main ExamsModule
 // ══════════════════════════════════════════════════════════════
 const PANELS = [
-  { key: "errors",     icon: "🟦", label: "التصحيح",    desc: "تقرير أخطاء الطلاب حسب الصف والوحدة والدرس + لوحة تصحيح الأوراق",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
-  { key: "correction", icon: "🟥", label: "الأخطاء",    desc: "تسجيل خطأ كل سؤال لكل طالب + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
+  { key: "errors",     icon: "🟦", label: "التصحيح",    desc: "تصحيح أوراق الامتحانات (اختيار من متعدد)",  color: "from-blue-600 to-blue-700",     border: "border-blue-500/25",    glow: "shadow-blue-500/10"    },
+  { key: "correction", icon: "🟥", label: "الأخطاء",    desc: "تسجيل خطأ كل سؤال لكل طالب + تقرير الأخطاء + تنبيهات",  color: "from-red-600 to-rose-700",      border: "border-red-500/25",     glow: "shadow-red-500/10"     },
   { key: "exams",      icon: "📝", label: "الامتحانات", desc: "رفع امتحان (Word/PDF/صورة) لكل صف ووحدة ودرس", color: "from-violet-600 to-purple-700", border: "border-violet-500/25",  glow: "shadow-violet-500/10"  },
   { key: "web",        icon: "🌐", label: "الويب",       desc: "ربط الامتحانات بالمحتوى التعليمي",    color: "from-emerald-600 to-green-700", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
 ];
@@ -2240,7 +2223,7 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
           </div>
         </div>
 
-        {activePanel === "errors"     && <ExamPanelErrorsHub     questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
+        {activePanel === "errors"     && <ExamPanelDashboard      questions={questions} webExams={webExams} centerExams={centerExams} setCenterExams={setCenterExams} students={students} />}
         {activePanel === "correction" && <ExamPanelAlerts        students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "exams"      && <ExamUploadLinked       students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
