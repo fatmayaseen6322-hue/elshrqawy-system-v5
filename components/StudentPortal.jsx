@@ -75,25 +75,33 @@ export default function StudentPortal({ grade, group }) {
       .sort((a, b) => (a.e.date < b.e.date ? 1 : -1));
   }, [student, cloud]);
 
-  // أخطاء الامتحانات الورقية (المصححة بالكاميرا) — من student.examErrors،
-  // بنترجم رقم كل سؤال لوصفه الفعلي عن طريق questionMeta بتاع centerExams
-  // المرتبط بنفس الصف/الوحدة/الدرس (نفس منطق تقرير الأخطاء عند المستر).
+  // أخطاء الامتحانات الورقية (المصححة بالكاميرا/يدويًا) — من student.examErrors،
+  // بنربطها بنفس الامتحان بالظبط (examId) لو موجود عشان النص والإجابة يطلعوا
+  // مظبوطين حتى لو فيه أكتر من امتحان على نفس الوحدة/الدرس، ولو examId مش
+  // موجود (بيانات قديمة) بنرجع للربط بالصف/الوحدة/الدرس زي الأول.
   const myPaperErrors = useMemo(() => {
     if (!student || !cloud) return [];
     const errs = student.examErrors || [];
-    const byLesson = {};
+    const byExam = {};
     errs.forEach(e => {
-      const key = `${e.grade}__${e.unit}__${e.lesson}`;
-      if (!byLesson[key]) byLesson[key] = { grade: e.grade, unit: e.unit, lesson: e.lesson, qs: new Set() };
-      byLesson[key].qs.add(e.q);
+      const key = e.examId ? `id:${e.examId}` : `${e.grade}__${e.unit}__${e.lesson}`;
+      if (!byExam[key]) byExam[key] = { grade: e.grade, unit: e.unit, lesson: e.lesson, examId: e.examId || null, qs: new Set() };
+      byExam[key].qs.add(e.q);
     });
-    return Object.values(byLesson).map(g => {
-      const linkedExam = (cloud.centerExams || []).find(e => e.grade === g.grade && String(e.unit) === String(g.unit) && String(e.lesson) === String(g.lesson));
+    return Object.values(byExam).map(g => {
+      const linkedExam = g.examId
+        ? (cloud.centerExams || []).find(e => e.id === g.examId)
+        : (cloud.centerExams || []).find(e => e.grade === g.grade && String(e.unit) === String(g.unit) && String(e.lesson) === String(g.lesson));
       return {
         ...g,
         qs: [...g.qs].sort((a, b) => a - b).map(q => {
           const d = linkedExam?.questionMeta?.[q];
-          return { q, desc: d && d.trim() ? d.trim() : `سؤال ${q}` };
+          const a = linkedExam?.questionAnswers?.[q];
+          return {
+            q,
+            desc: d && d.trim() ? d.trim() : `سؤال ${q}`,
+            answer: a && a.trim() ? a.trim() : "",
+          };
         }),
       };
     });
@@ -223,7 +231,7 @@ export default function StudentPortal({ grade, group }) {
                       <div className="text-xs text-slate-400 mb-1.5">{g.grade} — وحدة {g.unit} — درس {g.lesson}</div>
                       <div className="flex flex-wrap gap-1.5">
                         {g.qs.map((q, qi) => (
-                          <button key={qi} onClick={() => setOpenWrong({ desc: q.desc })}
+                          <button key={qi} onClick={() => setOpenWrong({ desc: q.desc, answer: q.answer })}
                             className="text-[11px] px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 active:scale-95">
                             {q.desc} ↗
                           </button>
@@ -264,7 +272,18 @@ export default function StudentPortal({ grade, group }) {
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setOpenWrong(null)}>
             <div className="bg-slate-900 border border-slate-700 rounded-2xl p-4 max-w-sm w-full" onClick={e => e.stopPropagation()}>
               {openWrong.desc ? (
-                <div className="text-sm text-slate-200">{openWrong.desc}</div>
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-emerald-400 text-[11px] font-bold mb-1">السؤال</div>
+                    <div className="text-sm text-slate-200">{openWrong.desc}</div>
+                  </div>
+                  {openWrong.answer && (
+                    <div className="pt-2 border-t border-slate-700/40">
+                      <div className="text-emerald-400 text-[11px] font-bold mb-1">✓ الإجابة الصحيحة</div>
+                      <div className="text-sm text-emerald-300">{openWrong.answer}</div>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <>
                   <div className="text-sm text-slate-200 font-bold mb-3">{openWrong.text}</div>

@@ -2273,6 +2273,7 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
         grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
         qs={errQsFor(gradeStudents.find(s => s.id === openStudent.id) || openStudent)}
         setCenterExams={setCenterExams}
+        role={role}
         onBack={() => setOpenStudent(null)}
       />
     );
@@ -2345,6 +2346,10 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
           <div className="text-amber-300 text-xs">⚠️ نص الأسئلة مش محفوظ لهذا الامتحان (اتسجّل قبل تفعيل قراءة النص) — ارفعي نفس ملف الامتحان تاني عشان يظهر السؤال نفسه بدل الرقم بس.</div>
           <RescanQuestionsButton exam={selectedExam} setCenterExams={setCenterExams} />
         </div>
+      )}
+
+      {role === "admin" && setCenterExams && (
+        <ExamAnswersConfig exam={selectedExam} setCenterExams={setCenterExams} />
       )}
 
       {gradeStudents.length === 0 ? (
@@ -2436,15 +2441,57 @@ function RescanQuestionsButton({ exam, setCenterExams }) {
   );
 }
 
+// ── مستطيل صغير قابل للطي (المستر بس): كتابة "الإجابة النموذجية" لكل سؤال
+// عشان تظهر للطالب في بوابة الويب جنب السؤال نفسه لما يفتح صفحته ويلاقي
+// أخطائه — ده اللي بيربط قسم "الأخطاء" ببوابة الطالب فعليًا ──
+function ExamAnswersConfig({ exam, setCenterExams }) {
+  const [open, setOpen] = useState(false);
+  const numQ = exam?.numQuestions || 0;
+  const meta = exam?.questionMeta || {};
+  const answers = exam?.questionAnswers || {};
+  if (!numQ) return null;
+
+  const setAnswer = (q, val) => {
+    setCenterExams(p => (p || []).map(e => e.id === exam.id
+      ? { ...e, questionAnswers: { ...(e.questionAnswers || {}), [q]: val } }
+      : e));
+  };
+
+  const answeredCount = Object.values(answers).filter(a => a && a.trim()).length;
+
+  return (
+    <div className="space-y-1.5">
+      <button onClick={() => setOpen(o => !o)} className="text-[11px] text-emerald-400 flex items-center gap-1">
+        ✏️ الإجابات النموذجية ({answeredCount}/{numQ}) — بتظهر للطالب في بوابة الويب {open ? "▲" : "▼"}
+      </button>
+      {open && (
+        <div className="bg-slate-900/60 border border-slate-700/40 rounded-xl p-2 max-h-72 overflow-y-auto space-y-2">
+          {Array.from({ length: numQ }, (_, i) => i + 1).map(q => (
+            <div key={q} className="bg-slate-800/60 rounded-lg p-2 space-y-1">
+              <div className="text-[11px] text-slate-400">س{q}: {meta[q] || "—"}</div>
+              <textarea value={answers[q] || ""} onChange={e => setAnswer(q, e.target.value)}
+                placeholder="اكتبي الإجابة النموذجية هنا عشان تظهر للطالب..." rows={2}
+                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-2 py-1.5 text-white text-[11px] focus:outline-none resize-none" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── صفحة عرض أخطاء طالب واحد + نسخ + طباعة ──
-function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCenterExams, onBack }) {
+function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCenterExams, role, onBack }) {
   const [toast, setToast] = useState(null);
 
   const descFor = ({ q, p }) => {
     const totalParts = partsForQuestion(exam, q);
     const d = exam?.questionMeta?.[q];
-    const base = d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
-    return totalParts > 1 ? `${base} — نقطة ${p}` : base;
+    const a = exam?.questionAnswers?.[q];
+    let base = d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
+    if (totalParts > 1) base += ` — نقطة ${p}`;
+    if (a && a.trim()) base += ` | الإجابة: ${a.trim()}`;
+    return base;
   };
 
   const doCopy = () => {
@@ -2497,6 +2544,10 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCent
           <div className="text-amber-300 text-xs">⚠️ نص الأسئلة مش محفوظ لهذا الامتحان — ارفعي نفس الملف تاني عشان يظهر السؤال نفسه.</div>
           <RescanQuestionsButton exam={exam} setCenterExams={setCenterExams} />
         </div>
+      )}
+
+      {role === "admin" && setCenterExams && (
+        <ExamAnswersConfig exam={exam} setCenterExams={setCenterExams} />
       )}
 
       {qs.length === 0 ? (
