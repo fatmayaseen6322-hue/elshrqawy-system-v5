@@ -857,7 +857,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   onClick={() => { setSelGrade(g); setSelGroup(""); setTableOpen(true); }}
                   className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/40 border border-slate-700/40 hover:bg-emerald-600/15 hover:border-emerald-500/40 transition-all text-right">
                   <span className="text-slate-300 text-xs font-bold">{g}</span>
-                  <span className="text-amber-300 text-xs font-black">مطلوب: {fmtM(currentGradeRequired[g] || 0)}</span>
+                  {role === "admin" && <span className="text-amber-300 text-xs font-black">مطلوب: {fmtM(currentGradeRequired[g] || 0)}</span>}
                 </button>
               ))}
               <button
