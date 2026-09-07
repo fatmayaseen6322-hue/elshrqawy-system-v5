@@ -140,7 +140,7 @@ function ConfirmModal({ msg, onConfirm, onCancel }) {
   );
 }
 
-export default function SettingsModule({ settings, setSettings, students, setStudents, finRecords, setFinRecords, webExams, setWebExams, centerExams, setCenterExams, examQs, setExamQs, cloudBackupState, backupToCloud, restoreFromCloud, liveSyncState, firestoreUsagePct, addActivity, onClose }) {
+export default function SettingsModule({ settings, setSettings, students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, setWebExams, centerExams, setCenterExams, examQs, setExamQs, cloudBackupState, backupToCloud, restoreFromCloud, liveSyncState, firestoreUsagePct, addActivity, onClose }) {
   const [confirmModal, setConfirmModal] = useState(null);
   const [view, setView] = useState("main");
   const [toast, setToast] = useState(null);
@@ -151,6 +151,15 @@ export default function SettingsModule({ settings, setSettings, students, setStu
   const [caP, setCaP] = useState(""); const [caConfP, setCaConfP] = useState(""); const [caErr, setCaErr] = useState("");
   const [pwdReceiverId, setPwdReceiverId] = useState(null); const [pwdNew, setPwdNew] = useState(""); const [pwdConfirm, setPwdConfirm] = useState(""); const [pwdErr, setPwdErr] = useState("");
   const [unP, setUnP] = useState(""); const [unConfP, setUnConfP] = useState(""); const [unErr, setUnErr] = useState("");
+  const [buP, setBuP] = useState(""); const [buConfP, setBuConfP] = useState(""); const [buErr, setBuErr] = useState("");
+  // ── تراجع شامل (يوم / ساعة) — يلغي تسجيل الحضور و/أو المصاريف لأي يوم أو ساعة معينة ──
+  const [buUnlocked, setBuUnlocked] = useState(false);
+  const [buPwdInput, setBuPwdInput] = useState(""); const [buGateErr, setBuGateErr] = useState("");
+  const [buDate, setBuDate] = useState(TODAY);
+  const [buHourOn, setBuHourOn] = useState(false);
+  const [buHour, setBuHour] = useState("08");
+  const [buDoFin, setBuDoFin] = useState(true);
+  const [buDoAtt, setBuDoAtt] = useState(true);
   const [notifs, setNotifs] = useState({ ...settings.notifs });
   const [waList, setWaList] = useState([...settings.waNumbers]);
   const [newNum, setNewNum] = useState(""); const [newType, setNewType] = useState("admin"); const [newLabel, setNewLabel] = useState("");
@@ -226,6 +235,42 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     resetFns.forEach(fn => fn(""));
     setView("main");
   };
+  // ── تراجع شامل — منطق المطابقة والحذف ──
+  const buGateSubmit = async () => {
+    const ok = await checkPwd(buPwdInput, settings?.bulkUndoPassword);
+    if (!ok) { setBuGateErr("كلمة السر غلط"); return; }
+    setBuUnlocked(true); setBuPwdInput(""); setBuGateErr("");
+  };
+  const buMatchFin = r => {
+    if (!(r?.timestamp || "").startsWith(buDate)) return false;
+    if (buHourOn) return (r.timestamp || "").slice(11, 13) === buHour;
+    return true;
+  };
+  const buMatchAtt = r => {
+    if ((r?.date || "") !== buDate) return false;
+    if (buHourOn) {
+      const h = r?.ts ? new Date(r.ts).getHours().toString().padStart(2, "0") : null;
+      return h === buHour;
+    }
+    return true;
+  };
+  const buFinCount = buDoFin ? (finRecords || []).filter(buMatchFin).length : 0;
+  const buAttCount = buDoAtt ? (attRecords || []).filter(buMatchAtt).length : 0;
+  const buExecute = () => {
+    const finN = buFinCount, attN = buAttCount;
+    if (finN === 0 && attN === 0) { setToast({ msg: "مفيش أي سجلات مطابقة", type: "error" }); return; }
+    setConfirmModal({
+      msg: `هيتم إلغاء ${finN} سجل مصاريف و${attN} سجل حضور ليوم ${buDate}${buHourOn ? ` — الساعة ${buHour}:00` : ""}. الإجراء ده نهائي ومش هيترجع. متأكدة؟`,
+      onConfirm: () => {
+        if (buDoFin) setFinRecords(prev => (prev || []).filter(r => !buMatchFin(r)));
+        if (buDoAtt) setAttRecords(prev => (prev || []).filter(r => !buMatchAtt(r)));
+        addActivity?.("تراجع شامل", `${buDate}${buHourOn ? ` (${buHour}:00)` : ""} — مصاريف:${finN} حضور:${attN}`);
+        setToast({ msg: `✓ تم إلغاء ${finN + attN} سجل`, type: "success" });
+        setConfirmModal(null);
+      }
+    });
+  };
+
   const addWa = () => {
     if (!newNum || newNum.length < 11) { setToast({ msg: "رقم غير صحيح", type: "error" }); return; }
     const n = { id: Date.now(), number: newNum, type: newType, label: newLabel || newType };
@@ -279,7 +324,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     }; r.readAsText(f); e.target.value = "";
   };
   const Back = ({ to = "main" }) => <button onClick={() => setView(to)} className="text-slate-400 hover:text-white text-sm flex items-center gap-1 mb-5">← رجوع</button>;
-  const viewTitles = { passwords: "كلمة السر", password: "كلمة سر المستر", cashierpwd: "كلمة سر الاسيست", undopwd: "كلمة سر تراجع المصاريف", receivers: "أسماء المستلمين (التحصيل)" };
+  const viewTitles = { passwords: "كلمة السر", password: "كلمة سر المستر", cashierpwd: "كلمة سر الاسيست", undopwd: "كلمة سر تراجع المصاريف", bulkundopwd: "كلمة سر التراجع الشامل", bulkundo: "تراجع", receivers: "أسماء المستلمين (التحصيل)" };
   const menu = [
     { i: "🏫", l: "اسم السنتر",         d: settings.centerName,              v: "center"        },
     { i: "🔑", l: "كلمة السر",           d: "المستر · الاسيست",              v: "passwords"     },
@@ -290,6 +335,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     { i: "📱", l: "أرقام الواتساب",     d: `${waList.length} أرقام`,          v: "whatsapp"      },
     { i: "🔔", l: "الإشعارات",          d: "تفضيلات",                         v: "notifs"        },
     { i: "💾", l: "النسخ الاحتياطي",    d: "تصدير / استيراد",                v: "backup"        },
+    { i: "↩️", l: "تراجع",              d: "إلغاء حضور/مصاريف يوم أو ساعة معينة", v: "bulkundo"  },
     { i: "ℹ️", l: "عن النظام",          d: "v9.0",                            v: "about"         },
   ];
 
@@ -341,6 +387,31 @@ export default function SettingsModule({ settings, setSettings, students, setStu
                   </div>
                   <span className="text-slate-600 shrink-0">←</span>
                 </button>
+                <button onClick={() => setView("bulkundopwd")} className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-800 transition-colors text-right">
+                  <span className="text-2xl w-8 text-center shrink-0">🗑️</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-slate-100 text-sm font-medium">كلمة سر التراجع الشامل</div>
+                    <div className="text-slate-500 text-xs">{settings.bulkUndoPassword ? "✓ مُعيَّنة — دخول لتعديل كلمة السر" : "بدون كلمة سر حاليًا (اختيارية) — دخول لتحديدها"}</div>
+                  </div>
+                  <span className="text-slate-600 shrink-0">←</span>
+                </button>
+              </div>
+            </>
+          )}
+          {view === "bulkundopwd" && (
+            <>
+              <Back to="passwords" />
+              <div className="space-y-4">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-red-400 text-xs">
+                  🗑️ كلمة سر زرار "تراجع" الشامل (إلغاء حضور/مصاريف يوم أو ساعة كاملة). سيبها فاضية لو عايزة الزرار يشتغل من غير كلمة سر.
+                </div>
+                <Field label="كلمة المرور الجديدة"><Inp type="password" value={buP} onChange={e => { setBuP(e.target.value); setBuErr(""); }} /></Field>
+                <Field label="تأكيد"><Inp type="password" value={buConfP} onChange={e => { setBuConfP(e.target.value); setBuErr(""); }} /></Field>
+                {buErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {buErr}</div>}
+                <Btn variant="primary" size="lg" className="w-full" onClick={() => changeRolePwd("التراجع الشامل", "bulkUndoPassword", buP, buConfP, setBuErr, [setBuP, setBuConfP])}>💾 حفظ كلمة سر التراجع</Btn>
+                {settings.bulkUndoPassword && (
+                  <Btn variant="ghost" size="lg" className="w-full" onClick={() => { save("bulkUndoPassword", "", "✓ اتشالت كلمة السر"); setView("passwords"); }}>🗑️ شيل كلمة السر (خليه بدون حماية)</Btn>
+                )}
               </div>
             </>
           )}
@@ -500,6 +571,52 @@ export default function SettingsModule({ settings, setSettings, students, setStu
               )}
             </div>
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4"><div className="text-blue-400 font-bold text-sm mb-1">💾 النسخ الاحتياطي</div><div className="text-slate-400 text-xs">احتفظ بنسخة من كل البيانات</div></div><Btn variant="primary" size="lg" className="w-full" onClick={exportData}>📤 تصدير البيانات (JSON)</Btn><div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2"><div className="text-slate-300 font-bold text-sm">📄 كشف الطلاب (Word)</div><div className="text-slate-500 text-xs">تصدير قائمة كل الطلاب في ملف Word جاهز للطباعة</div><Btn variant="ghost" size="lg" className="w-full" disabled={exportingWord} onClick={exportWord}>{exportingWord ? "⏳ جاري التجهيز..." : "📄 تصدير كشف Word"}</Btn></div><div className="pt-1"><PrinterResetButton /></div><input ref={importRef} type="file" accept=".json" className="hidden" onChange={importData} /><Btn variant="ghost" size="lg" className="w-full" onClick={() => importRef.current?.click()}>📥 استيراد بيانات</Btn>{backupToCloud && <div className="border-t border-slate-800 pt-4 space-y-3"><div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-4"><div className="text-violet-400 font-bold text-sm mb-1">☁️ نسخة سحابية (Firebase)</div><div className="text-slate-400 text-xs">التخزين الأساسي محلي دايمًا. النسخة السحابية بقت تلقائية يوميًا (بترفع بس الجديد من المصاريف/الغياب/الدرجات)، وزرار \"رفع نسخة\" بيرفع نسخة كاملة من كل قسم في البرنامج — الطلاب (بالبلوك)، كل الباسوردات والأرقام السرية، الامتحانات وبنك الأسئلة والتصحيح والأخطاء، وسجل أنشطة برج المراقبة — عشان تقدري تجيبيهم على أي جهاز تاني بزرار \"استرجاع من السحابة\"</div></div><Btn variant="primary" size="lg" className="w-full" disabled={cloudBackupState?.status === "uploading"} onClick={backupToCloud}>{cloudBackupState?.status === "uploading" ? "⏳ جاري الرفع..." : "☁️ رفع نسخة على السحابة"}</Btn><Btn variant="ghost" size="lg" className="w-full" disabled={cloudBackupState?.status === "downloading"} onClick={() => setConfirmModal({ msg: "استرجاع النسخة السحابية هيستبدل كل البيانات الحالية على الجهاز ده. متأكد؟", onConfirm: () => { restoreFromCloud(); setConfirmModal(null); } })}>{cloudBackupState?.status === "downloading" ? "⏳ جاري الاسترجاع..." : "📥 استرجاع من السحابة"}</Btn>{cloudBackupState?.message && <div className={`text-xs text-center rounded-xl px-3 py-2 ${cloudBackupState.status === "error" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"}`}>{cloudBackupState.message}</div>}</div>}<div className="border-t border-slate-800 pt-4"><div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 space-y-3"><div className="text-red-400 font-bold text-sm">⚠️ منطقة الخطر</div><Btn variant="danger" className="w-full" onClick={() => setConfirmModal({ msg: "هل تريد حذف كل بيانات الطلاب؟ لا يمكن التراجع.", onConfirm: () => { setStudents([]); setConfirmModal(null); setToast({ msg: "✓ تم الحذف", type: "success" }); } })}>🗑 إعادة تعيين</Btn></div></div></div></>}
+          {view === "bulkundo" && (
+            <>
+              <Back />
+              {settings.bulkUndoPassword && !buUnlocked ? (
+                <div className="space-y-4">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5 text-amber-400 text-xs">🔒 محتاجة تدخلي كلمة سر التراجع الشامل الأول</div>
+                  <Field label="كلمة السر"><Inp type="password" value={buPwdInput} onChange={e => { setBuPwdInput(e.target.value); setBuGateErr(""); }} /></Field>
+                  {buGateErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-sm">⚠️ {buGateErr}</div>}
+                  <Btn variant="primary" size="lg" className="w-full" onClick={buGateSubmit}>دخول</Btn>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 text-red-400 text-xs">
+                    ⚠️ هيلغي تسجيل الحضور و/أو المصاريف لليوم (أو الساعة) اللي هتحدديها — كأنها ما اتسجلتش خالص. الإجراء ده نهائي.
+                  </div>
+                  <Field label="اليوم"><Inp type="date" value={buDate} onChange={e => setBuDate(e.target.value)} /></Field>
+                  <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3">
+                    <span className="text-slate-300 text-sm">تحديد ساعة معينة بس</span>
+                    <Toggle on={buHourOn} onChange={setBuHourOn} />
+                  </div>
+                  {buHourOn && (
+                    <Field label="الساعة">
+                      <Sel value={buHour} onChange={e => setBuHour(e.target.value)}>
+                        {Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0")).map(h => (
+                          <option key={h} value={h}>{h}:00</option>
+                        ))}
+                      </Sel>
+                    </Field>
+                  )}
+                  <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3">
+                    <span className="text-slate-300 text-sm">💰 المصاريف</span>
+                    <Toggle on={buDoFin} onChange={setBuDoFin} />
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3">
+                    <span className="text-slate-300 text-sm">✅ الحضور</span>
+                    <Toggle on={buDoAtt} onChange={setBuDoAtt} />
+                  </div>
+                  <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-3 text-center">
+                    <div className="text-slate-400 text-xs mb-1">هيتم إلغاء</div>
+                    <div className="text-white font-bold text-sm">{buFinCount} سجل مصاريف · {buAttCount} سجل حضور</div>
+                  </div>
+                  <Btn variant="danger" size="lg" className="w-full" onClick={buExecute}>🗑️ نفّذ التراجع</Btn>
+                </div>
+              )}
+            </>
+          )}
           {view === "about" && <><Back /><div className="space-y-4"><div className="text-center py-6"><div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-600 via-violet-600 to-indigo-700 flex items-center justify-center mx-auto mb-4 text-4xl">🏫</div><div className="text-white font-black text-xl">Elshrqawy System</div><div className="text-slate-400 text-sm mt-1">نظام إدارة المراكز التعليمية</div><div className="text-blue-400 font-bold mt-2">الإصدار 9.1.2</div></div>{[{l:"الطلاب",v:`${students.length} طالب`},{l:"الوحدات",v:"7 وحدات"},{l:"آخر تحديث",v:TODAY}].map(x => <div key={x.l} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex justify-between"><span className="text-slate-400 text-sm">{x.l}</span><span className="text-white font-bold text-sm">{x.v}</span></div>)}<UpdateChecker /></div></>}
         </div>
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}

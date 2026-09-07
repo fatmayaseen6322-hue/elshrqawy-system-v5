@@ -706,7 +706,7 @@ export default function App() {
       <PrintStatusToast />
       {showSettings && (
         <Suspense fallback={<ModuleLoading />}>
-          <SettingsModule settings={settings} setSettings={setSettings} students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} examQs={examQs || []} setExamQs={setExamQs} cloudBackupState={cloudBackupState} backupToCloud={backupToCloud} restoreFromCloud={restoreFromCloud} liveSyncState={liveSyncState} firestoreUsagePct={firestoreUsagePct} addActivity={addActivity} onClose={() => setShowSettings(false)} />
+          <SettingsModule settings={settings} setSettings={setSettings} students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} examQs={examQs || []} setExamQs={setExamQs} cloudBackupState={cloudBackupState} backupToCloud={backupToCloud} restoreFromCloud={restoreFromCloud} liveSyncState={liveSyncState} firestoreUsagePct={firestoreUsagePct} addActivity={addActivity} onClose={() => setShowSettings(false)} />
         </Suspense>
       )}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
