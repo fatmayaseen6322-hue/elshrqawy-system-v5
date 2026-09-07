@@ -285,10 +285,13 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
 
   // ── حفظ تلقائي بالكامل: مفيش زرار حفظ خالص — بمجرد ما المبلغ والمستلم
   // يبقوا موجودين وصح، بيتسجل الدفعة على طول من غير أي ضغطة زرار.
-  // ده بيغطي حالة: مستلم مقفول (Assist) + مبلغ افتراضي جاهز من غير ما تلمسيه،
-  // وأي تغيير لاحق في المبلغ أو المستلم بيحدّث السجل فورًا بنفس الطريقة.
+  // ده بيغطي حالة: مستلم مقفول (Assist) بس — بيتسجل أوتوماتيك بمجرد فتح الصف
+  // من غير أي ضغطة، لأنه مفيش حاجة تتختار أصلاً (اسمها ثابت). أما المستر
+  // (مستلم مش مقفول) فـ لازم يأكد كل طالب بنفسه (اختيار من القائمة أو زرار
+  // "✓ تسجيل")، عشان تعبئة "المستلم الافتراضي" التلقائية (globalReceiver)
+  // للطلاب اللي جايين متتحولش لتسجيل فعلي من غير قصد.
   useEffect(() => {
-    if (!saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0) {
+    if (lockedReceiver && !saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0) {
       const rec = buildRec(receiverId, receiverName);
       onSave(rec);
       setLocalRecord(rec);
@@ -296,7 +299,17 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
       setEditing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saved, receiverId, amount]);
+  }, [saved, receiverId, amount, lockedReceiver]);
+
+  // ── تسجيل يدوي صريح للمستر: لما المستلم يبقى متعبى مسبقًا (من اختيار طالب
+  // قبله) بس لسه محدش أكد إن الطالب ده فعلاً دفع ──
+  const confirmRegister = () => {
+    const rec = buildRec(receiverId, receiverName);
+    onSave(rec);
+    setLocalRecord(rec);
+    setSaved(true);
+    setEditing(false);
+  };
 
   // ── حفظ تلقائي فوري لحظة تعديل المبلغ (بدون انتظار الخروج من الخانة) ──
   // بيضمن إن أي تعديل في مصاريف الطالب يفضل ثابت حتى لو قفلت الجدول أو غيّرت الصف وردّي تاني.
@@ -416,7 +429,11 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
         <td className="px-2 py-3 text-center">
           {saved && !editing
             ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
-            : <span className="text-slate-500 text-[10px]" title="بيتسجل تلقائي بمجرد اختيار المستلم والمبلغ">⏳ تلقائي</span>
+            : (!lockedReceiver && !saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0)
+              ? <button onClick={confirmRegister} title="أكد إن الطالب ده فعلاً دفع" className="px-2 h-8 rounded-lg bg-emerald-700/30 border border-emerald-600/40 text-emerald-300 text-[11px] font-bold hover:bg-emerald-700/50 whitespace-nowrap">✓ تسجيل</button>
+              : lockedReceiver
+                ? <span className="text-slate-500 text-[10px]" title="بيتسجل تلقائي بمجرد فتح الصف">⏳ تلقائي</span>
+                : <span className="text-slate-600 text-[10px]" title="اختاري المستلم من القائمة الأول">اختر مستلم</span>
           }
         </td>
         <td className="px-2 py-3 text-center">
