@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, MONTHS_AR, TODAY } from "../../constants";
-import { pct, scC, isBlocked, normalizeAr } from "../../utils";
+import { pct, scC, isBlocked, normalizeAr, isMonthBlocked, isMonthExempt } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Bar } from "../ui";
 
@@ -127,7 +127,11 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
       return fee;
     };
     let total = 0;
-    for (let m = startMonth; m <= currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) total += feeForMonth(m);
+    for (let m = startMonth; m <= currentMonthNum; m++) {
+      if (isMonthBlocked(s, m, currentYearNum)) continue;
+      if (isMonthExempt(s, m, currentYearNum)) continue;
+      if (!isMonthPaid(m, currentYearNum)) total += feeForMonth(m);
+    }
     return total;
   };
 
@@ -146,7 +150,11 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
     const studentFinRecords = finRecords.filter(r => r.studentId === s.id);
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
-    for (let m = startMonth; m < currentMonthNum; m++) if (!isMonthPaid(m, currentYearNum)) return m; // < مش <= — بيستبعد الشهر الحالي
+    for (let m = startMonth; m < currentMonthNum; m++) {
+      if (isMonthBlocked(s, m, currentYearNum)) continue;
+      if (isMonthExempt(s, m, currentYearNum)) continue;
+      if (!isMonthPaid(m, currentYearNum)) return m; // < مش <= — بيستبعد الشهر الحالي
+    }
     return null;
   };
   const prevDebtorsList = students

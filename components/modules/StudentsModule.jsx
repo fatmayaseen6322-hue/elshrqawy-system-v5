@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GRADES_LIST, GROUPS_MAP, TODAY, MONTHS_AR } from "../../constants";
-import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked, sortStudentsList, findStudentByName } from "../../utils";
-import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar, GradeSelect } from "../ui";
+import { pct, fmt, genSID, genStudentId, waLink, isBlocked, isMonthBlocked, isMonthExempt, getStatementMonths, sortStudentsList, findStudentByName } from "../../utils";
+import { Av, Bar, Toast, Field, Inp, Sel, Btn, DatePicker, StatusBar, GradeSelect, Toggle } from "../ui";
 import ImportStudentsModal from "./ImportStudentsModal";
 
 // المستوى الحقيقي للطالب: مبني على حاجتين مع بعض —
@@ -103,7 +103,7 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, centerExams, settings, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
+export default function StudentsModule({ students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, centerExams, settings, role, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
   const [step, setStep] = useState(startAdd ? "add" : "select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
@@ -264,8 +264,8 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
     const studentFinRecords = (finRecords || []).filter(r => r.studentId === s.id);
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
 
-    // اتسجّل بعد يوم 25 من الشهر الحالي نفسه؟ → مفيش مصاريف مطلوبة منه خالص عن الشهر ده
-    const feeWaivedThisMonth = joinYearNum === currentYearNum && joinMonthNum === currentMonthNum && joinDayNum > 25;
+    // اتسجّل بعد يوم 25 من الشهر الحالي نفسه، أو الشهر ده مُعفى يدويًا؟ → مفيش مصاريف مطلوبة منه خالص عن الشهر ده
+    const feeWaivedThisMonth = (joinYearNum === currentYearNum && joinMonthNum === currentMonthNum && joinDayNum > 25) || isMonthExempt(s, currentMonthNum, currentYearNum);
     const currentMonthActuallyPaid = isMonthPaid(currentMonthNum, currentYearNum);
     const currentMonthPaid = currentMonthActuallyPaid || feeWaivedThisMonth;
 
@@ -273,6 +273,7 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
     for (let m = startMonth; m < currentMonthNum; m++) {
       if (isMonthBlocked(s, m, currentYearNum)) continue; // شهر بلوك — مش دَين
+      if (isMonthExempt(s, m, currentYearNum)) continue; // شهر مُعفى يدويًا — مش دَين
       if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(m);
     }
 
@@ -371,6 +372,12 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
                 className="px-3 py-2 text-xs font-bold bg-blue-600/20 border-l border-slate-700/40 text-blue-300 whitespace-nowrap">
                 ✏️ تعديل
               </button>
+              {role === "admin" && (
+                <button onClick={() => setStep("finEdit")}
+                  className="px-3 py-2 text-xs font-bold bg-emerald-600/20 border-l border-slate-700/40 text-emerald-300 whitespace-nowrap">
+                  💰 تعديل مصاريف الطالب
+                </button>
+              )}
               <button onClick={() => setConfirmDel(s)}
                 className="px-3 py-2 text-xs font-bold bg-red-700/20 text-red-400 whitespace-nowrap">
                 🚫 حظر
@@ -462,6 +469,20 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
           </div>
         )}
       </div>
+    );
+  }
+
+  // ── FINANCE EDIT step (المستر بس) ────────────────────────────
+  if (step === "finEdit" && sel && role === "admin") {
+    return (
+      <StudentFinEditSubmodule
+        student={sel}
+        setStudents={setStudents}
+        setSel={setSel}
+        setStep={setStep}
+        addActivity={addActivity}
+        setToast={setToast}
+      />
     );
   }
 
@@ -788,6 +809,89 @@ function StudentPaySubmodule({ student: s, setSel, setStudents, setToast, setSte
         <Field label="ملاحظة"><Inp value={note} onChange={e => setNote(e.target.value)} placeholder="قسط..." /></Field>
       </div>
       <Btn variant="success" size="lg" className="w-full" onClick={pay}>💾 تسجيل {fmt(parseInt(amount) || 0)}</Btn>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUB: تعديل مصاريف الطالب — المستر بس (زرار 💰 في البروفايل)
+// - تاريخ الانضمام: قابل للتعديل هنا (بعكس فورم التعديل العادي اللي
+//   بيحافظ عليه ثابت عمدًا) — أي تغيير بيأثر تلقائيًا على حساب
+//   المصاريف في كل الشاشات (كشف المصاريف، برج المراقبة، البروفايل)
+//   لأنها كلها بتقرأ من نفس الحقل student.joinDate.
+// - إعفاء شهر معيّن: قائمة شهور السنة الدراسية الحالية (أغسطس..يونيو)
+//   مع مفتاح تشغيل/إيقاف لكل شهر. الشهر المُعفى بيتخزّن في
+//   student.exemptMonths (["YYYY-MM", ...]) وبيظهر "ـ" في كشف
+//   المصاريف بدل مطالبة بالدفع، ومش بيتحسب "متأخر" في أي مكان.
+// ══════════════════════════════════════════════════════════════
+function StudentFinEditSubmodule({ student: s, setStudents, setSel, setStep, addActivity, setToast }) {
+  const [joinDate, setJoinDate] = useState(s.joinDate || TODAY);
+  const [exempt, setExempt] = useState(new Set(s.exemptMonths || []));
+
+  const [curYearStr, curMonthStr] = TODAY.split("-");
+  const curYear  = parseInt(curYearStr, 10);
+  const curMonth = parseInt(curMonthStr, 10);
+  const statementStartYear = curMonth >= 8 ? curYear : curYear - 1;
+  const months = getStatementMonths(statementStartYear);
+
+  const toggleMonth = key => {
+    setExempt(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const save = () => {
+    const exemptMonths = Array.from(exempt);
+    const updated = { ...s, joinDate, exemptMonths };
+    setStudents(p => p.map(x => x.id === s.id ? updated : x));
+    setSel(updated);
+    const joinChanged  = joinDate !== (s.joinDate || TODAY);
+    const exemptChanged = JSON.stringify(exemptMonths.slice().sort()) !== JSON.stringify((s.exemptMonths || []).slice().sort());
+    const details = [
+      joinChanged ? `تاريخ الانضمام → ${joinDate}` : null,
+      exemptChanged ? `الشهور المُعفاة: ${exemptMonths.length ? exemptMonths.join("، ") : "لا يوجد"}` : null,
+    ].filter(Boolean).join(" — ");
+    addActivity?.("تعديل مصاريف طالب", `${s.name}${details ? " — " + details : ""}`);
+    setToast({ msg: `✓ تم تعديل مصاريف ${s.name}`, type: "success" });
+    setStep("profile");
+  };
+
+  return (
+    <div className="space-y-4">
+      <button onClick={() => setStep("profile")} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center gap-3">
+        <Av name={s.name} />
+        <div className="flex-1"><div className="text-white font-bold">{s.name}</div><div className="text-slate-400 text-xs">{s.grade} · مجموعة {s.group}</div></div>
+      </div>
+
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-3">
+        <div className="text-slate-400 text-xs font-bold">📅 تاريخ الانضمام</div>
+        <div className="text-slate-500 text-xs">تغيير التاريخ ده بيأثر تلقائيًا على حساب المصاريف المطلوبة في كل الشاشات.</div>
+        <DatePicker value={joinDate} onChange={setJoinDate} max={TODAY} />
+      </div>
+
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-1">
+        <div className="text-slate-400 text-xs font-bold mb-1">💸 إعفاء شهور من المصاريف</div>
+        <div className="text-slate-500 text-xs mb-2">شغّلي المفتاح جنب أي شهر عشان الطالب ما ياخدش مصاريف عنه — هيظهر "ـ" في كشف المصاريف بدل مطالبة، ومش هيتحسب "متأخر".</div>
+        <div className="divide-y divide-slate-700/30">
+          {months.map(({ month, year }) => {
+            const key = `${year}-${String(month).padStart(2, "0")}`;
+            return (
+              <div key={key} className="flex items-center justify-between py-2.5">
+                <span className="text-white text-sm">{MONTHS_AR[month - 1]} <span className="text-slate-500 text-xs">{year}</span></span>
+                <div className="flex items-center gap-2">
+                  {exempt.has(key) && <span className="text-emerald-400 text-xs font-bold">مُعفى</span>}
+                  <Toggle on={exempt.has(key)} onChange={() => toggleMonth(key)} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <Btn variant="success" size="lg" className="w-full" onClick={save}>💾 حفظ</Btn>
     </div>
   );
 }

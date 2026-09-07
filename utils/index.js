@@ -101,6 +101,25 @@ export function isMonthBlocked(s, month, year) {
   return periods.some(p => monthStart <= (p.end || "9999-12-31") && p.start <= monthEnd);
 }
 
+// هل شهر معيّن (month: 1-12, year) مُعفى يدويًا من المصاريف لهذا الطالب؟
+// (زرار "تعديل مصاريف الطالب" — المستر بس). مُخزّن في s.exemptMonths
+// كمصفوفة نصوص "YYYY-MM". شهر مُعفى بيتعامل معه كأنه "ـ" في كشف
+// المصاريف تمامًا زي الشهر اللي لسه ما انضمش فيه، ومش بيتحسب "متأخر".
+export function isMonthExempt(s, month, year) {
+  const key = `${year}-${String(month).padStart(2, "0")}`;
+  return !!((s && s.exemptMonths) || []).includes(key);
+}
+
+// شهور الكشف السنوي: أغسطس..ديسمبر من startYear، ويناير..يونيو من
+// (startYear+1) — 11 شهر بالظبط (بداية السنة الدراسية). مُشتركة بين
+// كشف المصاريف وشاشة "تعديل مصاريف الطالب" في ملف الطالب.
+export function getStatementMonths(startYear) {
+  const months = [];
+  for (let m = 8; m <= 12; m++) months.push({ month: m, year: startYear });
+  for (let m = 1; m <= 6; m++) months.push({ month: m, year: startYear + 1 });
+  return months;
+}
+
 export function lsSet(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));

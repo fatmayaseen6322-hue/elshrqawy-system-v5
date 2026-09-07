@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, GROUPS_MAP, MONTHS_AR, TODAY } from "../../constants";
-import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, checkPwd, sortStudentsList } from "../../utils";
+import { fmtM, genFinId, nowStr, isBlocked, isMonthBlocked, isMonthExempt, getStatementMonths, checkPwd, sortStudentsList } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Av, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 
@@ -23,6 +23,7 @@ import { Av, Toast, Modal, Field, Btn, GradeCircles } from "../ui";
 // وبعد كده أي شهر تاني (بما فيه الشهر اللي بعده) بيتحاسب عادي بالرسوم
 // الكاملة. لو اتسجّل يوم 15 نفسه أو قبله، الشهر ده بيتحاسب كامل زي العادي.
 function getExpectedFeeForMonth(student, month, year, gradeFees) {
+  if (isMonthExempt(student, month, year)) return 0;
   const base = Math.max(0, (gradeFees?.[student?.grade] || 0) - (student?.discount || 0));
   const parts = (student?.joinDate || "").split("-");
   if (parts.length !== 3) return base;
@@ -64,13 +65,14 @@ function getOverdueInfo(student, finRecords) {
   const overdueMonths = [];
   for (let m = startMonth; m <= currentMonthNum; m++) {
     if (isMonthBlocked(student, m, currentYearNum)) continue; // شهر بلوك — مش دَين
+    if (isMonthExempt(student, m, currentYearNum)) continue; // شهر مُعفى يدويًا — مش دَين
     if (joinYearNum === currentYearNum && m === joinMonthNum && parseInt((student.joinDate || "").split("-")[2], 10) > 25) continue; // اتسجّل بعد يوم 25 — مفيش مصاريف مطلوبة
     if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(MONTHS_AR[m - 1]);
   }
   return {
     overdueMonths,
     count: overdueMonths.length,
-    currentMonthOverdue: !isMonthBlocked(student, currentMonthNum, currentYearNum) && !isMonthPaid(currentMonthNum, currentYearNum),
+    currentMonthOverdue: !isMonthBlocked(student, currentMonthNum, currentYearNum) && !isMonthExempt(student, currentMonthNum, currentYearNum) && !isMonthPaid(currentMonthNum, currentYearNum),
   };
 }
 
@@ -92,6 +94,7 @@ function getOverdueAmount(student, finRecords, gradeFees) {
   let total = 0;
   for (let m = startMonth; m <= currentMonthNum; m++) {
     if (isMonthBlocked(student, m, currentYearNum)) continue;
+    if (isMonthExempt(student, m, currentYearNum)) continue;
     if (!isMonthPaid(m, currentYearNum)) total += getExpectedFeeForMonth(student, m, currentYearNum, gradeFees);
   }
   return total;
@@ -102,13 +105,7 @@ function getOverdueAmount(student, finRecords, gradeFees) {
 // أغسطس (بداية السنة الدراسية) لحد يونيو اللي بعده = 11 شهر بالظبط.
 // ══════════════════════════════════════════════════════════════
 
-// شهور الكشف: أغسطس..ديسمبر من startYear، ويناير..يونيو من (startYear+1)
-function getStatementMonths(startYear) {
-  const months = [];
-  for (let m = 8; m <= 12; m++) months.push({ month: m, year: startYear });
-  for (let m = 1; m <= 6; m++) months.push({ month: m, year: startYear + 1 });
-  return months;
-}
+// (getStatementMonths بقت في utils/index.js عشان تتشارك مع ملف الطالب)
 
 // تنسيق وقت الدفعة (YYYY-MM-DD HH:MM) لصيغة "يوم/شهر" بس، زي 6/9
 function fmtPayDay(ts) {
@@ -128,6 +125,7 @@ function fmtPayDay(ts) {
 // وفي كل الحالات ما عدا "none"، لو فيه دفعة فعلية مسجّلة لنفس الشهر/السنة
 // بمبلغ أكبر من صفر، بيرجع ✓ + تاريخ يوم/شهر الدفعة الفعلي.
 function getStatementCell(student, month, year, finRecords) {
+  if (isMonthExempt(student, month, year)) return { kind: "none", paid: false, paidDate: null };
   if (!hasJoinedByMonth(student, month, year)) return { kind: "none", paid: false, paidDate: null };
 
   let kind = "full";
@@ -651,6 +649,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     return baseTableStudents.filter(s =>
       hasJoinedByMonth(s, effMonth, effYear) &&
       !isMonthBlocked(s, effMonth, effYear) &&
+      !isMonthExempt(s, effMonth, effYear) &&
       !monthRecords.some(r => r.studentId === s.id)
     );
   }, [baseTableStudents, financeMode, effMonth, effYear, monthRecords]);
@@ -662,6 +661,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   // الصف/المجموعة، مع المبلغ الصحيح المطلوب فعليًا عن الشهر الحالي ──
   const isCurrentMonthUnpaid = (s) =>
     !isMonthBlocked(s, curMonth, curYear) &&
+    !isMonthExempt(s, curMonth, curYear) &&
     getExpectedFeeForMonth(s, curMonth, curYear, safeSettings.gradeFees) > 0 &&
     !safeRecords.some(r => r.studentId === s.id && r.month === curMonth && r.year === curYear && (r.amount || 0) > 0);
 
@@ -736,6 +736,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       const hasLate = safeStudents.some(s =>
         hasJoinedByMonth(s, m, regYear) &&
         !isMonthBlocked(s, m, regYear) &&
+        !isMonthExempt(s, m, regYear) &&
         !safeRecords.some(r => r.studentId === s.id && r.month === m && r.year === regYear)
       );
       if (hasLate) months.push(m);
@@ -762,6 +763,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       return gradeStudents.some(s =>
         hasJoinedByMonth(s, regMonth, regYear) &&
         !isMonthBlocked(s, regMonth, regYear) &&
+        !isMonthExempt(s, regMonth, regYear) &&
         !safeRecords.some(r => r.studentId === s.id && r.month === regMonth && r.year === regYear)
       );
     });
@@ -778,6 +780,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         .filter(s =>
           hasJoinedByMonth(s, regMonth, regYear) &&
           !isMonthBlocked(s, regMonth, regYear) &&
+          !isMonthExempt(s, regMonth, regYear) &&
           !safeRecords.some(r => r.studentId === s.id && r.month === regMonth && r.year === regYear)
         )
         .reduce((a, s) => a + getExpectedFeeForMonth(s, regMonth, regYear, safeSettings.gradeFees), 0);
