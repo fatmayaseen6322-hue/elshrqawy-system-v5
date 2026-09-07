@@ -2141,12 +2141,71 @@ function ExamPartsConfig({ exam, setCenterExams, numQ }) {
   );
 }
 
+// ── شبكة اختيار الأسئلة الغلط (مشتركة بين التصحيح الأساسي والإعادة) ──
+function QuestionGrid({ numQ, exam, wrongSet, onToggle }) {
+  if (numQ === 0) return <div className="text-center py-8 text-slate-600 text-sm">لا يوجد عدد أسئلة مسجَّل لهذا الامتحان</div>;
+  return (
+    <div className="flex flex-wrap gap-1.5 justify-center">
+      {Array.from({ length: numQ }, (_, i) => i + 1).map(q => {
+        const parts = partsForQuestion(exam, q);
+        if (parts <= 1) {
+          const wrong = wrongSet.has(`${q}:1`);
+          return (
+            <button key={q} onClick={() => onToggle(q, 1)}
+              className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-xs font-black transition-all active:scale-90 ${
+                wrong
+                  ? "bg-red-600 text-white shadow-[0_3px_10px_-3px_rgba(220,38,38,0.6)]"
+                  : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
+              {q}
+            </button>
+          );
+        }
+        return (
+          <div key={q} className="flex items-center gap-1 bg-slate-800/50 border border-slate-700/40 rounded-lg px-1.5 py-1 shrink-0">
+            <span className="text-[10px] text-slate-500 font-bold">{q}</span>
+            {Array.from({ length: parts }, (_, pi) => pi + 1).map(p => {
+              const wrong = wrongSet.has(`${q}:${p}`);
+              return (
+                <button key={p} onClick={() => onToggle(q, p)}
+                  className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black transition-all active:scale-90 ${
+                    wrong
+                      ? "bg-red-600 text-white"
+                      : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── صفحة تصحيح طالب واحد: كله صح / كله غلط / دوسة على السؤال (أو نقطة السؤال) ──
+// 🆕 لو الطالب عنده أخطاء متسجّلة قبل كده على نفس الامتحان، بيظهر تحت
+// التصحيح الأساسي فاصل + "إعادة" لنفس الأسئلة (تاني محاولة) — أي سؤال يتغلط
+// فيه في الإعادة بيتزوّد على قائمة الأخطاء (من غير ما يتحذف أي سؤال قديم لو
+// عدد أخطاء الإعادة قلّ)، وبيتسجّل له "عدد مرات الغلط" — ده اللي بيظهر بعدين
+// في قسم "الأخطاء ← التقارير".
 function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents, addActivity, onBack }) {
   const numQ = exam?.numQuestions || 0;
   const matches = e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === (exam?.id || null);
   const errors = (student.examErrors || []).filter(matches);
   const wrongSet = useMemo(() => new Set(errors.map(e => `${e.q}:${e.p || 1}`)), [errors]);
+  const hasExisting = wrongSet.size > 0;
+
+  const [retryWrong, setRetryWrong] = useState(new Set());
+  const [retryToast, setRetryToast] = useState(null);
+
+  // يضمن وجود سجل "عدد مرات الغلط" للسؤال ده (يبتدي بـ1) من غير ما
+  // يزوّد عدد موجود بالفعل — بيستخدم في التصحيح الأساسي بس عشان أي
+  // سؤال يتسجّل غلط لأول مرة يظهر في التقارير بعدد مرة واحدة.
+  const ensureMistakeRecord = (list, q, p) => {
+    const exists = list.some(m => matches(m) && m.q === q && (m.p || 1) === p);
+    if (exists) return list;
+    return [...list, { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, count: 1 }];
+  };
 
   const setAll = (allWrong) => {
     setStudents(prev => (prev || []).map(s => {
@@ -2157,7 +2216,15 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
             Array.from({ length: partsForQuestion(exam, q) }, (_, pi) => pi + 1).map(p =>
               ({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() })))
         : [];
-      return { ...s, examErrors: [...others, ...newOnes] };
+      let mistakeCounts = s.examMistakeCounts || [];
+      if (allWrong) {
+        Array.from({ length: numQ }, (_, i) => i + 1).forEach(q => {
+          Array.from({ length: partsForQuestion(exam, q) }, (_, pi) => pi + 1).forEach(p => {
+            mistakeCounts = ensureMistakeRecord(mistakeCounts, q, p);
+          });
+        });
+      }
+      return { ...s, examErrors: [...others, ...newOnes], examMistakeCounts: mistakeCounts };
     }));
     addActivity?.(allWrong ? "تصحيح: كله غلط" : "تصحيح: كله صح", `${student.name} — و${unit} - د${lesson}`);
   };
@@ -2170,8 +2237,59 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
       const newErrors = isWrong
         ? others
         : [...others, { id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() }];
-      return { ...s, examErrors: newErrors };
+      const mistakeCounts = isWrong ? (s.examMistakeCounts || []) : ensureMistakeRecord(s.examMistakeCounts || [], q, p);
+      return { ...s, examErrors: newErrors, examMistakeCounts: mistakeCounts };
     }));
+  };
+
+  // ── منطق الإعادة (تصحيح تاني لنفس الامتحان) ──
+  const toggleRetry = (q, p) => {
+    setRetryWrong(prev => {
+      const key = `${q}:${p}`;
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+  const retrySetAll = (allWrong) => {
+    if (!allWrong) { setRetryWrong(new Set()); return; }
+    const all = new Set();
+    Array.from({ length: numQ }, (_, i) => i + 1).forEach(q => {
+      Array.from({ length: partsForQuestion(exam, q) }, (_, pi) => pi + 1).forEach(p => all.add(`${q}:${p}`));
+    });
+    setRetryWrong(all);
+  };
+
+  const saveRetry = () => {
+    if (retryWrong.size === 0) {
+      setRetryToast({ msg: "مفيش أي سؤال اتسجّل غلط في الإعادة", type: "error" });
+      return;
+    }
+    setStudents(prev => (prev || []).map(s => {
+      if (s.id !== student.id) return s;
+      // 1) نزوّد عدد مرات الغلط لكل سؤال اتغلط فيه في الإعادة (نبتدي بـ1 لو أول مرة)
+      let mistakeCounts = [...(s.examMistakeCounts || [])];
+      retryWrong.forEach(key => {
+        const [qStr, pStr] = key.split(":");
+        const q = parseInt(qStr), p = parseInt(pStr);
+        const idx = mistakeCounts.findIndex(m => matches(m) && m.q === q && (m.p || 1) === p);
+        if (idx === -1) mistakeCounts.push({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, count: 1 });
+        else mistakeCounts[idx] = { ...mistakeCounts[idx], count: (mistakeCounts[idx].count || 1) + 1 };
+      });
+      // 2) نضيف أي سؤال جديد (مكانش مسجَّل غلط قبل كده) لقائمة الأخطاء —
+      //    من غير ما نحذف أي سؤال قديم حتى لو عدد أخطاء الإعادة قلّ
+      let examErrors = [...(s.examErrors || [])];
+      retryWrong.forEach(key => {
+        const [qStr, pStr] = key.split(":");
+        const q = parseInt(qStr), p = parseInt(pStr);
+        const already = examErrors.some(e => matches(e) && e.q === q && (e.p || 1) === p);
+        if (!already) examErrors.push({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() });
+      });
+      return { ...s, examErrors, examMistakeCounts: mistakeCounts };
+    }));
+    addActivity?.(`إعادة تصحيح: ${retryWrong.size} سؤال غلط`, `${student.name} — و${unit} - د${lesson}`);
+    setRetryToast({ msg: "✓ اتسجّلت نتيجة الإعادة", type: "success" });
+    setRetryWrong(new Set());
   };
 
   return (
@@ -2197,42 +2315,30 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
       ) : (
         <div className="space-y-2">
           <div className="text-[11px] text-slate-500 text-center">دوسي على السؤال (أو على نقطة السؤال لو مركّب) اللي غلط فيه — دوسة تانية تلغي التسجيل</div>
-          <div className="flex flex-wrap gap-1.5 justify-center">
-            {Array.from({ length: numQ }, (_, i) => i + 1).map(q => {
-              const parts = partsForQuestion(exam, q);
-              if (parts <= 1) {
-                const wrong = wrongSet.has(`${q}:1`);
-                return (
-                  <button key={q} onClick={() => toggleQuestion(q, 1)}
-                    className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-xs font-black transition-all active:scale-90 ${
-                      wrong
-                        ? "bg-red-600 text-white shadow-[0_3px_10px_-3px_rgba(220,38,38,0.6)]"
-                        : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
-                    {q}
-                  </button>
-                );
-              }
-              return (
-                <div key={q} className="flex items-center gap-1 bg-slate-800/50 border border-slate-700/40 rounded-lg px-1.5 py-1 shrink-0">
-                  <span className="text-[10px] text-slate-500 font-bold">{q}</span>
-                  {Array.from({ length: parts }, (_, pi) => pi + 1).map(p => {
-                    const wrong = wrongSet.has(`${q}:${p}`);
-                    return (
-                      <button key={p} onClick={() => toggleQuestion(q, p)}
-                        className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black transition-all active:scale-90 ${
-                          wrong
-                            ? "bg-red-600 text-white"
-                            : "bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-600/25"}`}>
-                        {p}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+          <QuestionGrid numQ={numQ} exam={exam} wrongSet={wrongSet} onToggle={toggleQuestion} />
         </div>
       )}
+
+      {hasExisting && numQ > 0 && (
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-slate-700/60"></div>
+            <div className="text-slate-500 text-[11px] font-bold shrink-0">🔁 إعادة تصحيح لنفس الامتحان</div>
+            <div className="flex-1 h-px bg-slate-700/60"></div>
+          </div>
+          <div className="text-[11px] text-slate-500 text-center">صحّحي نفس الأسئلة تاني — أي سؤال يتغلط فيه هنا يتزوّد على أخطاء الطالب وعدد مرات غلطه، من غير ما يتحذف أي سؤال قديم</div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Btn variant="ghost" onClick={() => retrySetAll(false)}>✅ الإعادة: كله صح</Btn>
+            <Btn variant="ghost" onClick={() => retrySetAll(true)}>❌ الإعادة: كله غلط</Btn>
+          </div>
+
+          <QuestionGrid numQ={numQ} exam={exam} wrongSet={retryWrong} onToggle={toggleRetry} />
+
+          <Btn variant="danger" className="w-full" onClick={saveRetry}>💾 حفظ نتيجة الإعادة ({retryWrong.size})</Btn>
+        </div>
+      )}
+      {retryToast && <Toast msg={retryToast.msg} type={retryToast.type} onDone={() => setRetryToast(null)} />}
     </div>
   );
 }
@@ -2247,6 +2353,7 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
   const [lesson, setLesson] = useState("");
   const [examId, setExamId] = useState("");
   const [openStudent, setOpenStudent] = useState(null);
+  const [reportStudent, setReportStudent] = useState(null);
   const [editingExam, setEditingExam] = useState(null);
   const [confirmDeleteExam, setConfirmDeleteExam] = useState(null);
   const [bulkToast, setBulkToast] = useState(null);
@@ -2344,6 +2451,18 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
     );
   }
 
+  if (reportStudent && selectedExam) {
+    const s = gradeStudents.find(s => s.id === reportStudent.id) || reportStudent;
+    return (
+      <StudentMistakeReportPage
+        student={s}
+        grade={grade} unit={unit} lesson={lesson} exam={selectedExam}
+        qs={errQsFor(s)}
+        onBack={() => setReportStudent(null)}
+      />
+    );
+  }
+
   if (!grade) return (
     <div className="space-y-3">
       <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">اختاري الصف</div>
@@ -2431,18 +2550,25 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
           {gradeStudents.map(s => {
             const qs = errQsFor(s);
             return (
-              <button key={s.id} onClick={() => setOpenStudent(s)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
-                <Av name={s.name} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
-                  <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
-                </div>
-                {qs.length > 0
-                  ? <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{qs.length} غلط</span>
-                  : <span className="text-xs px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 shrink-0">✓ كله صح</span>}
-                <span className="text-slate-500 text-xs shrink-0">عرض ›</span>
-              </button>
+              <div key={s.id} className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800/60 transition-colors">
+                <button onClick={() => setOpenStudent(s)} className="flex-1 min-w-0 flex items-center gap-3 text-right">
+                  <Av name={s.name} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</div>
+                    <div className="text-slate-500" style={{ fontSize: "12px" }}>{s.group ? `مجموعة ${s.group}` : ""}</div>
+                  </div>
+                  {qs.length > 0
+                    ? <span className="text-xs px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/20 text-red-400 shrink-0">{qs.length} غلط</span>
+                    : <span className="text-xs px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 shrink-0">✓ كله صح</span>}
+                </button>
+                {qs.length > 0 && (
+                  <button onClick={() => setReportStudent(s)}
+                    className="text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded-lg px-2 py-1.5 shrink-0">
+                    📊 التقارير
+                  </button>
+                )}
+                <button onClick={() => setOpenStudent(s)} className="text-slate-500 text-xs shrink-0">عرض ›</button>
+              </div>
             );
           })}
         </div>
@@ -2627,6 +2753,63 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCent
           {qs.map(x => (
             <div key={`${x.q}:${x.p}`} className="text-xs text-slate-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
               أخطأ في: <span className="text-red-300 font-medium">{descFor(x)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 🆕 تقارير الطالب: نفس أسئلة "عرض الأخطاء" لكن بجانب كل سؤال عدد
+// المرات اللي الطالب غلط فيها فيه (بتتزوّد كل ما اتصحح "إعادة" لنفس
+// الامتحان من قسم "التصحيح" وغلط في نفس السؤال تاني) ──
+// ══════════════════════════════════════════════════════════════
+function StudentMistakeReportPage({ student, grade, unit, lesson, exam, qs, onBack }) {
+  const [toast, setToast] = useState(null);
+  const matches = m => m.grade === grade && m.unit === unit && m.lesson === lesson && m.examId === (exam?.id || null);
+  const countFor = ({ q, p }) => {
+    const rec = (student.examMistakeCounts || []).find(m => matches(m) && m.q === q && (m.p || 1) === p);
+    return rec?.count || 1; // لو مفيش سجل عدّاد (بيانات قديمة قبل الميزة دي) بنعتبرها غلطت مرة واحدة
+  };
+  const descFor = ({ q, p }) => questionLineFor(exam, q, p);
+
+  const doCopy = () => {
+    const text = `تقرير أخطاء ${student.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(x => `- ${descFor(x)} — عدد مرات الغلط: ${countFor(x)}`).join("\n")}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(
+        () => setToast({ msg: "✓ اتنسخ التقرير", type: "success" }),
+        () => setToast({ msg: "تعذّر النسخ", type: "error" })
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع لقائمة الطلاب</button>
+
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
+        <div className="flex items-center gap-3">
+          <Av name={student.name} size="sm" />
+          <div className="flex-1 min-w-0">
+            <div className="text-white font-black text-sm truncate">📊 تقارير — {student.name}</div>
+            <div className="text-slate-500 text-xs">{grade} — و{unit} د{lesson}</div>
+          </div>
+          <div className="text-red-400 text-xs font-bold shrink-0">{qs.length} غلط</div>
+        </div>
+        <Btn variant="ghost" className="w-full" onClick={doCopy}>📋 نسخ التقرير</Btn>
+      </div>
+
+      {qs.length === 0 ? (
+        <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">✅</div><div className="text-sm">مفيش أخطاء مسجَّلة لهذا الطالب في هذا الامتحان</div></div>
+      ) : (
+        <div className="space-y-1.5">
+          {qs.map(x => (
+            <div key={`${x.q}:${x.p}`} className="flex items-center gap-2 text-xs text-slate-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <span className="flex-1 min-w-0">أخطأ في: <span className="text-red-300 font-medium">{descFor(x)}</span></span>
+              <span className="shrink-0 text-amber-300 font-bold bg-amber-500/15 border border-amber-500/25 rounded-lg px-2 py-1">عدد المرات: {countFor(x)}</span>
             </div>
           ))}
         </div>
