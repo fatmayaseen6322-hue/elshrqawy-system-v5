@@ -29,6 +29,10 @@ const KEYS = {
   trashedDup:  "app_trashed_dup_students", // #TrashDup — سلة مهملات حذف التكرار (شهرين)
   studentsSyncSnapshot: "app_live_sync_students_snapshot", // #LiveSyncFix — آخر نسخة طلاب اتزامنت فعليًا (لمنع رجوع المحذوف/البلوك)
   settingsSyncSnapshot: "app_live_sync_settings_snapshot", // #LiveSyncFix2 — نفس الإصلاح بالظبط لكن للإعدادات (باسوردات المستلمين... إلخ)
+  finRecordsSyncSnapshot:  "app_live_sync_fin_records_snapshot",  // #LiveSyncFix3 — نفس الإصلاح للمصاريف (منع رجوع دفعة اتمسحت/اتعدلت)
+  attRecordsSyncSnapshot:  "app_live_sync_att_records_snapshot",  // #LiveSyncFix3 — نفس الإصلاح للحضور
+  webExamsSyncSnapshot:    "app_live_sync_web_exams_snapshot",    // #LiveSyncFix3 — نفس الإصلاح لامتحانات الويب
+  centerExamsSyncSnapshot: "app_live_sync_center_exams_snapshot", // #LiveSyncFix3 — نفس الإصلاح لامتحانات المركز
 };
 
 const TRASH_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // شهرين (60 يوم)
@@ -473,18 +477,28 @@ export default function useAppData() {
       const lastSyncedSettingsJSON = lsGet(KEYS.settingsSyncSnapshot, null);
       const settingsChangedLocally = lastSyncedSettingsJSON === null || currentSettingsJSON !== lastSyncedSettingsJSON;
 
-      const payload = {
-        // #StudentPortal: لازم البيانات دي كمان عشان بوابة الطالب (لينك المجموعة)
-        // تقدر تعرض حضوره ومصاريفه ودرجاته لحظيًا من أي جهاز.
-        finRecords:  lsGet(KEYS.finRecords,  []),
-        attRecords:  lsGet(KEYS.attRecords,  []),
-        webExams:    lsGet(KEYS.webExams,    []),
-        // #StudentPortal: لازم centerExams كمان عشان زر "الدرجات" في بوابة
-        // الطالب يقدر يترجم رقم السؤال (examErrors) لاسم/وصف السؤال الفعلي
-        // من questionMeta بتاع الامتحان الورقي المرتبط.
-        centerExams: lsGet(KEYS.centerExams, []),
-        updatedAt: ts,
-      };
+      // ── #LiveSyncFix3: نفس إصلاح الطلاب/الإعدادات بالظبط، لكن لباقي
+      // البيانات (مصاريف/حضور/امتحانات). كانت هذه الحقول بترفع دايمًا
+      // بلا شرط (زي أول نسخة من الإصلاح) — يعني لو جهاز فاتح بنسخة قديمة
+      // من finRecords (مثلاً قبل ما تتمسح دفعة اتلغت/اتراجع عنها على
+      // جهاز تاني) وعمل أي تعديل بسيط تاني (زي تسجيل حضور)، كان بيرفع
+      // نسخته القديمة الكاملة من finRecords فيرجّع الدفعة الملغاة تاني
+      // من غير أي تنبيه (السبب الحقيقي وراء "شلت إنه دفع وبرضو راجع
+      // كأنه دافع"). نفس الحل: كل حقل ميترفعش إلا لو اتغيّر محليًا فعلاً
+      // بالمقارنة بآخر نسخة اتزامنت معاه.
+      const currentFinJSON = JSON.stringify(lsGet(KEYS.finRecords, []));
+      const finChangedLocally = lsGet(KEYS.finRecordsSyncSnapshot, null) === null || currentFinJSON !== lsGet(KEYS.finRecordsSyncSnapshot, null);
+
+      const currentAttJSON = JSON.stringify(lsGet(KEYS.attRecords, []));
+      const attChangedLocally = lsGet(KEYS.attRecordsSyncSnapshot, null) === null || currentAttJSON !== lsGet(KEYS.attRecordsSyncSnapshot, null);
+
+      const currentWebExamsJSON = JSON.stringify(lsGet(KEYS.webExams, []));
+      const webExamsChangedLocally = lsGet(KEYS.webExamsSyncSnapshot, null) === null || currentWebExamsJSON !== lsGet(KEYS.webExamsSyncSnapshot, null);
+
+      const currentCenterExamsJSON = JSON.stringify(lsGet(KEYS.centerExams, []));
+      const centerExamsChangedLocally = lsGet(KEYS.centerExamsSyncSnapshot, null) === null || currentCenterExamsJSON !== lsGet(KEYS.centerExamsSyncSnapshot, null);
+
+      const payload = { updatedAt: ts };
       if (studentsChangedLocally) {
         payload.students = JSON.parse(currentStudentsJSON);
         lsSet(KEYS.studentsSyncSnapshot, currentStudentsJSON);
@@ -492,6 +506,25 @@ export default function useAppData() {
       if (settingsChangedLocally) {
         payload.settings = JSON.parse(currentSettingsJSON);
         lsSet(KEYS.settingsSyncSnapshot, currentSettingsJSON);
+      }
+      // #StudentPortal: لازم finRecords/attRecords/webExams/centerExams
+      // تترفع أول مرة (لو مفيش سناب شوت أصلاً) عشان بوابة الطالب تشتغل
+      // حتى لو الجهاز ده لسه ما عدلش فيهم — نفس منطق "null = أول مرة".
+      if (finChangedLocally) {
+        payload.finRecords = JSON.parse(currentFinJSON);
+        lsSet(KEYS.finRecordsSyncSnapshot, currentFinJSON);
+      }
+      if (attChangedLocally) {
+        payload.attRecords = JSON.parse(currentAttJSON);
+        lsSet(KEYS.attRecordsSyncSnapshot, currentAttJSON);
+      }
+      if (webExamsChangedLocally) {
+        payload.webExams = JSON.parse(currentWebExamsJSON);
+        lsSet(KEYS.webExamsSyncSnapshot, currentWebExamsJSON);
+      }
+      if (centerExamsChangedLocally) {
+        payload.centerExams = JSON.parse(currentCenterExamsJSON);
+        lsSet(KEYS.centerExamsSyncSnapshot, currentCenterExamsJSON);
       }
       // merge:true إجباري هنا — عشان لو حذفنا "students"/"settings" من الـ
       // payload (مفيش تعديل محلي فيهم)، الحقل يفضل زي ما هو في السحابة
@@ -571,15 +604,23 @@ export default function useAppData() {
       lsSet(KEYS.settingsSyncSnapshot, JSON.stringify(merged));
       return merged;
     });
-    setFinRecords(cloud.finRecords || []);
-    setAttRecords(cloud.attRecords || []);
-    setWebExams(cloud.webExams || []);
-    setCenterExams(cloud.centerExams || []);
-    // بعد قبول نسخة الطلاب الجاية من السحابة، لازم نحدّث "آخر نسخة
-    // اتزامنت فعليًا" بنفس القيمة — عشان لو الجهاز ده عمل push بعد كده
-    // من غير ما يلمس قائمة الطلاب أصلاً، ميرفعش نسخة قديمة تمسح تعديل
-    // حصل على جهاز تاني (نفس الإصلاح الجذري في pushLiveState فوق).
+    // ── #LiveSyncFix3: زي الطلاب بالظبط — لو مفيش حقل معيّن في نسخة
+    // السحابة دي (مش راجع أصلاً)، سيبي القيمة المحلية الحالية زي ما هي
+    // بدل ما تمسحها بمصفوفة فاضية (كان ده بيحصل لو "cloud.finRecords"
+    // مش موجودة في نفس الدفعة دي).
+    if (cloud.finRecords    !== undefined) setFinRecords(cloud.finRecords);
+    if (cloud.attRecords    !== undefined) setAttRecords(cloud.attRecords);
+    if (cloud.webExams      !== undefined) setWebExams(cloud.webExams);
+    if (cloud.centerExams   !== undefined) setCenterExams(cloud.centerExams);
+    // بعد قبول أي نسخة جاية من السحابة، لازم نحدّث "آخر نسخة اتزامنت
+    // فعليًا" لكل حقل بنفس القيمة — عشان لو الجهاز ده عمل push بعد كده
+    // من غير ما يلمس الحقل ده أصلاً، ميرفعش نسخة قديمة تمسح تعديل حصل
+    // على جهاز تاني (نفس الإصلاح الجذري بتاع الطلاب/الإعدادات فوق).
     lsSet(KEYS.studentsSyncSnapshot, JSON.stringify(cloud.students || []));
+    if (cloud.finRecords    !== undefined) lsSet(KEYS.finRecordsSyncSnapshot,    JSON.stringify(cloud.finRecords));
+    if (cloud.attRecords    !== undefined) lsSet(KEYS.attRecordsSyncSnapshot,    JSON.stringify(cloud.attRecords));
+    if (cloud.webExams      !== undefined) lsSet(KEYS.webExamsSyncSnapshot,      JSON.stringify(cloud.webExams));
+    if (cloud.centerExams   !== undefined) lsSet(KEYS.centerExamsSyncSnapshot,   JSON.stringify(cloud.centerExams));
     lsSet(KEYS.liveSyncTs, cloud.updatedAt);
     setLiveSyncState({ status: "success", message: "تم تحديث البيانات من جهاز تاني تلقائيًا ✓" });
   }, [setStudents, setSettings, setFinRecords, setAttRecords, setWebExams, setCenterExams]);
