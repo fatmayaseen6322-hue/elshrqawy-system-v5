@@ -2195,9 +2195,6 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
   const wrongSet = useMemo(() => new Set(errors.map(e => `${e.q}:${e.p || 1}`)), [errors]);
   const hasExisting = wrongSet.size > 0;
 
-  const [retryWrong, setRetryWrong] = useState(new Set());
-  const [retryToast, setRetryToast] = useState(null);
-
   // يضمن وجود سجل "عدد مرات الغلط" للسؤال ده (يبتدي بـ1) من غير ما
   // يزوّد عدد موجود بالفعل — بيستخدم في التصحيح الأساسي بس عشان أي
   // سؤال يتسجّل غلط لأول مرة يظهر في التقارير بعدد مرة واحدة.
@@ -2242,54 +2239,75 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
     }));
   };
 
-  // ── منطق الإعادة (تصحيح تاني لنفس الامتحان) ──
-  const toggleRetry = (q, p) => {
-    setRetryWrong(prev => {
-      const key = `${q}:${p}`;
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  };
-  const retrySetAll = (allWrong) => {
-    if (!allWrong) { setRetryWrong(new Set()); return; }
-    const all = new Set();
-    Array.from({ length: numQ }, (_, i) => i + 1).forEach(q => {
-      Array.from({ length: partsForQuestion(exam, q) }, (_, pi) => pi + 1).forEach(p => all.add(`${q}:${p}`));
-    });
-    setRetryWrong(all);
-  };
+  // ── منطق الإعادة (تصحيح تاني لنفس الامتحان) — حفظ تلقائي فوري لكل دوسة ──
+  // بنسجّل "لقطة" الأسئلة اللي كانت غلط أصلًا قبل ما نفتح الإعادة، عشان لو
+  // اتلغى تحديد سؤال في الإعادة (رجّعناه صح غلط)، منحذفوش من قائمة الأخطاء
+  // إلا لو هو أصلًا كان اتضاف بس من نفس جلسة الإعادة دي.
+  const initialWrongKeysRef = useRef(null);
+  if (initialWrongKeysRef.current === null) initialWrongKeysRef.current = new Set(wrongSet);
+  const initialWrongKeys = initialWrongKeysRef.current;
 
-  const saveRetry = () => {
-    if (retryWrong.size === 0) {
-      setRetryToast({ msg: "مفيش أي سؤال اتسجّل غلط في الإعادة", type: "error" });
-      return;
-    }
+  const [retryWrong, setRetryWrong] = useState(new Set());
+
+  // بيطبّق تغييرات مجموعة مفاتيح (q:p) دفعة واحدة: markWrong=true معناها
+  // اتسجّلوا غلط دلوقتي (تزويد العداد + إضافة للأخطاء لو مش موجودين أصلًا)،
+  // markWrong=false معناها اتلغى تسجيلهم (تنقيص العداد + حذفهم من الأخطاء
+  // بس لو كانوا اتضافوا في نفس الجلسة دي، مش لو كانوا موجودين قبل كده).
+  const applyRetryChange = (keys, markWrong) => {
+    if (!keys.length) return;
     setStudents(prev => (prev || []).map(s => {
       if (s.id !== student.id) return s;
-      // 1) نزوّد عدد مرات الغلط لكل سؤال اتغلط فيه في الإعادة (نبتدي بـ1 لو أول مرة)
       let mistakeCounts = [...(s.examMistakeCounts || [])];
-      retryWrong.forEach(key => {
+      let examErrors = [...(s.examErrors || [])];
+      keys.forEach(key => {
         const [qStr, pStr] = key.split(":");
         const q = parseInt(qStr), p = parseInt(pStr);
         const idx = mistakeCounts.findIndex(m => matches(m) && m.q === q && (m.p || 1) === p);
-        if (idx === -1) mistakeCounts.push({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, count: 1 });
-        else mistakeCounts[idx] = { ...mistakeCounts[idx], count: (mistakeCounts[idx].count || 1) + 1 };
-      });
-      // 2) نضيف أي سؤال جديد (مكانش مسجَّل غلط قبل كده) لقائمة الأخطاء —
-      //    من غير ما نحذف أي سؤال قديم حتى لو عدد أخطاء الإعادة قلّ
-      let examErrors = [...(s.examErrors || [])];
-      retryWrong.forEach(key => {
-        const [qStr, pStr] = key.split(":");
-        const q = parseInt(qStr), p = parseInt(pStr);
-        const already = examErrors.some(e => matches(e) && e.q === q && (e.p || 1) === p);
-        if (!already) examErrors.push({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() });
+        if (markWrong) {
+          if (idx === -1) mistakeCounts.push({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, count: 1 });
+          else mistakeCounts[idx] = { ...mistakeCounts[idx], count: (mistakeCounts[idx].count || 1) + 1 };
+          const already = examErrors.some(e => matches(e) && e.q === q && (e.p || 1) === p);
+          if (!already) examErrors.push({ id: Date.now() + Math.random(), grade, unit, lesson, q, p, examId: exam?.id || null, ts: new Date().toISOString() });
+        } else {
+          if (idx !== -1) {
+            const newCount = (mistakeCounts[idx].count || 1) - 1;
+            mistakeCounts = newCount <= 0 ? mistakeCounts.filter((_, i) => i !== idx) : mistakeCounts.map((m, i) => i === idx ? { ...m, count: newCount } : m);
+          }
+          if (!initialWrongKeys.has(key)) {
+            examErrors = examErrors.filter(e => !(matches(e) && e.q === q && (e.p || 1) === p));
+          }
+        }
       });
       return { ...s, examErrors, examMistakeCounts: mistakeCounts };
     }));
-    addActivity?.(`إعادة تصحيح: ${retryWrong.size} سؤال غلط`, `${student.name} — و${unit} - د${lesson}`);
-    setRetryToast({ msg: "✓ اتسجّلت نتيجة الإعادة", type: "success" });
-    setRetryWrong(new Set());
+  };
+
+  const toggleRetry = (q, p) => {
+    const key = `${q}:${p}`;
+    const wasMarked = retryWrong.has(key);
+    applyRetryChange([key], !wasMarked);
+    setRetryWrong(prev => {
+      const next = new Set(prev);
+      wasMarked ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const retrySetAll = (allWrong) => {
+    const allKeys = [];
+    Array.from({ length: numQ }, (_, i) => i + 1).forEach(q => {
+      Array.from({ length: partsForQuestion(exam, q) }, (_, pi) => pi + 1).forEach(p => allKeys.push(`${q}:${p}`));
+    });
+    if (allWrong) {
+      const toMark = allKeys.filter(k => !retryWrong.has(k));
+      applyRetryChange(toMark, true);
+      setRetryWrong(new Set(allKeys));
+    } else {
+      const toUnmark = [...retryWrong];
+      applyRetryChange(toUnmark, false);
+      setRetryWrong(new Set());
+    }
+    addActivity?.(allWrong ? "إعادة تصحيح: كله غلط" : "إعادة تصحيح: كله صح", `${student.name} — و${unit} - د${lesson}`);
   };
 
   return (
@@ -2326,7 +2344,7 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
             <div className="text-slate-500 text-[11px] font-bold shrink-0">🔁 إعادة تصحيح لنفس الامتحان</div>
             <div className="flex-1 h-px bg-slate-700/60"></div>
           </div>
-          <div className="text-[11px] text-slate-500 text-center">صحّحي نفس الأسئلة تاني — أي سؤال يتغلط فيه هنا يتزوّد على أخطاء الطالب وعدد مرات غلطه، من غير ما يتحذف أي سؤال قديم</div>
+          <div className="text-[11px] text-slate-500 text-center">صحّحي نفس الأسئلة تاني — كل دوسة بتتحفظ فورًا: أي سؤال يتغلط فيه هنا يتزوّد على أخطاء الطالب وعدد مرات غلطه، من غير ما يتحذف أي سؤال قديم</div>
 
           <div className="grid grid-cols-2 gap-2">
             <Btn variant="ghost" onClick={() => retrySetAll(false)}>✅ الإعادة: كله صح</Btn>
@@ -2334,11 +2352,8 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
           </div>
 
           <QuestionGrid numQ={numQ} exam={exam} wrongSet={retryWrong} onToggle={toggleRetry} />
-
-          <Btn variant="danger" className="w-full" onClick={saveRetry}>💾 حفظ نتيجة الإعادة ({retryWrong.size})</Btn>
         </div>
       )}
-      {retryToast && <Toast msg={retryToast.msg} type={retryToast.type} onDone={() => setRetryToast(null)} />}
     </div>
   );
 }
