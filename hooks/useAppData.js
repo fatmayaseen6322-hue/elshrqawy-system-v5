@@ -50,6 +50,18 @@ function loadTrashedDup() {
   return fresh;
 }
 
+// ── #FirestoreUsage: حجم مستند المزامنة اللحظية (elshrqawy_live_state) نسبة
+// لأقصى حجم مسموح به لأي مستند واحد في Firestore (1 ميجابايت). لو قرب من
+// الحد ده، أي عملية رفع (push) هتفشل، فبنوريها كنسبة مئوية عشان تبقى واخدة
+// بالها بدري قبل ما يوصل المستند لحده الأقصى ──
+const FIRESTORE_DOC_LIMIT_BYTES = 1024 * 1024; // 1 MiB — أقصى حجم مستند في Firestore
+function getFirestoreUsagePct(payload) {
+  try {
+    const bytes = new Blob([JSON.stringify(payload || {})]).size;
+    return Math.min(100, Math.round((bytes / FIRESTORE_DOC_LIMIT_BYTES) * 100));
+  } catch { return 0; }
+}
+
 function usePersisted(key, loader) {
   const [value, setRaw] = useState(loader);
   const set = useCallback((v) => {
@@ -424,6 +436,7 @@ export default function useAppData() {
   // المحلي بوقت السحابة، ولو السحابة أحدث بيسحب النسخة الجديدة تلقائيًا
   // ويحدّث نفسه — كله من غير تدخّل يدوي.
   const [liveSyncState, setLiveSyncState] = useState({ status: "idle", message: "" });
+  const [firestoreUsagePct, setFirestoreUsagePct] = useState(0);
   const isApplyingRemote = useRef(false);
   const pushTimer = useRef(null);
   const firstRun  = useRef(true);
@@ -484,6 +497,7 @@ export default function useAppData() {
       // payload (مفيش تعديل محلي فيهم)، الحقل يفضل زي ما هو في السحابة
       // بدل ما يتمسح تمامًا (setDoc من غير merge بيستبدل المستند بالكامل).
       await setDoc(doc(db, "elshrqawy_live_state", "main"), payload, { merge: true });
+      setFirestoreUsagePct(getFirestoreUsagePct(payload));
       setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });
     } catch (e) {
       setLiveSyncState({ status: "error", message: "تعذّرت المزامنة التلقائية (تأكد من النت)" });
@@ -495,6 +509,7 @@ export default function useAppData() {
   // مش الطلاب والإعدادات بس زي أول نسخة من الميزة دي.
   const applyCloudSnapshot = useCallback((cloud) => {
     if (!cloud) return;
+    setFirestoreUsagePct(getFirestoreUsagePct(cloud));
     const localTs = lsGet(KEYS.liveSyncTs, 0);
     if (!cloud.updatedAt || cloud.updatedAt <= localTs) {
       // ── إصلاح: كان بيرجع من غير ما يحدّث liveSyncState خالص، فالكارت
@@ -660,6 +675,7 @@ export default function useAppData() {
     cloudBackupState, backupToCloud, restoreFromCloud,
     // #LiveSync
     liveSyncState,
+    firestoreUsagePct,
     // #TrashDup
     trashedDupStudents, moveDupToTrash, restoreDupFromTrash,
   };
