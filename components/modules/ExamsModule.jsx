@@ -696,6 +696,19 @@ const LESSONS_COUNT = 6;
 // حدّد إن السؤال ده مركّب من أكتر من نقطة عبر exam.questionParts[q].
 const partsForQuestion = (exam, q) => Math.max(1, Math.min(9, parseInt(exam?.questionParts?.[q]) || 1));
 
+// نص السؤال (+ رقم النقطة لو أكتر من واحدة + الإجابة النموذجية لو موجودة)
+// جاهز للعرض/النسخ/الطباعة — مستخدم في صفحة أخطاء الطالب الواحد وفي
+// النسخ/الطباعة الجماعية لكل الطلاب.
+function questionLineFor(exam, q, p) {
+  const totalParts = partsForQuestion(exam, q);
+  const d = exam?.questionMeta?.[q];
+  const a = exam?.questionAnswers?.[q];
+  let base = d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
+  if (totalParts > 1) base += ` — نقطة ${p}`;
+  if (a && a.trim()) base += ` | الإجابة: ${a.trim()}`;
+  return base;
+}
+
 // ─── ورقة تسجيل خطأ سؤال لطالب معيّن ────────────────────────
 // exam بييجي جاهز من ExamErrorEntry (سواء امتحان مرفوع فعليًا أو امتحان
 // اتسجّل يدويًا بعدد أسئلة/نقط بس من غير رفع ملف) — الشاشة دايمًا بتظهر
@@ -2236,6 +2249,7 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
   const [openStudent, setOpenStudent] = useState(null);
   const [editingExam, setEditingExam] = useState(null);
   const [confirmDeleteExam, setConfirmDeleteExam] = useState(null);
+  const [bulkToast, setBulkToast] = useState(null);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
   const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
@@ -2257,6 +2271,57 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
     setCenterExams(p => (p || []).filter(e => e.id !== confirmDeleteExam.id));
     if (examId === confirmDeleteExam.id) setExamId("");
     setConfirmDeleteExam(null);
+  };
+
+  // نسخ/طباعة أخطاء كل طلاب الصف مع بعض (لنفس الامتحان المختار) — كل طالب
+  // بيتحسب لوحده (اسمه + صفه + وحدته + درسه + أخطاؤه) عشان لو حبيتي تبعتيها
+  // أو تطبعيها لكل الطلاب دفعة واحدة بدل ما تدخلي على كل طالب لوحده.
+  const studentsWithErrors = useMemo(() =>
+    gradeStudents.map(s => ({ student: s, qs: errQsFor(s) })).filter(x => x.qs.length > 0),
+    [gradeStudents, selectedExam, grade, unit, lesson]
+  );
+
+  const bulkCopy = () => {
+    if (!studentsWithErrors.length) { setBulkToast({ msg: "مفيش أخطاء مسجَّلة لأي طالب في هذا الامتحان", type: "error" }); return; }
+    const text = studentsWithErrors.map(({ student, qs }) =>
+      `${student.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(x => `- ${questionLineFor(selectedExam, x.q, x.p)}`).join("\n")}`
+    ).join("\n\n────────────────────\n\n");
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(
+        () => setBulkToast({ msg: `✓ اتنسخت أخطاء ${studentsWithErrors.length} طالب`, type: "success" }),
+        () => setBulkToast({ msg: "تعذّر النسخ", type: "error" })
+      );
+    }
+  };
+
+  const bulkPrint = () => {
+    if (!studentsWithErrors.length) { setBulkToast({ msg: "مفيش أخطاء مسجَّلة لأي طالب في هذا الامتحان", type: "error" }); return; }
+    const w = window.open("", "_blank", "width=480,height=640");
+    if (!w) return;
+    const pages = studentsWithErrors.map(({ student, qs }) => `
+      <div class="student-page">
+        <h2>${student.name}</h2>
+        <div class="meta">${grade} — وحدة ${unit} — درس ${lesson} — ${selectedExam?.fileName || "امتحان يدوي"}</div>
+        <ol>${qs.map(x => `<li>${questionLineFor(selectedExam, x.q, x.p)}</li>`).join("")}</ol>
+      </div>
+    `).join("");
+    w.document.write(`
+      <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>أخطاء الطلاب</title>
+      <style>
+        body{font-family:Tajawal,Arial,sans-serif;padding:20px;color:#111}
+        h2{margin:0 0 4px}
+        .meta{color:#555;font-size:13px;margin-bottom:16px}
+        ol{padding-inline-start:20px}
+        li{margin-bottom:8px;font-size:14px}
+        .student-page{page-break-after:always}
+        .student-page:last-child{page-break-after:auto}
+      </style></head><body>
+      ${pages}
+      </body></html>
+    `);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 300);
   };
 
   const errQsFor = s => selectedExam
@@ -2337,9 +2402,16 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
         <button onClick={resetExam} className="text-slate-400 text-sm flex items-center gap-1">← تغيير الامتحان</button>
         <button onClick={resetToGrades} className="text-slate-500 text-xs">تغيير الصف</button>
       </div>
-      <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-red-300 text-xs text-center">
-        {selectedExam.fileName || "امتحان يدوي"} — {grade} — و{unit} د{lesson}
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-3 space-y-2.5">
+        <div className="text-red-300 text-xs text-center">
+          {selectedExam.fileName || "امتحان يدوي"} — {grade} — و{unit} د{lesson}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Btn variant="ghost" onClick={bulkCopy}>📋 نسخ أخطاء كل الطلاب</Btn>
+          <Btn variant="ghost" onClick={bulkPrint}>🖨️ طباعة أخطاء كل الطلاب</Btn>
+        </div>
       </div>
+      {bulkToast && <Toast msg={bulkToast.msg} type={bulkToast.type} onDone={() => setBulkToast(null)} />}
 
       {examNeedsQuestionText(selectedExam) && setCenterExams && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 space-y-1.5">
@@ -2484,15 +2556,7 @@ function ExamAnswersConfig({ exam, setCenterExams }) {
 function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCenterExams, role, onBack }) {
   const [toast, setToast] = useState(null);
 
-  const descFor = ({ q, p }) => {
-    const totalParts = partsForQuestion(exam, q);
-    const d = exam?.questionMeta?.[q];
-    const a = exam?.questionAnswers?.[q];
-    let base = d && d.trim() ? `سؤال ${q}: ${d.trim()}` : `سؤال ${q}`;
-    if (totalParts > 1) base += ` — نقطة ${p}`;
-    if (a && a.trim()) base += ` | الإجابة: ${a.trim()}`;
-    return base;
-  };
+  const descFor = ({ q, p }) => questionLineFor(exam, q, p);
 
   const doCopy = () => {
     const text = `${student.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(x => `- ${descFor(x)}`).join("\n")}`;
@@ -2530,13 +2594,19 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCent
     <div className="space-y-4">
       <button onClick={onBack} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع لقائمة الطلاب</button>
 
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 flex items-center gap-3">
-        <Av name={student.name} size="sm" />
-        <div className="flex-1 min-w-0">
-          <div className="text-white font-black text-sm truncate">{student.name}</div>
-          <div className="text-slate-500 text-xs">{grade} — و{unit} د{lesson}</div>
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 space-y-3">
+        <div className="flex items-center gap-3">
+          <Av name={student.name} size="sm" />
+          <div className="flex-1 min-w-0">
+            <div className="text-white font-black text-sm truncate">{student.name}</div>
+            <div className="text-slate-500 text-xs">{grade} — و{unit} د{lesson}</div>
+          </div>
+          <div className="text-red-400 text-xs font-bold shrink-0">{qs.length} غلط</div>
         </div>
-        <div className="text-red-400 text-xs font-bold shrink-0">{qs.length} غلط</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Btn variant="ghost" onClick={doCopy}>📋 نسخ الأسئلة الغلط</Btn>
+          <Btn variant="ghost" onClick={doPrint}>🖨️ طباعة</Btn>
+        </div>
       </div>
 
       {examNeedsQuestionText(exam) && setCenterExams && (
@@ -2561,11 +2631,6 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCent
           ))}
         </div>
       )}
-
-      <div className="grid grid-cols-2 gap-2">
-        <Btn variant="ghost" onClick={doCopy}>📋 نسخ الأسئلة الغلط</Btn>
-        <Btn variant="ghost" onClick={doPrint}>🖨️ طباعة</Btn>
-      </div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
