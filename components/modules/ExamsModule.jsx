@@ -2266,6 +2266,13 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
   const resetUnitLesson = () => { setUnit("");   setLesson(""); setExamId(""); };
   const resetExam       = () => { setExamId(""); };
 
+  const errQsFor = s => selectedExam
+    ? (s.examErrors || [])
+        .filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id)
+        .map(e => ({ q: e.q, p: e.p || 1 }))
+        .sort((a, b) => a.q - b.q || a.p - b.p)
+    : [];
+
   const deleteExam = () => {
     if (!confirmDeleteExam || !setCenterExams) return;
     setCenterExams(p => (p || []).filter(e => e.id !== confirmDeleteExam.id));
@@ -2323,13 +2330,6 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
     w.focus();
     setTimeout(() => { w.print(); w.close(); }, 300);
   };
-
-  const errQsFor = s => selectedExam
-    ? (s.examErrors || [])
-        .filter(e => e.grade === grade && e.unit === unit && e.lesson === lesson && e.examId === selectedExam.id)
-        .map(e => ({ q: e.q, p: e.p || 1 }))
-        .sort((a, b) => a.q - b.q || a.p - b.p)
-    : [];
 
   if (openStudent && selectedExam) {
     return (
