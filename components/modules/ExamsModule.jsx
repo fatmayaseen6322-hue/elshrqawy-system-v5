@@ -2698,12 +2698,39 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCent
   const [toast, setToast] = useState(null);
 
   const descFor = ({ q, p }) => questionLineFor(exam, q, p);
+  const matches = m => m.grade === grade && m.unit === unit && m.lesson === lesson && m.examId === (exam?.id || null);
+  const countFor = ({ q, p }) => {
+    const rec = (student.examMistakeCounts || []).find(m => matches(m) && m.q === q && (m.p || 1) === p);
+    return rec?.count || 1; // لو مفيش سجل عدّاد (بيانات قديمة قبل الميزة دي) بنعتبرها غلطت مرة واحدة
+  };
+
+  // مجموعات الأسئلة حسب عدد مرات الغلط — لو كل الأسئلة اتغلطت مرة واحدة بس
+  // (مفيش تكرار) بيفضل زرار النسخ العادي زي ما هو، أما لو فيه سؤال اتكرر
+  // غلطه، بتتحول لدوائر: كل دائرة برقم عدد المرات، ودوسة عليها تنسخ بس
+  // الأسئلة اللي اتغلطت بنفس العدد ده.
+  const countGroups = useMemo(() => {
+    const map = {};
+    qs.forEach(x => { const c = countFor(x); (map[c] = map[c] || []).push(x); });
+    return Object.keys(map).map(Number).sort((a, b) => a - b).map(c => ({ count: c, items: map[c] }));
+  }, [qs, student]);
+  const hasRepeats = countGroups.some(g => g.count > 1);
 
   const doCopy = () => {
     const text = `${student.name} — ${grade} — وحدة ${unit} — درس ${lesson}\n${qs.map(x => `- ${descFor(x)}`).join("\n")}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(
         () => setToast({ msg: "✓ اتنسخت الأسئلة الغلط", type: "success" }),
+        () => setToast({ msg: "تعذّر النسخ", type: "error" })
+      );
+    }
+  };
+
+  const doCopyGroup = (count, items) => {
+    const label = count === 1 ? "مرة واحدة" : `${count} مرات`;
+    const text = `${student.name} — ${grade} — وحدة ${unit} — درس ${lesson} — الأسئلة اللي غلط فيها ${label}\n${items.map(x => `- ${descFor(x)}`).join("\n")}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(
+        () => setToast({ msg: `✓ اتنسخت ${items.length} سؤال (غلط ${label})`, type: "success" }),
         () => setToast({ msg: "تعذّر النسخ", type: "error" })
       );
     }
@@ -2744,10 +2771,27 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCent
           </div>
           <div className="text-red-400 text-xs font-bold shrink-0">{qs.length} غلط</div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Btn variant="ghost" onClick={doCopy}>📋 نسخ الأسئلة الغلط</Btn>
-          <Btn variant="ghost" onClick={doPrint}>🖨️ طباعة</Btn>
-        </div>
+
+        {hasRepeats ? (
+          <div className="space-y-2">
+            <div className="text-[11px] text-slate-500 text-center">دوسي على رقم عدد مرات الغلط عشان تنسخي بس الأسئلة اللي اتغلطت بنفس العدد ده</div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {countGroups.map(g => (
+                <button key={g.count} onClick={() => doCopyGroup(g.count, g.items)}
+                  title={`نسخ ${g.items.length} سؤال غلط فيهم ${g.count} مرة`}
+                  className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center text-sm font-black bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600/30 active:scale-90 transition-all">
+                  {g.count}
+                </button>
+              ))}
+            </div>
+            <Btn variant="ghost" className="w-full" onClick={doPrint}>🖨️ طباعة</Btn>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <Btn variant="ghost" onClick={doCopy}>📋 نسخ الأسئلة الغلط</Btn>
+            <Btn variant="ghost" onClick={doPrint}>🖨️ طباعة</Btn>
+          </div>
+        )}
       </div>
 
       {examNeedsQuestionText(exam) && setCenterExams && (
@@ -2766,8 +2810,11 @@ function StudentErrorsViewPage({ student, grade, unit, lesson, exam, qs, setCent
       ) : (
         <div className="space-y-1.5">
           {qs.map(x => (
-            <div key={`${x.q}:${x.p}`} className="text-xs text-slate-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              أخطأ في: <span className="text-red-300 font-medium">{descFor(x)}</span>
+            <div key={`${x.q}:${x.p}`} className="flex items-center gap-2 text-xs text-slate-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <span className="flex-1 min-w-0">أخطأ في: <span className="text-red-300 font-medium">{descFor(x)}</span></span>
+              {hasRepeats && (
+                <span className="shrink-0 text-indigo-300 font-bold bg-indigo-500/15 border border-indigo-500/25 rounded-lg px-2 py-1">×{countFor(x)}</span>
+              )}
             </div>
           ))}
         </div>
