@@ -731,13 +731,6 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
 
   return (
     <div className="space-y-4">
-      {pendingGate && (
-        <AttendancePasswordGate
-          onUnlock={unlockOldDateEdit}
-          onCancel={() => setPendingGate(false)}
-        />
-      )}
-
       {reportOpen && (
         <Modal title="🚫 غياب حصة" onClose={() => setReportOpen(false)} maxW="max-w-lg">
           <div className="space-y-3">
@@ -866,9 +859,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             </table>
             {role === "admin" && (
               <div className="p-3 border-t border-slate-700/40">
-                <button onClick={() => setPendingGate(true)}
+                <button onClick={() => setEditUnlocked(true)}
                   className="w-full py-2.5 rounded-xl text-xs font-bold bg-amber-600/20 border border-amber-600/30 text-amber-300">
-                  🔒 تعديل غياب هذا اليوم (باسورد المستر)
+                  ✏️ تعديل غياب هذا اليوم
                 </button>
               </div>
             )}

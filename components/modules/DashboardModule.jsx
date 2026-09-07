@@ -871,17 +871,39 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
         </div>
       )}
       {isAssist && (
-        <div className="grid gap-3 grid-cols-1">
-          <button onClick={() => setShowOldDebtors(true)}
-            className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
-            <span className="text-2xl">🟠</span>
-            <div className="text-2xl font-bold text-amber-400">{oldDebtorsCount}</div>
-            <div className="text-slate-400 text-xs">متأخرين من شهور سابقة</div>
-          </button>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-bold text-sm flex items-center gap-2">🟠 الطلاب المتأخرين من شهور سابقة</h3>
+            <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">{oldDebtorsCount}</span>
+          </div>
+          {oldDebtorsCount === 0 ? (
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 text-center text-slate-500 text-xs">لا يوجد متأخرين من شهور سابقة 🎉</div>
+          ) : (
+            dd.gradeDebtStudents.filter(g => g.list.length > 0).map((g, i) => (
+              <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
+                <div className="px-3 py-2 bg-amber-500/10 flex items-center justify-between">
+                  <span className="text-white text-sm font-bold">{g.grade}</span>
+                  <span className="text-amber-400 text-xs font-bold">{g.list.length} طالب</span>
+                </div>
+                <div className="divide-y divide-slate-700/40">
+                  {g.list.map((s, si) => (
+                    <div key={si} className="px-3 py-2.5 flex items-center justify-between text-xs">
+                      <span className="text-white font-bold">{s.name}</span>
+                      <span className="text-red-400 font-bold shrink-0">متأخر من شهر {s.monthLabel}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
-      <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
-      <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
+      {!isAssist && (
+        <>
+          <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
+          <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
+        </>
+      )}
       {!isAssist && (
         <button onClick={() => setShowLog(true)}
           className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
@@ -895,16 +917,43 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
         </button>
       )}
       {dd.noPhoneSection.grades.length > 0 && (
-        <button onClick={() => setShowNoPhone(true)}
-          className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">📵</span>
-            <span className="text-white font-bold text-sm">الطلاب بدون أرقام</span>
+        isAssist ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2">📵 الطلاب بدون أرقام</h3>
+              <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                {dd.noPhoneSection.grades.reduce((a, g) => a + g.students.length, 0)} طالب
+              </span>
+            </div>
+            {dd.noPhoneSection.grades.map((g, i) => (
+              <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
+                <div className="px-3 py-2 bg-amber-500/10 flex items-center justify-between">
+                  <span className="text-white text-sm font-bold">{g.grade}</span>
+                  <span className="text-amber-400 text-xs font-bold">{g.students.length} طالب</span>
+                </div>
+                <div className="divide-y divide-slate-700/40">
+                  {g.students.map((s, si) => (
+                    <div key={si} className="px-3 py-2.5 flex items-center justify-between text-xs">
+                      <span className="text-white font-bold">{s.name}</span>
+                      <span className="text-amber-400 font-bold shrink-0">مجموعة {s.group}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-          <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
-            {dd.noPhoneSection.grades.reduce((a, g) => a + g.students.length, 0)} طالب
-          </span>
-        </button>
+        ) : (
+          <button onClick={() => setShowNoPhone(true)}
+            className="w-full bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex items-center justify-between text-right hover:bg-slate-800 transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📵</span>
+              <span className="text-white font-bold text-sm">الطلاب بدون أرقام</span>
+            </div>
+            <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
+              {dd.noPhoneSection.grades.reduce((a, g) => a + g.students.length, 0)} طالب
+            </span>
+          </button>
+        )
       )}
       {!isAssist && (
         <button ref={refs.exams} onClick={() => setShowExams(true)}
