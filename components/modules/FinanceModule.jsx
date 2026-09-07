@@ -1214,10 +1214,12 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             <div className="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-700/40 rounded-xl px-3 py-2.5">
               <div className="flex items-center gap-1.5">
                 <button onClick={() => goDay(-1)} title="اليوم اللي قبله" className="w-7 h-7 shrink-0 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold">◀</button>
-                <div title="إجمالي المدفوع في هذا اليوم" className="flex items-center gap-1 h-7 px-2.5 shrink-0 rounded-lg bg-emerald-700/20 border border-emerald-600/30">
-                  <span className="text-emerald-400 text-[10px] font-bold whitespace-nowrap">إجمالي اليوم:</span>
-                  <span className="text-emerald-300 text-xs font-black whitespace-nowrap">{dayTotal} ج</span>
-                </div>
+                {role === "admin" && (
+                  <div title="إجمالي المدفوع في هذا اليوم" className="flex items-center gap-1 h-7 px-2.5 shrink-0 rounded-lg bg-emerald-700/20 border border-emerald-600/30">
+                    <span className="text-emerald-400 text-[10px] font-bold whitespace-nowrap">إجمالي اليوم:</span>
+                    <span className="text-emerald-300 text-xs font-black whitespace-nowrap">{dayTotal} ج</span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-slate-300 text-xs font-bold whitespace-nowrap">{dSelDay} {MONTHS_AR[dSelMonth - 1]} {dSelYear}</span>
