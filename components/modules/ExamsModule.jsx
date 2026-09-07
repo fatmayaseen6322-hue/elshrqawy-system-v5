@@ -1851,7 +1851,8 @@ function ExamMistakesReport({ students, centerExams }) {
 // بيانات أخطاء متسجّلة قبل كده تفضل محفوظة وتظهر تاني عادي —
 // إضافة/إزالة بس بالنسبة للسؤال اللي بتتغيّر حالته.
 // ══════════════════════════════════════════════════════════════
-function ExamPickerBox({ exams, onSelect, onCreateNew, allowCreate }) {
+function ExamPickerBox({ exams, onSelect, onCreateNew, allowCreate, role, onDeleteExam, onEditExam }) {
+  const isMaster = role === "admin";
   return (
     <div className="space-y-2">
       <div style={PICKER_FONT} className="text-white font-extrabold text-sm px-1">اختاري الامتحان</div>
@@ -1863,15 +1864,25 @@ function ExamPickerBox({ exams, onSelect, onCreateNew, allowCreate }) {
       ) : (
         <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden divide-y divide-slate-700/40">
           {exams.map((ex, i) => (
-            <button key={ex.id} type="button" onClick={() => onSelect(ex.id)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800 transition-colors text-right">
-              <span className="text-xl shrink-0">{fileKindIcon(ex.fileName || "")}</span>
-              <div className="flex-1 min-w-0">
-                <div className="text-white text-xs font-bold truncate">امتحان {i + 1}{ex.fileName ? ` — ${ex.fileName}` : " — يدوي"}</div>
-                <div className="text-slate-500 text-xs">{ex.numQuestions || 0} سؤال · {ex.date}</div>
-              </div>
-              <span className="text-slate-500 text-xs shrink-0">اختيار ›</span>
-            </button>
+            <div key={ex.id} className="w-full flex items-center gap-1.5 px-3 py-2.5 hover:bg-slate-800 transition-colors">
+              <button type="button" onClick={() => onSelect(ex.id)}
+                className="flex-1 min-w-0 flex items-center gap-3 text-right">
+                <span className="text-xl shrink-0">{fileKindIcon(ex.fileName || "")}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-xs font-bold truncate">امتحان {i + 1}{ex.fileName ? ` — ${ex.fileName}` : " — يدوي"}</div>
+                  <div className="text-slate-500 text-xs">{ex.numQuestions || 0} سؤال · {ex.date}</div>
+                </div>
+              </button>
+              {isMaster && onEditExam && (
+                <button type="button" title="تعديل الامتحان" onClick={() => onEditExam(ex)}
+                  className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-sm">📄</button>
+              )}
+              {isMaster && onDeleteExam && (
+                <button type="button" title="حذف الامتحان" onClick={() => onDeleteExam(ex)}
+                  className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 text-sm">🗑️</button>
+              )}
+              <button type="button" onClick={() => onSelect(ex.id)} className="text-slate-500 text-xs shrink-0">اختيار ›</button>
+            </div>
           ))}
           {allowCreate && (
             <button type="button" onClick={onCreateNew} className="w-full px-3 py-2.5 text-emerald-400 text-xs font-bold hover:bg-slate-800 transition-colors">➕ تسجيل امتحان جديد</button>
@@ -1879,6 +1890,85 @@ function ExamPickerBox({ exams, onSelect, onCreateNew, allowCreate }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── مودال (المستر بس): تعديل اسم الامتحان و/أو استبدال ملف الامتحان
+// نفسه بملف Word/PDF/صورة جديد — بيعيد قراءة نص الأسئلة تلقائيًا
+// ويحدّث بيانات الامتحان (id بيفضل زي ما هو عشان أخطاء الطلاب المسجَّلة
+// عليه من قبل تفضل مربوطة بيه صح) ──
+function ExamEditModal({ exam, setCenterExams, onClose }) {
+  const [name, setName]     = useState(exam.fileName || "");
+  const [newFile, setNewFile] = useState(null);
+  const [busy, setBusy]     = useState(false);
+  const [toast, setToast]   = useState(null);
+  const ref = useRef(null);
+
+  const pickFile = f => {
+    if (!f) return;
+    const ext = f.name.split(".").pop().toLowerCase();
+    if (!EXAM_ACCEPT.includes(ext)) { setToast({ msg: "الصيغة غير مدعومة", type: "error" }); return; }
+    setNewFile(f);
+    if (!name.trim()) setName(f.name);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      let patch = { fileName: name.trim() || exam.fileName || null };
+      if (newFile) {
+        const ext = newFile.name.split(".").pop().toLowerCase();
+        const isImage = ["jpg", "jpeg", "png", "webp"].includes(ext);
+        const isPdf = ext === "pdf";
+        const isDocx = ext === "docx";
+        let rawText = "";
+        if (isDocx) rawText = await extractTextFromDocx(newFile);
+        else if (isImage) rawText = await ocrRecognize(newFile);
+        else if (isPdf) rawText = await extractTextFromPdf(newFile);
+        patch.fileType = ext;
+        patch.fileSize = newFile.size;
+        if (!name.trim()) patch.fileName = newFile.name;
+        if (rawText && rawText.trim()) {
+          const { numQuestions, questionMeta, pointsPerQuestion } = parseQuestionsFromText(rawText);
+          if (numQuestions) {
+            patch.numQuestions = numQuestions;
+            patch.pointsPerQuestion = pointsPerQuestion || exam.pointsPerQuestion || 4;
+            patch.questionMeta = questionMeta;
+          }
+        }
+      }
+      setCenterExams(p => (p || []).map(e => e.id === exam.id ? { ...e, ...patch } : e));
+      setToast({ msg: "✓ اتحفظ التعديل", type: "success" });
+      setTimeout(onClose, 700);
+    } catch {
+      setToast({ msg: "⚠️ حصل خطأ أثناء حفظ التعديل", type: "error" });
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="✏️ تعديل الامتحان" onClose={onClose}>
+      <div className="space-y-3">
+        <Field label="اسم الامتحان">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="مثال: امتحان الأسبوع 2"
+            className="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none" />
+        </Field>
+        <div>
+          <button type="button" onClick={() => ref.current?.click()}
+            className="w-full flex items-center justify-center gap-2 bg-slate-800/60 border border-slate-700/40 border-dashed rounded-xl px-3 py-3 text-blue-300 text-xs font-bold">
+            📄 {newFile ? newFile.name : "استبدال ملف الامتحان (Word / PDF / صورة)"}
+          </button>
+          <input ref={ref} type="file" accept={EXAM_ACCEPT} className="hidden"
+            onChange={e => { pickFile(e.target.files?.[0]); e.target.value = ""; }} />
+          {newFile && <div className="text-slate-500 text-[11px] mt-1">هيتم إعادة قراءة نص الأسئلة تلقائيًا من الملف الجديد.</div>}
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <Btn variant="ghost" onClick={onClose} disabled={busy}>إلغاء</Btn>
+          <Btn variant="success" onClick={save} disabled={busy}>{busy ? "⏳ جاري الحفظ..." : "💾 حفظ"}</Btn>
+        </div>
+      </div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </Modal>
   );
 }
 
@@ -2138,12 +2228,14 @@ function StudentCorrectionPage({ student, grade, unit, lesson, exam, setStudents
 // 🆕 عرض الأخطاء: صف ← وحدة/درس ← اختيار امتحان (مستطيل) ← طالب
 // ← صفحة تعرض أرقام الأسئلة الغلط + زر نسخ + زر طباعة
 // ══════════════════════════════════════════════════════════════
-function ExamErrorsFlow({ students, centerExams, setCenterExams }) {
+function ExamErrorsFlow({ students, centerExams, setCenterExams, role }) {
   const [grade,  setGrade]  = useState("");
   const [unit,   setUnit]   = useState("");
   const [lesson, setLesson] = useState("");
   const [examId, setExamId] = useState("");
   const [openStudent, setOpenStudent] = useState(null);
+  const [editingExam, setEditingExam] = useState(null);
+  const [confirmDeleteExam, setConfirmDeleteExam] = useState(null);
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
   const gradeStudents = useMemo(() => (students || []).filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
@@ -2159,6 +2251,13 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams }) {
   const resetToGrades   = () => { setGrade("");  setUnit("");  setLesson("");  setExamId(""); };
   const resetUnitLesson = () => { setUnit("");   setLesson(""); setExamId(""); };
   const resetExam       = () => { setExamId(""); };
+
+  const deleteExam = () => {
+    if (!confirmDeleteExam || !setCenterExams) return;
+    setCenterExams(p => (p || []).filter(e => e.id !== confirmDeleteExam.id));
+    if (examId === confirmDeleteExam.id) setExamId("");
+    setConfirmDeleteExam(null);
+  };
 
   const errQsFor = s => selectedExam
     ? (s.examErrors || [])
@@ -2208,7 +2307,26 @@ function ExamErrorsFlow({ students, centerExams, setCenterExams }) {
       <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-red-300 text-xs text-center">
         {grade} — وحدة {unit} — درس {lesson}
       </div>
-      <ExamPickerBox exams={examsForLesson} onSelect={setExamId} allowCreate={false} />
+      <ExamPickerBox exams={examsForLesson} onSelect={setExamId} allowCreate={false}
+        role={role} onEditExam={setEditingExam} onDeleteExam={setConfirmDeleteExam} />
+
+      {editingExam && (
+        <ExamEditModal exam={editingExam} setCenterExams={setCenterExams} onClose={() => setEditingExam(null)} />
+      )}
+
+      {confirmDeleteExam && (
+        <Modal title="🗑️ حذف الامتحان" onClose={() => setConfirmDeleteExam(null)}>
+          <div className="space-y-3">
+            <div className="text-slate-300 text-sm">
+              هل أنتِ متأكدة من حذف "{confirmDeleteExam.fileName || "الامتحان"}"؟ الأخطاء المسجَّلة عليه هتفضل محفوظة في بيانات الطلاب، لكن الامتحان مش هيظهر في القوائم تاني.
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Btn variant="ghost" onClick={() => setConfirmDeleteExam(null)}>إلغاء</Btn>
+              <Btn variant="danger" onClick={deleteExam}>حذف نهائي</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 
@@ -2705,7 +2823,7 @@ function ExamFileUploadInline({ grade, unit, lesson, setCenterExams, onDone }) {
   );
 }
 
-export default function ExamsModule({ students, setStudents, addActivity, questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams }) {
+export default function ExamsModule({ students, setStudents, addActivity, questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams, role }) {
   const [activePanel, setActivePanel] = useState(null);
 
   if (activePanel) {
@@ -2722,7 +2840,7 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
         </div>
 
         {activePanel === "errors"     && <ExamCorrectionFlow     students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
-        {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} setCenterExams={setCenterExams} />}
+        {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} setCenterExams={setCenterExams} role={role} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
     );
