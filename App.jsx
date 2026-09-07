@@ -393,7 +393,14 @@ export default function App() {
 
   // #7 — إذا لم يسجل الدخول بعد، نعرض RoleGate
   if (!currentRole) {
-    return <RoleGate settings={settings} onEnter={(r) => { setCurrentRole(r); if (r.role === "assist") setPage("dashboard"); addActivity("login", `دخل كـ ${r.label}`); }} />;
+    return <RoleGate settings={settings} onEnter={(r) => {
+      setCurrentRole(r);
+      if (r.role === "assist") {
+        setPage("dashboard");
+        showToast(`👋 أهلا مس ${r.name || r.label}`, "success");
+      }
+      addActivity("login", `دخل كـ ${r.label}`);
+    }} />;
   }
 
   // #7 — الصفحات المسموح بها للدور الحالي

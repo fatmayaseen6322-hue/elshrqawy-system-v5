@@ -10,6 +10,36 @@ const fmt  = n => (n || 0).toLocaleString("en-US") + " ج";
 const fmtM = n => (n || 0).toLocaleString("en-US");
 
 // ══════════════════════════════════════════════════════════════
+// صوت إنذار بسيط وواطي (Web Audio API — من غير أي ملف صوت خارجي)
+// بيتشغل مرة واحدة لما الأسست تفتح برج المراقبة ولسه فيه متأخرين
+// أو طلاب بدون أرقام، عشان يلفت انتباهها.
+// ══════════════════════════════════════════════════════════════
+function playAssistAlertSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const beep = (start, freq, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + start);
+      gain.gain.setValueAtTime(0, now + start);
+      gain.gain.linearRampToValueAtTime(0.07, now + start + 0.03);
+      gain.gain.linearRampToValueAtTime(0, now + start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + start);
+      osc.stop(now + start + dur + 0.05);
+    };
+    beep(0, 420, 0.28);
+    beep(0.38, 340, 0.28);
+    setTimeout(() => { try { ctx.close(); } catch (e) {} }, 1500);
+  } catch (e) { /* الجهاز مش بيدعم الصوت — تجاهل بهدوء */ }
+}
+
+// ══════════════════════════════════════════════════════════════
 // كشف التكرار: طلاب بنفس الاسم *وفي نفس الصف بالظبط* (بغض النظر عن
 // المجموعة) — لو طالبين بنفس الاسم في صفوف مختلفة، ده طبيعي (إخوات في
 // سنين مختلفة مثلاً) ومش بيتحسب تكرار أصلاً. أو نفس رقم التليفون مسجّل
@@ -406,6 +436,10 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [examsGrade, setExamsGrade] = useState(null);
   const [showDup, setShowDup] = useState(false);
   const [confirmDeleteDup, setConfirmDeleteDup] = useState(null);
+  // ── تنبيه الأسست: رسائل ثابتة على الشاشة متختفيش إلا لما تدوس على
+  // قسم "المتأخرين" وبعده "بدون أرقام" — عشان تتأكد إنها فعلاً شافتهم
+  const [ackLate, setAckLate] = useState(false);
+  const [ackNoPhone, setAckNoPhone] = useState(false);
 
   // بحث التوبار العلوي: مفيش صف فردي ثابت للطالب في برج المراقبة (البيانات
   // كلها مجمّعة/مقسّمة بالصف)، فبنعرضلها بطاقة معلومات سريعة عنه بدل ما
@@ -484,6 +518,16 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const effectivePeriod = isAssist ? "today" : period;
   const revVal = effectivePeriod === "today" ? dd.stats.revToday : effectivePeriod === "week" ? dd.stats.revWeek : dd.stats.revMonth;
   const oldDebtorsCount = dd.gradeDebtStudents.reduce((a, g) => a + g.list.length, 0);
+  const noPhoneCount = dd.noPhoneSection.grades.reduce((a, g) => a + g.students.length, 0);
+
+  // تنبيه صوتي بسيط لما الأسست تفتح برج المراقبة ولسه فيه متأخرين أو
+  // طلاب بدون أرقام محتاجين متابعة (مرة واحدة بس عند فتح الصفحة)
+  useEffect(() => {
+    if (isAssist && (oldDebtorsCount > 0 || noPhoneCount > 0)) {
+      playAssistAlertSound();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAssist]);
 
   // ── صفحة "الطلاب المتأخرين من شهور سابقة" — منفصلة عن برج المراقبة، بتتفتح
   // من زرار 👤▾ بجوار كارت إجمالي الديون، وترجع لبرج المراقبة بزرار الرجوع فوق
@@ -853,10 +897,35 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {isAssist && (
+        <style>{`
+          @keyframes assistAlertGlow {
+            0%, 100% { box-shadow: 0 0 0px 0px rgba(248,113,113,0.0); }
+            50% { box-shadow: 0 0 16px 4px rgba(248,113,113,0.55); }
+          }
+          .assist-glow { animation: assistAlertGlow 1.6s ease-in-out infinite; }
+        `}</style>
+      )}
+      <div className={`flex items-center justify-between gap-3 flex-wrap ${isAssist && (oldDebtorsCount > 0 || noPhoneCount > 0) ? "assist-glow rounded-2xl px-1" : ""}`}>
         <div><h1 className="text-lg font-bold text-white flex items-center gap-2">🗼 برج المراقبة{alerts.length > 0 && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">{alerts.length}</span>}</h1><p className="text-xs text-slate-500">Control Tower</p></div>
         {!isAssist && <div className="flex gap-1 bg-slate-800 rounded-xl p-1">{Object.entries(periodLabels).map(([k, v]) => <button key={k} onClick={() => setPeriod(k)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === k ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}>{v}</button>)}</div>}
       </div>
+      {isAssist && !ackLate && oldDebtorsCount > 0 && (
+        <button onClick={() => setAckLate(true)}
+          className="assist-glow w-full bg-red-500/15 border border-red-500/50 rounded-2xl p-4 text-right">
+          <div className="text-red-300 font-bold text-sm">🚨 يا مس، فيه طلاب متأخرين في السداد من شهور سابقة!</div>
+          <div className="text-red-300/80 text-xs mt-1">شوفي القايمة تحت واطلبي منهم يدفعوا الفلوس المتأخرة.</div>
+          <div className="text-red-200/60 text-[11px] mt-2">(دوسي هنا بعد ما تشوفي المتأخرين عشان الرسالة تختفي)</div>
+        </button>
+      )}
+      {isAssist && (ackLate || oldDebtorsCount === 0) && !ackNoPhone && noPhoneCount > 0 && (
+        <button onClick={() => setAckNoPhone(true)}
+          className="assist-glow w-full bg-amber-500/15 border border-amber-500/50 rounded-2xl p-4 text-right">
+          <div className="text-amber-300 font-bold text-sm">📵 يا مس، فيه طلاب مسجّلين من غير رقم تليفون!</div>
+          <div className="text-amber-300/80 text-xs mt-1">شوفي القايمة تحت واطلبي منهم يبعتوا رقم ولي الأمر أو رقم الطالب.</div>
+          <div className="text-amber-200/60 text-[11px] mt-2">(دوسي هنا بعد ما تشوفي الطلاب بدون أرقام عشان الرسالة تختفي)</div>
+        </button>
+      )}
       {!isAssist && (
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
           <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />
@@ -872,10 +941,11 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       )}
       {isAssist && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <button onClick={() => setAckLate(true)}
+            className={`w-full flex items-center justify-between ${oldDebtorsCount > 0 && !ackLate ? "assist-glow" : ""} bg-slate-800/40 rounded-xl px-2 py-1.5 text-right`}>
             <h3 className="text-white font-bold text-sm flex items-center gap-2">🟠 الطلاب المتأخرين من شهور سابقة</h3>
             <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">{oldDebtorsCount}</span>
-          </div>
+          </button>
           {oldDebtorsCount === 0 ? (
             <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 text-center text-slate-500 text-xs">لا يوجد متأخرين من شهور سابقة 🎉</div>
           ) : (
@@ -919,12 +989,13 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
       {dd.noPhoneSection.grades.length > 0 && (
         isAssist ? (
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <button onClick={() => setAckNoPhone(true)}
+              className={`w-full flex items-center justify-between ${noPhoneCount > 0 && !ackNoPhone ? "assist-glow" : ""} bg-slate-800/40 rounded-xl px-2 py-1.5 text-right`}>
               <h3 className="text-white font-bold text-sm flex items-center gap-2">📵 الطلاب بدون أرقام</h3>
               <span className="bg-amber-500/15 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
-                {dd.noPhoneSection.grades.reduce((a, g) => a + g.students.length, 0)} طالب
+                {noPhoneCount} طالب
               </span>
-            </div>
+            </button>
             {dd.noPhoneSection.grades.map((g, i) => (
               <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
                 <div className="px-3 py-2 bg-amber-500/10 flex items-center justify-between">
