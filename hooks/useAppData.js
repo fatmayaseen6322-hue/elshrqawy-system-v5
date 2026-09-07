@@ -358,7 +358,30 @@ export default function useAppData() {
       } else {
         setStudents(prev => (prev || []).map(s => examSnap[s.id] ? { ...s, score: examSnap[s.id].score, weak: examSnap[s.id].weak } : s));
       }
-      if (fullSettings) setSettings(fullSettings);
+      if (fullSettings) {
+        // ── إصلاح: منع "استرجاع من السحابة" من مسح أي باسورد (مستر/أسيست/
+        // مستلمين) اتحفظ محليًا بعد آخر نسخة كاملة اترفعت على السحابة.
+        // فكرة الإصلاح: النسخة السحابية القديمة ممكن متكونش فيها آخر
+        // باسورد اتحفظ، فبدل ما نستبدل settings بالكامل، بنفضّل الباسوردات
+        // المحلية دايمًا لو موجودة، وناخد باقي إعدادات النسخة السحابية عادي.
+        setSettings(prev => {
+          const localReceivers = prev?.receivers || [];
+          const cloudReceivers = fullSettings.receivers || [];
+          const mergedReceivers = cloudReceivers.map(cr => {
+            const lr = localReceivers.find(l => l.id === cr.id);
+            return (lr && lr.password) ? { ...cr, password: lr.password } : cr;
+          });
+          localReceivers.forEach(lr => {
+            if (!mergedReceivers.find(m => m.id === lr.id)) mergedReceivers.push(lr);
+          });
+          return {
+            ...fullSettings,
+            receivers: mergedReceivers,
+            password:         prev?.password         || fullSettings.password,
+            cashierPassword:  prev?.cashierPassword  || fullSettings.cashierPassword,
+          };
+        });
+      }
 
       // الامتحانات (بنك الأسئلة، التصحيح، الأخطاء): لو فيه نسخة كاملة
       // اترفعت من زرار الرفع اليدوي، بتستبدل بالكامل عشان تبقى مطابقة
@@ -498,7 +521,27 @@ export default function useAppData() {
     isApplyingRemote.current = true;
     setStudents(cloud.students || []);
     setSettings(prev => {
-      const merged = { ...prev, ...(cloud.settings || {}) };
+      // ── نفس مبدأ إصلاح الاسترجاع اليدوي: حتى في المزامنة اللحظية بين
+      // الأجهزة، أي باسورد (مستر/أسيست/مستلم) محفوظ محليًا بيتفضّل دايمًا
+      // على أي نسخة جاية من جهاز/سحابة تانية، عشان محدش يفقد باسورد
+      // اتحفظ لسه من غير قصد بسبب فرق توقيت بسيط بين الأجهزة.
+      const cloudSettings = cloud.settings || {};
+      const localReceivers = prev?.receivers || [];
+      const cloudReceivers = cloudSettings.receivers || localReceivers;
+      const mergedReceivers = cloudReceivers.map(cr => {
+        const lr = localReceivers.find(l => l.id === cr.id);
+        return (lr && lr.password) ? { ...cr, password: lr.password } : cr;
+      });
+      localReceivers.forEach(lr => {
+        if (!mergedReceivers.find(m => m.id === lr.id)) mergedReceivers.push(lr);
+      });
+      const merged = {
+        ...prev,
+        ...cloudSettings,
+        receivers:       mergedReceivers,
+        password:        prev?.password        || cloudSettings.password,
+        cashierPassword: prev?.cashierPassword || cloudSettings.cashierPassword,
+      };
       // #LiveSyncFix2: نحدّث سناب شوت الإعدادات بنفس النسخة اللي قبلناها من
       // السحابة، عشان لو الجهاز ده عمل push بعد كده من غير ما يلمس
       // الإعدادات، ميرفعش نسخة قديمة (زي قبل ما تتحفظ باسوردات المستلمين)
