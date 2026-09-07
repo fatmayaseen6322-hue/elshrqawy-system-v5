@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, MONTHS_AR, TODAY } from "../../constants";
-import { pct, scC, isBlocked, normalizeAr, isMonthBlocked, isMonthExempt } from "../../utils";
+import { pct, scC, isBlocked, normalizeAr, isMonthBlocked, isMonthExempt, getStatementMonths } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
 import { Bar } from "../ui";
 
@@ -436,6 +436,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [examsGrade, setExamsGrade] = useState(null);
   const [showDup, setShowDup] = useState(false);
   const [confirmDeleteDup, setConfirmDeleteDup] = useState(null);
+  const [showReceiversCompare, setShowReceiversCompare] = useState(false);
   // ── تنبيه الأسست: رسائل ثابتة على الشاشة متختفيش إلا لما تدوس على
   // قسم "المتأخرين" وبعده "بدون أرقام" — عشان تتأكد إنها فعلاً شافتهم
   const [ackLate, setAckLate] = useState(false);
@@ -477,6 +478,35 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const dd = useMemo(() => buildDashboardData(students, finRecords, settings?.gradeFees, attRecords), [students, finRecords, settings?.gradeFees, attRecords]);
   const alerts = students.filter(s => s.score < 60 || (dd.absenceByStudentId?.[s.id]?.absent || 0) > 8 || (s.totalFees - s.paid) > 1200);
   const dupData = useMemo(() => buildDuplicatesData(studentsProp), [studentsProp]);
+
+  // ══════════════════════════════════════════════════════════════
+  // جدول مقارنة المستلمين ("المس") — لكل مستلم (مس)، عدد الطلاب اللي
+  // حصّل منهم فعليًا في كل شهر من شهور السنة الدراسية (أغسطس..يونيو).
+  // بنعتمد على finRecords نفسها (receiverId + month + year + amount>0)
+  // زي باقي حسابات المصاريف بالظبط.
+  // ══════════════════════════════════════════════════════════════
+  const receiversCompareMonths = useMemo(() => {
+    const [curYearStr, curMonthStr] = TODAY.split("-");
+    const curYear  = parseInt(curYearStr, 10);
+    const curMonth = parseInt(curMonthStr, 10);
+    const startYear = curMonth >= 8 ? curYear : curYear - 1;
+    return getStatementMonths(startYear);
+  }, []);
+
+  const receiversCompareData = useMemo(() => {
+    const receivers = (settings?.receivers || []);
+    return receivers.map(r => {
+      const counts = receiversCompareMonths.map(({ month, year }) => {
+        const studentIds = new Set(
+          (finRecords || [])
+            .filter(rec => rec.receiverId === r.id && rec.month === month && rec.year === year && (rec.amount || 0) > 0)
+            .map(rec => rec.studentId)
+        );
+        return studentIds.size;
+      });
+      return { id: r.id, name: r.name, active: r.active !== false, counts, total: counts.reduce((a, b) => a + b, 0) };
+    });
+  }, [settings?.receivers, finRecords, receiversCompareMonths]);
   // بتتعلّم لما يتدوس ✓ على اسم في "الأسماء المكررة" — بتحفظ إن الطالب/
   // الطلاب دول اتأكد عليهم إنهم مش تكرار فعلي (زي إخوات بنفس الاسم)
   // فيختفوا من القايمة نهائيًا وميرجعوش تاني.
@@ -732,6 +762,50 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     );
   }
 
+  // ── صفحة "مقارنة المستلمين (المس)" — جدول: صف لكل مستلم، عمود لكل
+  // شهر دراسي (أغسطس..يونيو)، وكل خانة = عدد الطلاب اللي حصّل منهم
+  // المستلم ده في الشهر ده. ──
+  if (showReceiversCompare) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => setShowReceiversCompare(false)} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <h2 className="text-white font-bold text-sm">مقارنة المستلمين (المس)</h2>
+          <span className="w-10" />
+        </div>
+
+        {receiversCompareData.length === 0 ? (
+          <div className="text-center text-slate-500 text-xs py-8">مفيش أسماء مستلمين مسجّلة — ضيفيهم من الإعدادات ← أسماء المستلمين</div>
+        ) : (
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-x-auto">
+            <table className="w-full text-xs whitespace-nowrap">
+              <thead>
+                <tr className="bg-slate-900/60">
+                  <th className="px-3 py-2.5 text-right text-slate-400 font-bold sticky right-0 bg-slate-900/60">المس</th>
+                  {receiversCompareMonths.map(({ month, year }) => (
+                    <th key={`${month}-${year}`} className="px-3 py-2.5 text-center text-slate-400 font-bold">{MONTHS_AR[month - 1]}</th>
+                  ))}
+                  <th className="px-3 py-2.5 text-center text-emerald-400 font-bold">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/40">
+                {receiversCompareData.map(r => (
+                  <tr key={r.id} className={r.active ? "" : "opacity-50"}>
+                    <td className="px-3 py-2.5 text-white font-bold sticky right-0 bg-slate-800/90">{r.name}{!r.active && " (معطّل)"}</td>
+                    {r.counts.map((c, i) => (
+                      <td key={i} className={`px-3 py-2.5 text-center ${c > 0 ? "text-slate-200" : "text-slate-600"}`}>{c || "—"}</td>
+                    ))}
+                    <td className="px-3 py-2.5 text-center text-emerald-400 font-bold">{r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── صفحة "الطلاب بدون أرقام" — نفس آلية "الطلاب المتأخرين من شهور سابقة"
   // بالظبط: مستطيل واحد، وبالضغط عليه بيفتح شاشة صفوف ثم أسماء
   if (showDup) {
@@ -936,6 +1010,12 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
             <span className="text-2xl">🧬</span>
             <div className={`text-2xl font-bold ${dupData.count > 0 ? "text-red-400" : "text-emerald-400"}`}>{dupData.count}</div>
             <div className="text-slate-400 text-xs">الأسماء المكررة</div>
+          </button>
+          <button onClick={() => setShowReceiversCompare(true)}
+            className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
+            <span className="text-2xl">🧑‍💼</span>
+            <div className="text-2xl font-bold text-blue-400">{(settings?.receivers || []).length}</div>
+            <div className="text-slate-400 text-xs">المس</div>
           </button>
         </div>
       )}
