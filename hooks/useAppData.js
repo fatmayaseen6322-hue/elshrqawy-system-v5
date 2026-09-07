@@ -496,7 +496,14 @@ export default function useAppData() {
   const applyCloudSnapshot = useCallback((cloud) => {
     if (!cloud) return;
     const localTs = lsGet(KEYS.liveSyncTs, 0);
-    if (!cloud.updatedAt || cloud.updatedAt <= localTs) return;
+    if (!cloud.updatedAt || cloud.updatedAt <= localTs) {
+      // ── إصلاح: كان بيرجع من غير ما يحدّث liveSyncState خالص، فالكارت
+      // في الإعدادات كان بيفضل واقف على "جاري التحقق من الاتصال..." لحد
+      // ما يحصل تحديث فعلي من جهاز تاني — حتى لو كل حاجة شغالة تمام
+      // ومفيش حاجة جديدة أصلاً. دلوقتي بنأكد إن الاتصال تمام ومتزامن. ──
+      setLiveSyncState(s => (s.status === "idle" ? { status: "success", message: "متصلة ومتزامنة ✓" } : s));
+      return;
+    }
 
     // ── إصلاح جذري لمشكلة "رجوع الطلاب المكررين بعد الحذف/البلوك" ──
     // لو فيه تعديل محلي حصل من ثانية/اتنين ولسه في نافذة الـ 3 ثواني
@@ -563,17 +570,30 @@ export default function useAppData() {
   }, [setStudents, setSettings, setFinRecords, setAttRecords, setWebExams, setCenterExams]);
 
   const pullLiveState = useCallback(async () => {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine) {
+      setLiveSyncState({ status: "error", message: "مفيش اتصال بالنت دلوقتي — هتتزامن أول ما يرجع النت" });
+      return;
+    }
     try {
       const { doc, getDoc } = await import("firebase/firestore");
       const { db } = await import("../src/firebase");
       const snap = await getDoc(doc(db, "elshrqawy_live_state", "main"));
-      if (!snap.exists()) return;
+      if (!snap.exists()) {
+        // ── إصلاح: أول مرة يشتغل فيها النظام، مفيش مستند "elshrqawy_live_state"
+        // خالص على السحابة، فالكود القديم كان بيرجع من غير ما يعمل حاجة
+        // ومن غير ما يحدّث الحالة — فالكارت يفضل واقف على "جاري التحقق"
+        // للأبد. الحل: نرفع نسخة أولى فورًا من بيانات الجهاز ده عشان
+        // "ننشئ" المستند ونبدأ المزامنة على طول من غير ما نستنى أول تعديل.
+        const ts = Date.now();
+        lsSet(KEYS.liveSyncTs, ts);
+        await pushLiveState(ts);
+        return;
+      }
       applyCloudSnapshot(snap.data());
     } catch (e) {
-      setLiveSyncState({ status: "error", message: "تعذّر سحب التحديثات (تأكد من النت)" });
+      setLiveSyncState({ status: "error", message: "تعذّر سحب التحديثات (تأكد من صلاحيات Firestore والنت)" });
     }
-  }, [applyCloudSnapshot]);
+  }, [applyCloudSnapshot, pushLiveState]);
 
   // أول ما الصفحة تتفتح: اسحب أحدث نسخة فورًا (لو النت شغال)، وبعدين
   // فضّل "مستمع" (onSnapshot) شغال طول الوقت — أي جهاز تاني يغيّر حاجة
