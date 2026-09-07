@@ -254,8 +254,12 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     }
     return true;
   };
-  const buFinCount = buDoFin ? (finRecords || []).filter(buMatchFin).length : 0;
-  const buAttCount = buDoAtt ? (attRecords || []).filter(buMatchAtt).length : 0;
+  const buFinList = buDoFin ? (finRecords || []).filter(buMatchFin) : [];
+  const buAttList = buDoAtt ? (attRecords || []).filter(buMatchAtt) : [];
+  const buFinCount = buFinList.length;
+  const buAttCount = buAttList.length;
+  const buAttStatusLabel = st => st === "p" ? "✓ حاضر" : st === "a" ? "✗ غايب" : st === "l" ? "⏰ متأخر" : st === "t" ? "↔️ منقول" : "—";
+  const buStudentName = id => students.find(s => s.id === id)?.name || "طالب محذوف";
   const buExecute = () => {
     const finN = buFinCount, attN = buAttCount;
     if (finN === 0 && attN === 0) { setToast({ msg: "مفيش أي سجلات مطابقة", type: "error" }); return; }
@@ -608,9 +612,23 @@ export default function SettingsModule({ settings, setSettings, students, setStu
                     <span className="text-slate-300 text-sm">✅ الحضور</span>
                     <Toggle on={buDoAtt} onChange={setBuDoAtt} />
                   </div>
-                  <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl px-4 py-3 text-center">
-                    <div className="text-slate-400 text-xs mb-1">هيتم إلغاء</div>
-                    <div className="text-white font-bold text-sm">{buFinCount} سجل مصاريف · {buAttCount} سجل حضور</div>
+                  <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-3 space-y-2 max-h-72 overflow-y-auto">
+                    <div className="text-slate-400 text-xs text-center mb-1">هيتم إلغاء {buFinCount + buAttCount} سجل — {buFinCount} مصاريف · {buAttCount} حضور</div>
+                    {buFinCount === 0 && buAttCount === 0 && (
+                      <div className="text-slate-500 text-xs text-center py-3">مفيش سجلات مطابقة</div>
+                    )}
+                    {buFinList.map(r => (
+                      <div key={"fin-" + r.id} className="bg-red-500/5 border border-red-500/10 rounded-lg px-3 py-2 text-xs">
+                        <div className="text-slate-100 font-medium">💰 {r.studentName} — {r.grade} م{r.group}</div>
+                        <div className="text-slate-400 mt-0.5">{r.amount} ج · المستلم: {r.receiverName || "—"} · {r.timestamp}</div>
+                      </div>
+                    ))}
+                    {buAttList.map(r => (
+                      <div key={"att-" + r.id} className="bg-red-500/5 border border-red-500/10 rounded-lg px-3 py-2 text-xs">
+                        <div className="text-slate-100 font-medium">✅ {buStudentName(r.studentId)} — {r.grade} م{r.group}</div>
+                        <div className="text-slate-400 mt-0.5">{buAttStatusLabel(r.status)}{r.time ? ` · الساعة ${r.time}` : ""}{r.takenBy ? ` · بواسطة ${r.takenBy}` : ""}</div>
+                      </div>
+                    ))}
                   </div>
                   <Btn variant="danger" size="lg" className="w-full" onClick={buExecute}>🗑️ نفّذ التراجع</Btn>
                 </div>
