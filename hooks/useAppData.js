@@ -318,6 +318,22 @@ export default function useAppData() {
         examSnapshot:  { ...sync.examSnapshot, ...Object.fromEntries(examChanges.map(c => [c.studentId, { score: c.score, weak: c.weak }])) },
       });
 
+      // ── إصلاح مشكلة "التعديلات مش وصلة أونلاين" ──────────────────
+      // زرار "رفع نسخة على السحابة" اليدوي كان بيرفع بس على مستند
+      // النسخ الاحتياطية اليومية (elshrqawy_daily_backups)، وده مستند
+      // "استرجاع يدوي بس" — مفيش أي جهاز تاني بيسمعه لحظيًا. المزامنة
+      // اللحظية بين الأجهزة (اللي بتخلي الموقع أونلاين يتحدّث لوحده)
+      // بتعتمد على مستند مختلف تمامًا (elshrqawy_live_state/main). يعني
+      // كان ممكن الرفع "ينجح" ظاهريًا من غير ما يوصل فعليًا للموقع
+      // الحي. الحل: أي رفع يدوي (force=true) لازم كمان يدفع نسخة كاملة
+      // لمستند المزامنة اللحظية على طول، عشان أي جهاز تاني فاتح الموقع
+      // (أونلاين) ياخد التحديث فورًا من غير ما ينتظر زرار "استرجاع".
+      if (force && pushLiveStateRef.current) {
+        const ts = Date.now();
+        lsSet(KEYS.liveSyncTs, ts);
+        await pushLiveStateRef.current(ts, true);
+      }
+
       setCloudBackupState(hasAnything
         ? { status: "success", message: `تم رفع نسخة تراكمية تلقائية ليوم ${today} ✓` }
         : { status: "success", message: `لا يوجد جديد للرفع اليوم — كل شيء متزامن ✓` });
@@ -325,6 +341,12 @@ export default function useAppData() {
       setCloudBackupState({ status: "error", message: "فشل النسخ الاحتياطي — تأكد من إعداد Firebase في .env" });
     }
   }, []);
+
+  // #LiveSyncFullBackupFix: مرجع (ref) لدالة pushLiveState عشان
+  // runIncrementalCloudBackup تقدر تستدعيها من غير مشاكل ترتيب تعريف
+  // (pushLiveState متعرّفة تحت في الكود) ومن غير ما تدخلها في dependency
+  // array وتسبب إعادة إنشاء الدالة كل مرة.
+  const pushLiveStateRef = useRef(null);
 
   // نسخة "يدوية" للاستخدام من زرار الإعدادات — نفس المنطق التراكمي، لكن force=true
   // (بترفع أي جديد فورًا من غير ما تستنى بداية يوم جديد)
@@ -445,7 +467,7 @@ export default function useAppData() {
   const pushTimer = useRef(null);
   const firstRun  = useRef(true);
 
-  const pushLiveState = useCallback(async (ts) => {
+  const pushLiveState = useCallback(async (ts, forceFull = false) => {
     if (!navigator.onLine) return;
     try {
       const { doc, setDoc } = await import("firebase/firestore");
@@ -464,7 +486,7 @@ export default function useAppData() {
       // عادي زي ما هو من غير ما يلمس قائمة الطلاب خالص.
       const currentStudentsJSON = JSON.stringify(lsGet(KEYS.students, []));
       const lastSyncedJSON      = lsGet(KEYS.studentsSyncSnapshot, null);
-      const studentsChangedLocally = lastSyncedJSON === null || currentStudentsJSON !== lastSyncedJSON;
+      const studentsChangedLocally = forceFull || lastSyncedJSON === null || currentStudentsJSON !== lastSyncedJSON;
 
       // ── #LiveSyncFix2: نفس الإصلاح بالظبط بتاع الطلاب، لكن للإعدادات ──
       // كان أي جهاز فاتح بنسخة قديمة من الإعدادات (مثلاً قبل ما تحطي
@@ -475,7 +497,7 @@ export default function useAppData() {
       // محليًا فعلاً (بالمقارنة بآخر نسخة اتزامنت معاه).
       const currentSettingsJSON = JSON.stringify(lsGet(KEYS.settings, {}));
       const lastSyncedSettingsJSON = lsGet(KEYS.settingsSyncSnapshot, null);
-      const settingsChangedLocally = lastSyncedSettingsJSON === null || currentSettingsJSON !== lastSyncedSettingsJSON;
+      const settingsChangedLocally = forceFull || lastSyncedSettingsJSON === null || currentSettingsJSON !== lastSyncedSettingsJSON;
 
       // ── #LiveSyncFix3: نفس إصلاح الطلاب/الإعدادات بالظبط، لكن لباقي
       // البيانات (مصاريف/حضور/امتحانات). كانت هذه الحقول بترفع دايمًا
@@ -487,16 +509,16 @@ export default function useAppData() {
       // كأنه دافع"). نفس الحل: كل حقل ميترفعش إلا لو اتغيّر محليًا فعلاً
       // بالمقارنة بآخر نسخة اتزامنت معاه.
       const currentFinJSON = JSON.stringify(lsGet(KEYS.finRecords, []));
-      const finChangedLocally = lsGet(KEYS.finRecordsSyncSnapshot, null) === null || currentFinJSON !== lsGet(KEYS.finRecordsSyncSnapshot, null);
+      const finChangedLocally = forceFull || lsGet(KEYS.finRecordsSyncSnapshot, null) === null || currentFinJSON !== lsGet(KEYS.finRecordsSyncSnapshot, null);
 
       const currentAttJSON = JSON.stringify(lsGet(KEYS.attRecords, []));
-      const attChangedLocally = lsGet(KEYS.attRecordsSyncSnapshot, null) === null || currentAttJSON !== lsGet(KEYS.attRecordsSyncSnapshot, null);
+      const attChangedLocally = forceFull || lsGet(KEYS.attRecordsSyncSnapshot, null) === null || currentAttJSON !== lsGet(KEYS.attRecordsSyncSnapshot, null);
 
       const currentWebExamsJSON = JSON.stringify(lsGet(KEYS.webExams, []));
-      const webExamsChangedLocally = lsGet(KEYS.webExamsSyncSnapshot, null) === null || currentWebExamsJSON !== lsGet(KEYS.webExamsSyncSnapshot, null);
+      const webExamsChangedLocally = forceFull || lsGet(KEYS.webExamsSyncSnapshot, null) === null || currentWebExamsJSON !== lsGet(KEYS.webExamsSyncSnapshot, null);
 
       const currentCenterExamsJSON = JSON.stringify(lsGet(KEYS.centerExams, []));
-      const centerExamsChangedLocally = lsGet(KEYS.centerExamsSyncSnapshot, null) === null || currentCenterExamsJSON !== lsGet(KEYS.centerExamsSyncSnapshot, null);
+      const centerExamsChangedLocally = forceFull || lsGet(KEYS.centerExamsSyncSnapshot, null) === null || currentCenterExamsJSON !== lsGet(KEYS.centerExamsSyncSnapshot, null);
 
       const payload = { updatedAt: ts };
       if (studentsChangedLocally) {
@@ -536,6 +558,7 @@ export default function useAppData() {
       setLiveSyncState({ status: "error", message: "تعذّرت المزامنة التلقائية (تأكد من النت)" });
     }
   }, []);
+  pushLiveStateRef.current = pushLiveState;
 
   // بتطبّق نسخة سحابية (جاية من getDoc أو من onSnapshot) على البيانات
   // المحلية — بتاخد بالها من كل أنواع البيانات (طلاب/مصاريف/غياب/امتحانات)
@@ -676,6 +699,22 @@ export default function useAppData() {
     return () => { cancelled = true; if (unsub) unsub(); };
   }, [pullLiveState, applyCloudSnapshot]);
 
+  // ── #LiveSyncOfflineFix: لو الجهاز كان بيعدّل والنت مقطوع وقتها،
+  // pushLiveState كان بيرجع فورًا من غير ما يعمل حاجة (navigator.onLine
+  // = false) ومفيش أي محاولة تانية لرفع التعديل ده لما النت يرجع —
+  // فالتعديل يفضل عالق محليًا للأبد لحد ما يحصل تعديل جديد. الحل:
+  // أول ما النت يرجع (حدث "online")، ادفعي فورًا آخر نسخة محلية على طول
+  // من غير ما تستني تعديل جديد.
+  useEffect(() => {
+    const onOnline = () => {
+      const ts = Date.now();
+      lsSet(KEYS.liveSyncTs, ts);
+      pushLiveState(ts);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [pushLiveState]);
+
   // أي تغيير حقيقي (من المستخدم) في الطلاب أو الإعدادات → ارفع نسخة جديدة
   // (بعد 3 ثواني هدوء عشان ميرفعش مرة لكل حرف بيتكتب)
   useEffect(() => {
@@ -687,7 +726,7 @@ export default function useAppData() {
     pushTimer.current = setTimeout(() => pushLiveState(ts), 3000);
     return () => clearTimeout(pushTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, settings, finRecords, attRecords, webExams]);
+  }, [students, settings, finRecords, attRecords, webExams, centerExams]);
 
 
   const cloudAutoRan = useRef(false);
