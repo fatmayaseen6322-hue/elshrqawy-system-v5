@@ -428,7 +428,9 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
         </td>
         <td className="px-2 py-3 text-center">
           {saved && !editing
-            ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
+            ? (role === "admin"
+                ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
+                : <span className="text-slate-600 text-[10px]" title="التعديل متاح للمستر بس">—</span>)
             : (!lockedReceiver && !saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0)
               ? <button onClick={confirmRegister} title="أكد إن الطالب ده فعلاً دفع" className="px-2 h-8 rounded-lg bg-emerald-700/30 border border-emerald-600/40 text-emerald-300 text-[11px] font-bold hover:bg-emerald-700/50 whitespace-nowrap">✓ تسجيل</button>
               : lockedReceiver
