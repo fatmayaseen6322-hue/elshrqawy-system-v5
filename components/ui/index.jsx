@@ -440,13 +440,22 @@ export function TopSearchBar({ students, onSelect }) {
     return () => document.removeEventListener("mousedown", h);
   }, []);
   const nq = normalizeAr(q).toLowerCase();
-  const res = q.length === 0 ? [] : students.filter(s =>
-    !isBlocked(s) && (
-      normalizeAr(s.name || "").toLowerCase().includes(nq) ||
-      s.id?.toLowerCase().includes(q.toLowerCase()) ||
-      String(s.phone || "").includes(q)
+  const res = q.length === 0 ? [] : students
+    .filter(s =>
+      !isBlocked(s) && (
+        normalizeAr(s.name || "").toLowerCase().includes(nq) ||
+        s.id?.toLowerCase().includes(q.toLowerCase()) ||
+        String(s.phone || "").includes(q)
+      )
     )
-  );
+    .sort((a, b) => {
+      const an = normalizeAr(a.name || "").toLowerCase();
+      const bn = normalizeAr(b.name || "").toLowerCase();
+      const aStarts = an.startsWith(nq) ? 0 : 1;
+      const bStarts = bn.startsWith(nq) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return an.localeCompare(bn, "ar");
+    });
   return (
     <div ref={ref} className="relative flex-1">
       <input value={q} onChange={e => { setQ(e.target.value); setShow(true); }} onFocus={() => setShow(true)}
@@ -456,12 +465,12 @@ export function TopSearchBar({ students, onSelect }) {
       />
       <span className="absolute left-3 top-2.5 text-sm" style={{ color: "var(--text-muted)" }}>🔍</span>
       {show && q.length > 0 && (
-        <div className="absolute top-12 right-0 left-0 shadow-xl z-50 max-h-60 overflow-y-auto"
+        <div className="absolute top-12 right-0 left-0 shadow-xl z-50 max-h-96 overflow-y-auto"
           style={{ background: "var(--sidebar-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-md)" }}
         >
           {res.length === 0
             ? <div className="px-4 py-4 text-sm text-center" style={{ color: "var(--text-muted)" }}>لا توجد نتائج</div>
-            : res.slice(0, 6).map(s => (
+            : res.slice(0, 15).map(s => (
               <button key={s.id} onClick={() => { onSelect(s); setShow(false); setQ(""); }}
                 className="w-full flex items-center gap-3 px-4 py-3 transition-colors"
                 style={{ borderBottom: "1px solid var(--border)" }}
