@@ -306,10 +306,10 @@ function ProblemSection({ data, idRef, extra }) {
                 <div className="flex items-center gap-2"><span className="text-red-400 text-xs">{g.students.length} طالب</span><span className="text-slate-500 text-xs">{open ? "▲" : "▼"}</span></div>
               </button>
               {open && (
-                <div className="border-t border-red-500/15 p-2 overflow-x-auto">
-                  <table className="w-full text-xs min-w-max">
+                <div className="border-t border-red-500/15 p-2 overflow-x-auto rtable-wrap">
+                  <table className="w-full text-xs min-w-max rtable">
                     <thead><tr className="led-thead text-slate-400">{data.cols.map((c, ci) => <th key={ci} className="px-2 py-1.5 text-right font-medium whitespace-nowrap">{c}</th>)}</tr></thead>
-                    <tbody>{g.students.map((s, si) => <tr key={si} className="border-t border-slate-700/30">{renderProblemRow(data.title, s, extra).map((cell, ci) => <td key={ci} className="px-2 py-2 text-slate-300 whitespace-nowrap">{cell}</td>)}</tr>)}</tbody>
+                    <tbody>{g.students.map((s, si) => <tr key={si} className="border-t border-slate-700/30">{renderProblemRow(data.title, s, extra).map((cell, ci) => <td key={ci} className={`px-2 py-2 text-slate-300 whitespace-nowrap ${ci === 0 ? "rt-name" : ""}`} data-label={ci === 0 ? undefined : data.cols[ci]}>{cell}</td>)}</tr>)}</tbody>
                   </table>
                 </div>
               )}
@@ -736,8 +736,8 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
               <div className="text-center text-slate-500 text-xs py-8">مفيش طلاب ضعاف في الصف ده</div>
             ) : (
               <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-max">
+                <div className="overflow-x-auto rtable-wrap">
+                  <table className="w-full text-xs min-w-max rtable">
                     <thead>
                       <tr className="led-thead text-slate-400">
                         {dd.examsSection.cols.map((c, ci) => <th key={ci} className="px-2 py-1.5 text-right font-medium whitespace-nowrap">{c}</th>)}
@@ -747,7 +747,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
                       {gradeList.map((s, si) => (
                         <tr key={si} className="border-t border-slate-700/30">
                           {renderProblemRow(dd.examsSection.title, s).map((cell, ci) => (
-                            <td key={ci} className="px-2 py-2 text-slate-300 whitespace-nowrap">{cell}</td>
+                            <td key={ci} className={`px-2 py-2 text-slate-300 whitespace-nowrap ${ci === 0 ? "rt-name" : ""}`} data-label={ci === 0 ? undefined : dd.examsSection.cols[ci]}>{cell}</td>
                           ))}
                         </tr>
                       ))}

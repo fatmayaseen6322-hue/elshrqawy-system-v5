@@ -182,8 +182,8 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
             {grpStudents.length === 0 ? (
               <div className="text-center text-slate-600 text-xs py-4">مفيش طلاب في المجموعة دي</div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-700/30">
-                <table className="w-full text-right border-collapse">
+              <div className="overflow-x-auto rounded-xl border border-slate-700/30 rtable-wrap">
+                <table className="w-full text-right border-collapse rtable">
                   <thead>
                     <tr className="led-thead bg-slate-800/70 text-slate-400 text-xs">
                       <th className="px-3 py-2 font-medium">الطالب</th>
@@ -200,25 +200,25 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
                       return (
                         <tr key={s.id} onClick={() => { setSel(s); setStep("profile"); }}
                           className="bg-slate-800/50 hover:bg-slate-800 border-t border-slate-700/30 cursor-pointer transition-colors">
-                          <td className="px-3 py-2.5">
+                          <td className="px-3 py-2.5 rt-name">
                             <div className="flex items-center gap-2 min-w-0">
                               <Av name={s.name} size="sm" />
                               <span className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-400 whitespace-normal break-words" style={{ fontSize: "12px" }}>
+                          <td className="px-3 py-2.5 text-slate-400 whitespace-normal break-words" style={{ fontSize: "12px" }} data-label="التليفونات">
                             <div>{s.phone || "—"}</div>
                             {s.parentPhone && s.parentPhone !== s.phone && (
                               <div className="text-slate-600">ولي الأمر: {s.parentPhone}</div>
                             )}
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td className="px-3 py-2.5" data-label="المستوى">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.t}`}>{lvl === null ? "—" : `${lvl}%`}</span>
                           </td>
-                          <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                          <td className="px-3 py-2.5" onClick={e => e.stopPropagation()} data-label="المصاريف">
                             <FeeDiscountCell student={s} setStudents={setStudents} gradeFees={settings?.gradeFees} />
                           </td>
-                          <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap" style={{ fontSize: "12px" }}>
+                          <td className="px-3 py-2.5 text-slate-400 whitespace-nowrap" style={{ fontSize: "12px" }} data-label="تاريخ الانضمام">
                             {fmtJoinDayMonth(s.joinDate)}
                           </td>
                         </tr>

@@ -378,7 +378,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
         <FinancePasswordGate onUnlock={unlockReceivedPw} onCancel={() => setShowRecvPw(false)} />
       )}
       <tr ref={rowRef} className={`border-b transition-colors ${bgCls} ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}>
-        <td className="px-3 py-3">
+        <td className="px-3 py-3 rt-name">
           <div className="flex items-center gap-2 min-w-0">
             {typeof index === "number" && role !== "assist" && (
               <span className="text-slate-500 font-bold text-xs shrink-0">{index + 1}.</span>
@@ -390,7 +390,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
             </div>
           </div>
         </td>
-        <td className="px-2 py-3" style={{ minWidth: "100px" }}>
+        <td className="px-2 py-3" style={{ minWidth: "100px" }} data-label="المستلم">
           {lockedReceiver
             ? <span className="text-slate-300 text-xs">{lockedReceiver.name}</span>
             : (editing || !saved)
@@ -401,7 +401,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
               : <span className="text-slate-300 text-xs">{receiverName}</span>
           }
         </td>
-        <td className="px-2 py-3 text-center">
+        <td className="px-2 py-3 text-center" data-label="تم الاستلام">
           <button
             onClick={requestToggleReceived}
             disabled={!saved}
@@ -410,10 +410,10 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
             {received ? "✓" : ""}
           </button>
         </td>
-        <td className="px-2 py-3">
+        <td className="px-2 py-3" data-label="وقت التسجيل">
           <span className="text-slate-500 text-xs whitespace-nowrap">{(editing || !saved) ? (pickTime || "—") : (localRecord?.timestamp || "—")}</span>
         </td>
-        <td className="px-2 py-3">
+        <td className="px-2 py-3" data-label="المبلغ (ج)">
           {/* Assist: عمود المبلغ ثابت دايمًا — بيعرض المبلغ المطلوب دفعه فقط
               (student._defaultFee)، ومفيش أي مربع تعديل حتى في وضع التعديل.
               المستر بس هو اللي يقدر يغيّر المبلغ (خصم/زيادة). */}
@@ -424,7 +424,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
             : <span className="text-amber-400 font-black text-sm">{amount}</span>
           }
         </td>
-        <td className="px-2 py-3 text-center">
+        <td className="px-2 py-3 text-center" data-label="تعديل">
           {saved && !editing
             ? (role === "admin"
                 ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
@@ -436,7 +436,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
                 : <span className="text-slate-600 text-[10px]" title="اختاري المستلم من القائمة الأول">اختر مستلم</span>
           }
         </td>
-        <td className="px-2 py-3 text-center">
+        <td className="px-2 py-3 text-center" data-label="طباعة">
           <button
             onClick={() => canPrint && smartPrint({ docType: "receipt", data: localRecord, centerName })}
             disabled={!canPrint}
@@ -445,7 +445,7 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
             🖨️
           </button>
         </td>
-        <td className="px-2 py-3 text-center">
+        <td className="px-2 py-3 text-center" data-label="تراجع">
           <button
             onClick={requestUndo}
             disabled={!saved}
@@ -1152,8 +1152,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         adminLateStudents.length === 0
           ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">🎉</div><div className="text-sm">مفيش طلاب متأخرين عن الشهر الحالي بالفلتر ده</div></div>
           : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse" style={{ minWidth: "420px" }}>
+              <div className="overflow-x-auto rtable-wrap">
+                <table className="w-full border-collapse rtable" style={{ minWidth: "420px" }}>
                   <thead>
                     <tr className="bg-slate-900/80 border-b border-slate-700/60">
                       {["اسم الطالب","الصف / المجموعة","المبلغ المطلوب (ج)"].map(h => (
@@ -1164,14 +1164,14 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   <tbody>
                     {adminLateStudents.map(({ student, amount }) => (
                       <tr key={student.id} className="border-b border-slate-700/20">
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2.5 rt-name">
                           <div className="flex items-center gap-2 min-w-0">
                             <Av name={student.name} size="sm" />
                             <span className="text-white text-xs font-bold whitespace-normal break-words">{student.name}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{student.grade} — {student.group}</td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap" data-label="الصف / المجموعة">{student.grade} — {student.group}</td>
+                        <td className="px-3 py-2.5" data-label="المبلغ المطلوب">
                           <span className="text-red-400 font-black text-sm">{fmtM(amount)}</span>
                         </td>
                       </tr>
@@ -1197,8 +1197,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           {tableStudents.length === 0
             ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">{financeMode === "past" ? "🎉" : "📭"}</div><div className="text-sm">{financeMode === "past" ? "مفيش طلاب متأخرين عن الشهر ده" : "لا يوجد طلاب لهذا الاختيار"}</div></div>
             : <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse" style={{ minWidth: "560px" }}>
+                <div className="overflow-x-auto rtable-wrap">
+                  <table className="w-full border-collapse rtable" style={{ minWidth: "560px" }}>
                     <thead>
                       <tr className="led-thead bg-slate-900/80 border-b border-slate-700/60">
                         {["اسم الطالب","المستلم","تم الاستلام","وقت التسجيل","المبلغ (ج)","تعديل","طباعة","تراجع"].map(h => (
@@ -1279,8 +1279,8 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             {dayRecords.length === 0
               ? <div className="text-center py-8 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">محدش دفع في يوم {dSelDay} {MONTHS_AR[dSelMonth - 1]}</div></div>
               : <div className="bg-slate-900/40 border border-slate-700/30 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto max-h-96">
-                    <table className="w-full border-collapse" style={{ minWidth: "480px" }}>
+                  <div className="overflow-x-auto max-h-96 rtable-wrap">
+                    <table className="w-full border-collapse rtable" style={{ minWidth: "480px" }}>
                       <thead className="sticky top-0">
                         <tr className="led-thead bg-slate-900 border-b border-slate-700/60">
                           {["اسم الطالب","الصف","الشهر المدفوع","المبلغ (ج)","المستلم","الساعة"].map((h, i) => (
@@ -1291,17 +1291,17 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                       <tbody>
                         {dayRecords.map(r => (
                           <tr key={r.id} className="border-b border-slate-700/20">
-                            <td className="px-3 py-2.5 w-full">
+                            <td className="px-3 py-2.5 w-full rt-name">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Av name={r.studentName} size="sm" />
                                 <span className="text-white text-xs font-bold whitespace-normal break-words">{r.studentName}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{r.grade} — {r.group}</td>
-                            <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${((r.year || 0) < curYear || ((r.year || 0) === curYear && (r.month || 0) < curMonth)) ? "text-red-400" : "text-blue-400"}`} style={{ fontSize: "25px" }}>{r.month || "—"}</td>
-                            <td className="px-3 py-2.5 text-amber-400 font-black text-sm">{r.amount}</td>
-                            <td className="px-3 py-2.5 text-slate-300 text-xs">{r.receiverName || "—"}</td>
-                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{fmtTime12(r.timestamp)}</td>
+                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap" data-label="الصف">{r.grade} — {r.group}</td>
+                            <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${((r.year || 0) < curYear || ((r.year || 0) === curYear && (r.month || 0) < curMonth)) ? "text-red-400" : "text-blue-400"}`} style={{ fontSize: "25px" }} data-label="الشهر المدفوع">{r.month || "—"}</td>
+                            <td className="px-3 py-2.5 text-amber-400 font-black text-sm" data-label="المبلغ (ج)">{r.amount}</td>
+                            <td className="px-3 py-2.5 text-slate-300 text-xs" data-label="المستلم">{r.receiverName || "—"}</td>
+                            <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap" data-label="الساعة">{fmtTime12(r.timestamp)}</td>
                           </tr>
                         ))}
                       </tbody>

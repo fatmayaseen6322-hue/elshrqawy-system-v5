@@ -685,7 +685,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
           <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">👥</div>لا يوجد طلاب</div>
         ) : (
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="rtable-wrap">
+            <table className="w-full text-sm rtable">
               <thead>
                 <tr className="led-thead text-slate-400 text-xs border-b border-slate-700/40">
                   <th className="text-right px-3 py-2.5">الطالب</th>
@@ -702,8 +703,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     const effStatus = rec?.status || (logHasSession ? "a" : null);
                     return (
                       <tr key={s.id} className={i % 2 === 0 ? "bg-slate-900/20" : ""}>
-                        <td className="px-3 py-2.5 text-white text-sm font-bold break-words">{s.name}</td>
-                        <td className="px-3 py-2.5 text-center">
+                        <td className="px-3 py-2.5 text-white text-sm font-bold break-words rt-name">{s.name}</td>
+                        <td className="px-3 py-2.5 text-center" data-label="الحالة">
                           {effStatus
                             ? <div className="flex flex-col items-center gap-0.5">
                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[effStatus].color}/20 border ${stCfg[effStatus].border}/40 ${stCfg[effStatus].text}`}>
@@ -715,14 +716,15 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                               </div>
                             : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
                         </td>
-                        <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.reason || "—"}</td>
-                        <td className="px-3 py-2.5 text-slate-400 text-xs">{rec?.takenBy || "—"}</td>
+                        <td className="px-3 py-2.5 text-slate-400 text-xs" data-label="السبب">{rec?.reason || "—"}</td>
+                        <td className="px-3 py-2.5 text-slate-400 text-xs" data-label="المسؤول">{rec?.takenBy || "—"}</td>
                       </tr>
                     );
                   });
                 })()}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
@@ -740,8 +742,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
               </Sel>
               <DatePicker value={reportDate} onChange={handleReportDateChange} max={TODAY} />
             </div>
-            <div className="border border-slate-700/40 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="border border-slate-700/40 rounded-xl overflow-hidden rtable-wrap">
+              <table className="w-full text-sm rtable">
                 <thead>
                   <tr className="led-thead bg-slate-900/60 text-slate-400 text-xs">
                     <th className="text-right px-3 py-2">الطالب</th>
@@ -754,12 +756,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     <tr><td colSpan={3} className="text-center text-slate-500 text-xs py-4">مفيش غياب مسجّل في هذا التاريخ لهذا الصف</td></tr>
                   ) : reportRows.map(r => (
                     <tr key={r.recId} className="border-t border-slate-700/30">
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 rt-name">
                         <div className="text-white text-sm font-medium">{r.name}</div>
                         <div className="text-slate-500 text-[12px]">مجموعة {r.group}</div>
                       </td>
-                      <td className="px-3 py-2 text-slate-300 text-xs">{r.reason}</td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-3 py-2 text-slate-300 text-xs" data-label="السبب">{r.reason}</td>
+                      <td className="px-3 py-2 text-center" data-label="تواصل">
                         <button onClick={() => toggleReportContacted(r.recId)}
                           className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold ${r.contacted ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}
                           title={r.contacted ? "تم التواصل — اضغط للتراجع" : "لم يتم التواصل — اضغط للتأكيد"}>
@@ -815,7 +817,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         {/* ═══════ يوم قديم غير مفتوح للتعديل: جدول عرض فقط ═══════ */}
         {isOldDate && !editUnlocked && (
           <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="rtable-wrap">
+            <table className="w-full text-sm rtable">
               <thead>
                 <tr className="led-thead text-slate-400 text-xs border-b border-slate-700/40">
                   <th className="text-right px-3 py-2.5">الطالب</th>
@@ -832,8 +835,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                   const effStatus = rec?.status || (hasExistingSession ? "a" : null);
                   return (
                     <tr key={s.id} className={`${i % 2 === 0 ? "bg-slate-900/20" : ""} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
-                      <td className="px-3 py-2.5 text-white text-sm font-bold break-words">{s.name}</td>
-                      <td className="px-3 py-2.5 text-center">
+                      <td className="px-3 py-2.5 text-white text-sm font-bold break-words rt-name">{s.name}</td>
+                      <td className="px-3 py-2.5 text-center" data-label="الحالة">
                         {effStatus
                           ? <div className="flex flex-col items-center gap-0.5">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold ${stCfg[effStatus].color}/20 border ${stCfg[effStatus].border}/40 ${stCfg[effStatus].text}`}>
@@ -845,7 +848,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                             </div>
                           : <span className="text-slate-600 text-xs">لم يُسجَّل</span>}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-400 text-xs">
+                      <td className="px-3 py-2.5 text-slate-400 text-xs" data-label="السبب">
                         {rec?.status === "t" && otherGrp
                           ? <span className="text-sky-400 font-bold">🔁 نُقل لمجموعة {otherGrp}</span>
                           : rec?.guestFrom
@@ -857,6 +860,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                 })}
               </tbody>
             </table>
+            </div>
             {role === "admin" && (
               <div className="p-3 border-t border-slate-700/40">
                 <button onClick={() => setEditUnlocked(true)}
