@@ -85,6 +85,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   const [editUnlocked, setEditUnlocked] = useState(false); // مفتوح للتعديل (يوم قديم بعد الباسورد)
   const [reasonDrafts, setReasonDrafts] = useState({}); // نص السبب قبل ما يتحفظ بالزرار الصغير
   const [highlightId, setHighlightId] = useState(null); // تمييز الطالب لما نيجي من بحث التوبار
+  const [isExtraSession, setIsExtraSession] = useState(false); // الحصة الحالية "إضافية" ولا عادية
 
   // ══════════════════════════════════════════════════════════════
   // 📲 تنبيه واتساب تلقائي لولي الأمر بعد حفظ غياب/تأخير اليوم
@@ -202,6 +203,55 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     if (logDateIdx !== -1 && logDateIdx < logDatesList.length - 1) setLogDate(logDatesList[logDateIdx + 1]);
   };
 
+
+  // ══════════════════════════════════════════════════════════════
+  // 📊 كشف الغياب — جدول كل الحصص لصف/مجموعة معيّنين، بنفس آلية
+  // "كشف المصاريف" بالظبط (عمود لكل شهر) لكن عمود لكل حصة غياب اتاخدت
+  // فعليًا. الحصص العادية بترقّم تسلسليًا (1، 2، 3...)، والحصص
+  // "الإضافية" (اللي اتاخدت بزرار "➕ إضافية") بتتحط في مكانها
+  // الزمني الصح من غير رقم — يعني لو اتاخدت بعد الحصة 9 وقبل الحصة
+  // 10، هتظهر عمود ➕ لوحده بينهم، من غير ما تاخد رقم 10.
+  // ══════════════════════════════════════════════════════════════
+  const [statementOpen, setStatementOpen] = useState(false);
+  const [stGrade, setStGrade] = useState(grade);
+  const [stGroup, setStGroup] = useState(group);
+
+  const openStatement = () => {
+    setStGrade(grade);
+    setStGroup(group);
+    setStatementOpen(true);
+  };
+
+  const stGrpList = GROUPS_MAP[stGrade] || ["A"];
+  const handleStGradeChange = (g) => { setStGrade(g); setStGroup(GROUPS_MAP[g]?.[0] || "A"); };
+
+  const stStudents = useMemo(
+    () => sortStudentsList((students || []).filter(s => s && s.grade === stGrade && s.group === stGroup && !isBlocked(s))),
+    [students, stGrade, stGroup]
+  );
+
+  // كل تواريخ الحصص اللي اتاخد فيها غياب فعلي لهذا الصف/المجموعة،
+  // مرتبة تصاعديًا. كل حصة عادية بتاخد رقم تسلسلي، والحصص الإضافية
+  // بتفضل من غير رقم لكن في مكانها الصحيح بين الحصتين اللي حواليها.
+  const stSessions = useMemo(() => {
+    const relevant = (attRecords || []).filter(r => r.grade === stGrade && r.group === stGroup);
+    const dates = [...new Set(relevant.map(r => r.date))].sort();
+    let n = 0;
+    return dates.map(date => {
+      const recsOnDate = relevant.filter(r => r.date === date);
+      const isExtra = recsOnDate.length > 0 && recsOnDate.every(r => r.isExtra);
+      if (!isExtra) n++;
+      return { date, isExtra, num: isExtra ? null : n };
+    });
+  }, [attRecords, stGrade, stGroup]);
+
+  const stRecordsByDate = useMemo(() => {
+    const map = {};
+    (attRecords || []).filter(r => r.grade === stGrade && r.group === stGroup).forEach(r => {
+      (map[r.date] ||= {})[r.studentId] = r;
+    });
+    return map;
+  }, [attRecords, stGrade, stGroup]);
 
   // ══════════════════════════════════════════════════════════════
   // 🚫 تقرير الغياب السريع (زرار "غياب" جنب البحث)
@@ -375,6 +425,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   useEffect(() => {
     setSession({ ...existingMap });
     setEditUnlocked(false);
+    // لو الحصة المسجّلة فعلاً ليوم/صف/مجموعة دي كانت "إضافية"، الزرار
+    // يفتح على "إضافية" تلقائي بدل ما يرجع "عادية" افتراضيًا.
+    setIsExtraSession(recordsForSession.length > 0 && recordsForSession.every(r => r.isExtra));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grade, group, date]);
 
@@ -405,7 +458,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
         const newTime = newStatus === "l" ? (sessionSnapshot[id]?.time || list[idx]?.time || null) : null;
         if (newStatus) {
-          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
+          const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: newReason, time: newTime, isExtra: isExtraSession, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
           list = idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
         } else if (idx >= 0) {
           list = list.filter((_, i) => i !== idx);
@@ -536,7 +589,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       let list = prev || [];
       const idx = list.findIndex(r => r.studentId === id && r.date === date && r.grade === grade && r.group === group);
       const newTime = newStatus === "l" ? (session[id]?.time || list[idx]?.time || null) : null;
-      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft, time: newTime, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
+      const rec = { ...(list[idx] || {}), id: list[idx]?.id || genAttId(), studentId: id, grade, group, date, status: newStatus, reason: draft, time: newTime, isExtra: isExtraSession, takenBy: currentUserName || list[idx]?.takenBy || null, ts: Date.now() };
       return idx >= 0 ? [...list.slice(0, idx), rec, ...list.slice(idx + 1)] : [...list, rec];
     });
 
@@ -771,6 +824,108 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     );
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // صفحة "كشف الغياب" — جدول حصص كامل (زي كشف المصاريف بالظبط)
+  // ══════════════════════════════════════════════════════════════
+  if (statementOpen) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setStatementOpen(false)}
+            className="w-9 h-9 shrink-0 rounded-xl bg-slate-800/60 border border-slate-700/40 text-slate-300 flex items-center justify-center">
+            ›
+          </button>
+          <div className="text-white font-black text-sm">📊 كشف الغياب</div>
+        </div>
+
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3.5 space-y-3">
+          <GradeCircles value={stGrade} onChange={handleStGradeChange} />
+          <div className="flex items-center justify-center gap-1.5">
+            {stGrpList.map(g => (
+              <button key={g} onClick={() => setStGroup(g)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                  stGroup === g
+                    ? "bg-blue-600/25 border-blue-500/60 text-blue-200"
+                    : "bg-slate-900/40 border-slate-700/40 text-slate-400 hover:text-white hover:border-slate-500"
+                }`}>
+                مجموعة {g}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {stStudents.length === 0 ? (
+          <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">👥</div>لا يوجد طلاب</div>
+        ) : stSessions.length === 0 ? (
+          <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لسه ما اتاخدش أي غياب لهذه المجموعة</div></div>
+        ) : (
+          <>
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse" style={{ minWidth: `${120 + stSessions.length * 48}px` }}>
+                  <thead>
+                    <tr className="led-thead bg-slate-900/90 border-b border-slate-700/60">
+                      <th className="sticky right-0 z-10 bg-slate-900 px-3 py-2.5 text-right text-slate-400 font-bold whitespace-nowrap" style={{ fontSize: "12px" }}>
+                        الطالب
+                      </th>
+                      {stSessions.map(sess => (
+                        <th key={sess.date} title={sess.date}
+                          className="px-1 py-2.5 text-center text-slate-300 font-black whitespace-nowrap" style={{ fontSize: sess.isExtra ? "15px" : "18px" }}>
+                          {sess.isExtra ? <span className="text-sky-400">➕</span> : sess.num}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stStudents.map((s, i) => (
+                      <tr key={s.id} className={`border-b border-slate-700/20 ${i % 2 === 0 ? "bg-slate-900/10" : ""} ${highlightId === s.id ? "ring-2 ring-amber-400/70" : ""}`}>
+                        <td className="sticky right-0 z-10 bg-slate-900/95 px-3 py-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Av name={s.name} size="sm" />
+                            <span className="text-white text-xs font-bold whitespace-normal break-words">{s.name}</span>
+                          </div>
+                        </td>
+                        {stSessions.map(sess => {
+                          const rec = stRecordsByDate[sess.date]?.[s.id];
+                          const st = rec?.status;
+                          return (
+                            <td key={sess.date} className="px-1 py-2.5 text-center">
+                              {rec?.reason ? (
+                                <span className={`font-bold ${st === "a" ? "text-red-400" : "text-amber-400"}`} style={{ fontSize: "9px", lineHeight: 1.1 }}>
+                                  {rec.reason}
+                                </span>
+                              ) : st === "p" ? (
+                                <span className="text-emerald-400 font-black" style={{ fontSize: "20px", lineHeight: 1 }}>✓</span>
+                              ) : st === "l" ? (
+                                <span className="text-amber-400 font-black" style={{ fontSize: "20px", lineHeight: 1 }}>✓</span>
+                              ) : st === "a" ? (
+                                <span className="text-red-500 font-black" style={{ fontSize: "20px", lineHeight: 1 }}>✗</span>
+                              ) : (
+                                <span className="text-slate-600 font-black" style={{ fontSize: "16px" }}>ـ</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="text-slate-500 text-[11px] leading-relaxed bg-slate-800/40 border border-slate-700/30 rounded-xl p-3">
+              <span className="text-emerald-400 font-bold">✓</span> = حاضر (أو متأخر) ·{" "}
+              <span className="text-red-500 font-bold">✗</span> = غايب ·{" "}
+              <span className="text-sky-400 font-bold">➕</span> = حصة إضافية ·{" "}
+              <span className="text-slate-500 font-bold">ـ</span> = لسه ما اتاخدش له غياب في هذه الحصة.
+              <br />أي خانة فيها سبب مكتوب، السبب بيظهر بدل العلامة.
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {reportOpen && (
@@ -842,8 +997,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </Modal>
       )}
 
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
-        <div className="grid grid-cols-5 gap-2 items-stretch">
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2">
+        <div className="grid grid-cols-3 gap-2 items-stretch">
           <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
             {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
           </Sel>
@@ -851,11 +1006,19 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
           </Sel>
           <DatePicker value={date} onChange={handleDateChange} max={TODAY} />
+        </div>
+        <div className="grid grid-cols-3 gap-2 items-stretch">
           <button onClick={openLog}
             className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
             title="سجل الغياب">
             <span className="text-sm leading-none">📔</span>
             <span className="text-[12px] font-bold leading-tight text-blue-400">سجل الغياب</span>
+          </button>
+          <button onClick={openStatement}
+            className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+            title="كشف الغياب">
+            <span className="text-sm leading-none">📊</span>
+            <span className="text-[12px] font-bold leading-tight text-emerald-400">كشف الغياب</span>
           </button>
           <button onClick={openReport}
             className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
@@ -953,6 +1116,22 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             ].map(([k, l, cls]) => (
               <button key={k} onClick={() => markAll(k)} className={`flex-1 py-2 rounded-xl text-xs font-bold border ${cls}`}>{l}</button>
             ))}
+          </div>
+
+          {/* نوع الحصة: عادية (بتاخد رقم تسلسلي في كشف الغياب) أو إضافية
+              (بتتحط بعلامة ➕ في مكانها الزمني في الكشف من غير رقم) */}
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-slate-500 text-[11px] font-bold">نوع الحصة:</span>
+            <div className="flex rounded-xl overflow-hidden border border-slate-700/40">
+              <button onClick={() => setIsExtraSession(false)}
+                className={`px-3 py-1.5 text-xs font-bold transition-colors ${!isExtraSession ? "bg-blue-600/30 text-blue-200" : "bg-slate-900/40 text-slate-500 hover:text-slate-300"}`}>
+                📘 عادية
+              </button>
+              <button onClick={() => setIsExtraSession(true)}
+                className={`px-3 py-1.5 text-xs font-bold transition-colors ${isExtraSession ? "bg-sky-600/30 text-sky-200" : "bg-slate-900/40 text-slate-500 hover:text-slate-300"}`}>
+                ➕ إضافية
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
