@@ -332,7 +332,7 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
               <span className={`mt-1.5 inline-block text-xs px-2.5 py-0.5 rounded-full whitespace-nowrap ${stCfg[s.status]?.bg} ${stCfg[s.status]?.t}`}>{stCfg[s.status]?.l}</span>
             </div>
             <div className="bg-slate-900/50 rounded-xl p-2.5 text-center shrink-0 min-w-[68px]">
-              <div className="font-black text-sm text-white truncate">{s.phone || "—"}</div>
+              <div className="font-black text-sm text-white truncate">{s.phone || s.parentPhone || "—"}</div>
               <div className="text-xs text-slate-500">هاتف</div>
             </div>
             {contactPhone && (
