@@ -1030,6 +1030,11 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             <span className="text-sm leading-none">🚫</span>
             <span className="text-[11px] font-bold leading-tight text-red-400">غياب</span>
           </button>
+          <button onClick={() => setIsExtraSession(v => !v)}
+            title={isExtraSession ? "حصة إضافية — دوس عشان ترجع عادية" : "حصة عادية — دوس عشان تخليها إضافية"}
+            className={`shrink-0 w-[40px] rounded-xl flex items-center justify-center border font-black text-lg transition-colors ${isExtraSession ? "bg-sky-600/30 border-sky-500/40 text-sky-300" : "bg-slate-900/40 border-slate-700/40 text-slate-500 hover:text-slate-300"}`}>
+            +
+          </button>
         </div>
       </div>
 
@@ -1120,22 +1125,6 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             ].map(([k, l, cls]) => (
               <button key={k} onClick={() => markAll(k)} className={`flex-1 py-2 rounded-xl text-xs font-bold border ${cls}`}>{l}</button>
             ))}
-          </div>
-
-          {/* نوع الحصة: عادية (بتاخد رقم تسلسلي في كشف الغياب) أو إضافية
-              (بتتحط بعلامة ➕ في مكانها الزمني في الكشف من غير رقم) */}
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-slate-500 text-[11px] font-bold">نوع الحصة:</span>
-            <div className="flex rounded-xl overflow-hidden border border-slate-700/40">
-              <button onClick={() => setIsExtraSession(false)}
-                className={`px-3 py-1.5 text-xs font-bold transition-colors ${!isExtraSession ? "bg-blue-600/30 text-blue-200" : "bg-slate-900/40 text-slate-500 hover:text-slate-300"}`}>
-                📘 عادية
-              </button>
-              <button onClick={() => setIsExtraSession(true)}
-                className={`px-3 py-1.5 text-xs font-bold transition-colors ${isExtraSession ? "bg-sky-600/30 text-sky-200" : "bg-slate-900/40 text-slate-500 hover:text-slate-300"}`}>
-                ➕ إضافية
-              </button>
-            </div>
           </div>
 
           <div className="space-y-2">
