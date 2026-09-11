@@ -225,6 +225,118 @@ function UndoPasswordGate({ undoHash, onUnlock, onCancel }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// تعديل خانة "كشف المصاريف" — بعد باسورد المستر، تقدر تسجّلي دفعة
+// (يوم + مبلغ + مستلم) لأي شهر في الكشف، أو تمسحي دفعة موجودة (زرار
+// حذف = يرجع الشهر "لم يدفع"). بتستخدم نفس شكل/منطق حفظ باقي المصاريف.
+// ══════════════════════════════════════════════════════════════
+function StatementCellModal({ student, month, year, record, activeReceivers, defaultAmount, financePassword, onSave, onUndo, onClose }) {
+  const [unlocked, setUnlocked] = useState(false);
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const inputRef = useRef(null);
+  useEffect(() => inputRef.current?.focus(), [unlocked]);
+
+  const [day, setDay] = useState(() => {
+    if (record?.timestamp) {
+      const parts = record.timestamp.split("-");
+      if (parts.length >= 3) return parseInt(parts[2], 10) || 1;
+    }
+    const now = new Date();
+    return (now.getMonth() + 1 === month && now.getFullYear() === year) ? now.getDate() : 1;
+  });
+  const [amount, setAmount] = useState(record ? record.amount : (defaultAmount || 0));
+  const [receiverId, setReceiverId] = useState(record ? record.receiverId : null);
+
+  const unlock = () => {
+    if (!financePassword) { setErr("لازم تحددي باسورد المصاريف الأول من الإعدادات"); return; }
+    if (pw === financePassword) { setUnlocked(true); setErr(""); }
+    else setErr("كلمة المرور غير صحيحة");
+  };
+
+  const receiverName = (activeReceivers || []).find(r => r.id === receiverId)?.name || "—";
+  const canSave = receiverId && amount !== "" && (parseInt(amount) || 0) > 0 && day >= 1 && day <= 31;
+
+  const save = () => {
+    if (!canSave) return;
+    const pad = n => String(n).padStart(2, "0");
+    const rec = {
+      id: record?.id || genFinId(),
+      studentId: student.id, studentName: student.name,
+      grade: student.grade, group: student.group,
+      month, year,
+      amount: parseInt(amount) || 0,
+      receiverId, receiverName,
+      timestamp: `${year}-${pad(month)}-${pad(day)} 00:00`,
+      note: "",
+      received: record ? (record.received !== false) : true,
+    };
+    onSave(rec);
+    onClose();
+  };
+
+  const del = () => {
+    if (record) onUndo(record);
+    onClose();
+  };
+
+  if (!unlocked) {
+    return (
+      <Modal title="🔒 تعديل كشف المصاريف" onClose={onClose}>
+        <div className="space-y-4">
+          <div className="text-slate-400 text-sm text-center">
+            التعديل في كشف المصاريف يحتاج باسورد المستر
+          </div>
+          <Field label="باسورد المستر" error={err}>
+            <input
+              ref={inputRef}
+              type="password" value={pw} autoFocus
+              onChange={e => { setPw(e.target.value); setErr(""); }}
+              onKeyDown={e => { if (e.key === "Enter") unlock(); }}
+              className={`w-full bg-slate-800/80 border ${err ? "border-red-500" : "border-slate-700/50"} rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center tracking-widest text-lg`}
+              placeholder="••••" />
+          </Field>
+          <div className="flex gap-2">
+            <Btn variant="ghost" className="flex-1" onClick={onClose}>إلغاء</Btn>
+            <Btn variant="primary" className="flex-1" onClick={unlock}>✓ دخول</Btn>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title={`✏️ ${student.name} — ${month}/${year}`} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="اليوم">
+            <input type="number" min={1} max={31} value={day}
+              onChange={e => setDay(parseInt(e.target.value) || "")}
+              className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+          </Field>
+          <Field label="المبلغ (ج)">
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
+              className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none text-center" />
+          </Field>
+        </div>
+        <Field label="المستلم">
+          <select value={receiverId || ""} onChange={e => setReceiverId(e.target.value ? parseInt(e.target.value) : null)}
+            className="w-full bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none">
+            <option value="">اختر المستلم</option>
+            {(activeReceivers || []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </Field>
+        <div className="flex gap-2">
+          {record && (
+            <Btn variant="danger" className="flex-1" onClick={del}>🗑️ حذف (لم يدفع)</Btn>
+          )}
+          <Btn variant="success" className="flex-1" disabled={!canSave} onClick={save}>✓ تسجيل الدفع</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // FINANCE ROW (نفس آلية العرض القديمة: اسم / مبلغ / مستلم / وقت / تعديل / طباعة / تراجع)
 // ══════════════════════════════════════════════════════════════
 function FinRow({ student, index, record, globalReceiver, activeReceivers, lockedReceiver, onSave, onUndo, passwordEnabled, financePassword, undoPassword, centerName, highlighted, role = "admin" }) {
@@ -568,6 +680,21 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
     () => (financeMode === "statement" && selGrade) ? sortStudentsList(safeStudents.filter(s => s && s.grade === selGrade)) : [],
     [financeMode, selGrade, safeStudents]
   );
+
+  // ══════════════════════════════════════════════════════════════
+  // تعديل خانة كشف المصاريف: دوس على شهر أي طالب في الكشف → باسورد
+  // المستر → تقدر تسجّل دفعة (يوم + مستلم) أو تمسحها (زرار حذف).
+  // بيستخدم نفس handleSave/handleUndo بتوع باقي المصاريف بالظبط، يعني
+  // بيتسجل في finRecords الأصلي ويبان فورًا في كل مكان تاني (برج
+  // المراقبة، سجل اليوم، إلخ) لأنه بالظبط نفس مصدر الحقيقة.
+  // ══════════════════════════════════════════════════════════════
+  const [editCell, setEditCell] = useState(null); // { student, month, year, record }
+
+  const openStatementCell = (student, month, year, kind) => {
+    if (role !== "admin" || kind === "none") return;
+    const rec = safeRecords.find(r => r.studentId === student.id && r.month === month && r.year === year && (r.amount || 0) > 0) || null;
+    setEditCell({ student, month, year, record: rec });
+  };
 
   const baseTableStudents = useMemo(() => {
     if (!selGrade) return [];
@@ -1074,8 +1201,12 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                             </td>
                             {statementMonths.map(({ month, year }) => {
                               const cell = getStatementCell(s, month, year, safeRecords);
+                              const clickable = role === "admin" && cell.kind !== "none";
                               return (
-                                <td key={`${month}-${year}`} className="px-1.5 py-2.5 text-center">
+                                <td key={`${month}-${year}`}
+                                  onClick={() => openStatementCell(s, month, year, cell.kind)}
+                                  className={`px-1.5 py-2.5 text-center ${clickable ? "cursor-pointer hover:bg-slate-700/30 transition-colors" : ""}`}
+                                  title={clickable ? "دوس لتعديل دفعة الشهر ده" : undefined}>
                                   {cell.kind === "none" ? (
                                     <span className="text-slate-600 font-black" style={{ fontSize: "18px" }}>ـ</span>
                                   ) : cell.kind === "half" ? (
@@ -1110,6 +1241,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
                   <span className="text-red-500 font-bold">✗</span> = لسه ما دفعش الشهر ده ·{" "}
                   <span className="text-sky-400 font-bold">/</span> = اتسجّل في نص الشهر ده ·{" "}
                   <span className="text-slate-500 font-bold">ـ</span> = لسه ما انضمش الشهر ده
+                  {role === "admin" && <><br />👆 دوس على أي خانة عشان تسجّل دفعة أو تعدّلها (يحتاج باسورد المستر).</>}
                 </div>
               </>
             )}
@@ -1315,6 +1447,17 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
             }
           </div>
         </Modal>
+      )}
+
+      {editCell && (
+        <StatementCellModal
+          student={editCell.student} month={editCell.month} year={editCell.year} record={editCell.record}
+          activeReceivers={activeReceivers}
+          defaultAmount={getExpectedFeeForMonth(editCell.student, editCell.month, editCell.year, safeSettings.gradeFees)}
+          financePassword={safeSettings.financePassword}
+          onSave={handleSave} onUndo={handleUndo}
+          onClose={() => setEditCell(null)}
+        />
       )}
 
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
