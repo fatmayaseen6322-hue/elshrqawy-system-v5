@@ -79,7 +79,12 @@ export default function StudentPortal({ grade, group }) {
       setCloud({ finRecords, attRecords, webExams, centerExams });
       setStudent(found);
     } catch (e) {
-      setErr("تعذّر الاتصال — تأكد من النت وحاول تاني");
+      // #DiagFix: كانت رسالة "تعذّر الاتصال" عامة بتخفي السبب الحقيقي
+      // (صلاحيات Firestore / مشروع غير مهيّأ / نت فعليًا...) فمستحيل
+      // نعرف نصلّح غير لو شفنا كود الخطأ الفعلي من Firebase نفسه.
+      const code = e?.code ? ` [${e.code}]` : "";
+      setErr(`تعذّر الاتصال بقاعدة البيانات${code} — لو ظهرت الرسالة دي تاني ابعتي صورة منها بالظبط`);
+      console.error("StudentPortal login error:", e);
     }
     setLoading(false);
   };
