@@ -778,7 +778,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       )}
 
       <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
-        <div className="grid grid-cols-4 gap-2 items-stretch">
+        <div className="grid grid-cols-5 gap-2 items-stretch">
           <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
             {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
           </Sel>
@@ -791,6 +791,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
             title="سجل الغياب">
             <span className="text-sm leading-none">📔</span>
             <span className="text-[12px] font-bold leading-tight text-blue-400">سجل الغياب</span>
+          </button>
+          <button onClick={openReport}
+            className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+            title="غياب الطلاب">
+            <span className="text-sm leading-none">🚫</span>
+            <span className="text-[12px] font-bold leading-tight text-red-400">غياب</span>
           </button>
         </div>
       </div>
