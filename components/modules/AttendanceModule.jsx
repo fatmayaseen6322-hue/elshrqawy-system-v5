@@ -328,24 +328,22 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       });
   }, [reportOpen, attRecords, reportGrade, reportDate, students]);
 
-  // موقع الصف/التاريخ الحاليين في تاريخ الغياب الكامل (بغض النظر عن الصف) —
-  // عشان أي سهم يجيب مباشرة أقرب غياب سابق/لاحق متسجل فعلاً، حتى لو كان
-  // في صف مختلف عن الصف المعروض دلوقتي.
-  const reportHistoryIdx = reportHistory.findIndex(h => h.date === reportDate && h.grade === reportGrade);
-  const hasPrevReportDate = reportHistoryIdx > 0 || (reportHistoryIdx === -1 && reportHistory.length > 0);
-  const hasNextReportDate = reportHistoryIdx !== -1 && reportHistoryIdx < reportHistory.length - 1;
-
-  const jumpToReportEntry = (entry) => {
-    setReportGrade(entry.grade);
-    setReportDate(entry.date);
-  };
+  // سجل الغياب الخاص بالصف المختار حاليًا بس (مش كل الصفوف مع بعض) —
+  // ده اللي بيتحكم في السهم عشان يفضل جوّه نفس الصف ومايقفزش لصف تاني.
+  const reportHistoryForGrade = useMemo(
+    () => reportHistory.filter(h => h.grade === reportGrade),
+    [reportHistory, reportGrade]
+  );
+  const reportGradeIdx = reportHistoryForGrade.findIndex(h => h.date === reportDate);
+  const hasPrevReportDate = reportGradeIdx > 0 || (reportGradeIdx === -1 && reportHistoryForGrade.length > 0);
+  const hasNextReportDate = reportGradeIdx !== -1 && reportGradeIdx < reportHistoryForGrade.length - 1;
 
   const goPrevReportDate = () => {
-    if (reportHistoryIdx > 0) jumpToReportEntry(reportHistory[reportHistoryIdx - 1]);
-    else if (reportHistoryIdx === -1 && reportHistory.length) jumpToReportEntry(reportHistory[reportHistory.length - 1]);
+    if (reportGradeIdx > 0) setReportDate(reportHistoryForGrade[reportGradeIdx - 1].date);
+    else if (reportGradeIdx === -1 && reportHistoryForGrade.length) setReportDate(reportHistoryForGrade[reportHistoryForGrade.length - 1].date);
   };
   const goNextReportDate = () => {
-    if (reportHistoryIdx !== -1 && reportHistoryIdx < reportHistory.length - 1) jumpToReportEntry(reportHistory[reportHistoryIdx + 1]);
+    if (reportGradeIdx !== -1 && reportGradeIdx < reportHistoryForGrade.length - 1) setReportDate(reportHistoryForGrade[reportGradeIdx + 1].date);
   };
 
   const toggleReportContacted = (recId) => {
@@ -951,9 +949,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                 </button>
               </div>
             </div>
-            {reportHistory.length > 0 && (
+            {reportHistoryForGrade.length > 0 && (
               <div className="text-slate-500 text-[11px] text-center">
-                {reportHistoryIdx >= 0 ? `سجل ${reportHistoryIdx + 1} من ${reportHistory.length}` : `${reportHistory.length} يوم فيه غياب مسجَّل — دوس → عشان تشوف آخرهم`}
+                {reportGradeIdx >= 0 ? `سجل ${reportGradeIdx + 1} من ${reportHistoryForGrade.length} لصف ${reportGrade}` : `${reportHistoryForGrade.length} يوم فيه غياب مسجَّل لصف ${reportGrade} — دوس → عشان تشوف آخرهم`}
               </div>
             )}
             <div className="border border-slate-700/40 rounded-xl overflow-hidden rtable-wrap">
@@ -997,34 +995,40 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         </Modal>
       )}
 
-      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2">
-        <div className="grid grid-cols-3 gap-2 items-stretch">
-          <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
-            {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
-          </Sel>
-          <Sel value={group} onChange={e => handleGroupChange(e.target.value)}>
-            {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
-          </Sel>
-          <DatePicker value={date} onChange={handleDateChange} max={TODAY} />
-        </div>
-        <div className="grid grid-cols-3 gap-2 items-stretch">
+      <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
+        {/* الفلاتر الستة في صف أفقي واحد — بيسمح بالتمرير الأفقي على
+            الشاشات الضيقة جدًا (موبايل) عشان محدش يتقصّ من الشكل. */}
+        <div className="flex items-stretch gap-1.5 overflow-x-auto">
+          <div className="shrink-0 w-[92px]">
+            <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
+              {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
+            </Sel>
+          </div>
+          <div className="shrink-0 w-[110px]">
+            <Sel value={group} onChange={e => handleGroupChange(e.target.value)}>
+              {grpList.map(g => <option key={g} value={g}>مجموعة {g}</option>)}
+            </Sel>
+          </div>
+          <div className="shrink-0 w-[128px]">
+            <DatePicker value={date} onChange={handleDateChange} max={TODAY} />
+          </div>
           <button onClick={openLog}
-            className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
+            className="shrink-0 w-[76px] rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
             title="سجل الغياب">
             <span className="text-sm leading-none">📔</span>
-            <span className="text-[12px] font-bold leading-tight text-blue-400">سجل الغياب</span>
+            <span className="text-[11px] font-bold leading-tight text-blue-400">سجل الغياب</span>
           </button>
           <button onClick={openStatement}
-            className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+            className="shrink-0 w-[76px] rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
             title="كشف الغياب">
             <span className="text-sm leading-none">📊</span>
-            <span className="text-[12px] font-bold leading-tight text-emerald-400">كشف الغياب</span>
+            <span className="text-[11px] font-bold leading-tight text-emerald-400">كشف الغياب</span>
           </button>
           <button onClick={openReport}
-            className="rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+            className="shrink-0 w-[76px] rounded-xl px-1 py-1 text-center border flex flex-col items-center justify-center gap-0.5 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors"
             title="غياب الطلاب">
             <span className="text-sm leading-none">🚫</span>
-            <span className="text-[12px] font-bold leading-tight text-red-400">غياب</span>
+            <span className="text-[11px] font-bold leading-tight text-red-400">غياب</span>
           </button>
         </div>
       </div>
