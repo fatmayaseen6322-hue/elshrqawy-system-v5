@@ -41,6 +41,17 @@ export default function StudentPortal({ grade, group }) {
 
   const normalizeAr = (str = "") => String(str).trim().replace(/[أإآء]/g, "ا").replace(/\s+/g, " ");
 
+  // #RootFix: كيبورد الأرقام على موبايلات كتير مظبوطة بالعربي بيكتب
+  // أرقام هندية (٠١٢٣٤٥٦٧٨٩) أو فارسية (۰۱۲۳...) بدل الأرقام العادية
+  // لما تدوسي على حقل رقمي (inputMode="numeric") — شكلها زي الرقم
+  // الصح بالظبط على الشاشة، لكنها مختلفة تمامًا كنص عن "0123456789"
+  // المحفوظ فعليًا، فالمقارنة كانت بتفشل دايمًا في الحالة دي حتى لو
+  // الرقم "صح" فعليًا. الدالة دي بتحوّل أي رقم هندي/فارسي لرقم عادي
+  // قبل أي مقارنة أو حفظ.
+  const toLatinDigits = (str = "") =>
+    String(str).replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
+                .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+
   const login = async () => {
     setErr("");
     if (!name.trim() || !sid.trim()) { setErr("اكتب اسمك والرقم المسجل"); return; }
@@ -50,7 +61,7 @@ export default function StudentPortal({ grade, group }) {
       const list = await fetchRecordCollection(db, "elshrqawy_students");
       if (!list.length) { setErr("النظام لسه ما عملش أي مزامنة سحابية — كلّمي إدارة السنتر"); setLoading(false); return; }
       const typedName = normalizeAr(name);
-      const typedId   = sid.trim();
+      const typedId   = toLatinDigits(sid).trim();
       const found = list.find(s =>
         String(s.id || "").trim() === typedId &&
         normalizeAr(s.name || "").includes(typedName)
@@ -346,7 +357,7 @@ export default function StudentPortal({ grade, group }) {
         </div>
         <div>
           <label className="text-xs text-slate-400 mb-1 block">الرقم المسجل بيه عندنا</label>
-          <input value={sid} onChange={e => setSid(e.target.value)} type="text" inputMode="numeric" placeholder="مثال: 01xxxxxxxxx"
+          <input value={sid} onChange={e => setSid(toLatinDigits(e.target.value))} type="text" inputMode="numeric" placeholder="مثال: 01xxxxxxxxx"
             onKeyDown={e => e.key === "Enter" && login()}
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-500" />
         </div>

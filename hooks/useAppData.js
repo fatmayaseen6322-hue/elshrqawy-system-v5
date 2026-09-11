@@ -649,6 +649,10 @@ export default function useAppData() {
 
   return {
     students,    setStudents,
+    // #InstantSync — رفع فوري (من غير انتظار الديباونس) بعد تسجيل طالب
+    // جديد مباشرة، عشان يبقى متاح على بوابة الطالب فورًا من غير ما نستنى
+    // 3 ثواني أو نعتمد إنها متسيبتش الصفحة مفتوحة بعد التسجيل.
+    studentsPushNow: studentsSync.pushNow,
     settings,    setSettings,
     finRecords,  setFinRecords,
     attRecords,  setAttRecords,

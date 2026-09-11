@@ -174,5 +174,14 @@ export function useRecordSync(collectionName, records, setRecords) {
 
   const forcePush = useCallback(() => pushChanges(true), [pushChanges]);
 
-  return { state, forcePush };
+  // بترفع فورًا (من غير انتظار الـ 3 ثواني ديباونس) أي تغيير لسه واقف
+  // في الانتظار — مهم لحظة إضافة سجل لازم يبقى متاح للقراءة العامة
+  // فورًا (زي تسجيل طالب جديد وهو لسه هيدخل على بوابة الطالب على طول)،
+  // عشان محدش يقفل الصفحة قبل ما يخلص الرفع الطبيعي المتأخر بالديباونس.
+  const pushNow = useCallback(() => {
+    clearTimeout(pushTimer.current);
+    return pushChanges(false);
+  }, [pushChanges]);
+
+  return { state, forcePush, pushNow };
 }

@@ -103,7 +103,7 @@ function ScoreHistoryChart({ student }) {
   );
 }
 
-export default function StudentsModule({ students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, centerExams, settings, role, jumpTo, onJumpDone, addActivity, startAdd, onDone }) {
+export default function StudentsModule({ students, setStudents, finRecords, setFinRecords, attRecords, setAttRecords, webExams, centerExams, settings, role, jumpTo, onJumpDone, addActivity, startAdd, onDone, studentsPushNow }) {
   const [step, setStep] = useState(startAdd ? "add" : "select");
   const [grade, setGrade] = useState(GRADES_LIST[2]);
   const [group, setGroup] = useState("A");
@@ -503,6 +503,7 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
         setStep={setStep}
         addActivity={addActivity}
         onDoneAdd={startAdd ? onDone : null}
+        studentsPushNow={studentsPushNow}
       />
     );
   }
@@ -528,7 +529,7 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
 // BUG FIX: removed local toast state — parent's setToast is used directly
 // so Toast renders in the parent scope and actually shows.
 // ══════════════════════════════════════════════════════════════
-function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, students, setStudents, setFinRecords, setAttRecords, setSel, setToast, setStep, addActivity, onDoneAdd }) {
+function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, students, setStudents, setFinRecords, setAttRecords, setSel, setToast, setStep, addActivity, onDoneAdd, studentsPushNow }) {
   const [name,   setName]   = useState(s.name        || "");
   const [sg,     setSg]     = useState(s.grade        || defaultGrade || "");
   const [sgp,    setSgp]    = useState(s.group        || defaultGroup);
@@ -586,6 +587,11 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
 
     if (mode === "add") {
       setStudents(p => [st, ...p]);
+      // ارفعي السجل الجديد على السحابة فورًا (من غير استنى الديباونس
+      // العادي 3 ثواني) — عشان الطالب يقدر يدخل بوابة الطالب على طول
+      // من غير ما ننتظر إغلاق الصفحة يفوّت رفع السجل. الـ setTimeout
+      // هنا لازم عشان نستنى الـ state الجديد يتحدّث فعليًا الأول.
+      setTimeout(() => studentsPushNow?.(), 0);
     } else {
       setStudents(p => p.map(x => x.id === st.id ? st : x));
       // لو اتغيّر الصف أو المجموعة، حدّث كل سجلات الحضور والمصاريف
@@ -595,6 +601,7 @@ function StudentFormSubmodule({ mode, student: s, defaultGrade, defaultGroup, st
         setFinRecords?.(p => (p || []).map(r => r.studentId === st.id ? { ...r, grade: st.grade, group: st.group } : r));
         setAttRecords?.(p => (p || []).map(r => r.studentId === st.id ? { ...r, grade: st.grade, group: st.group } : r));
       }
+      setTimeout(() => studentsPushNow?.(), 0);
     }
     if (mode === "edit") setSel(st);
 
