@@ -225,12 +225,24 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attRecords, reportDate]);
 
+  // كل الأيام اللي فيها غياب فعلي متسجّل (لأي صف)، كل يوم مربوط بالصف
+  // اللي اتسجّل فيه، ومرتّبين تصاعديًا — عشان أسهم التنقل تلاقي أي غياب
+  // سابق أو لاحق متسجل فعلاً بغض النظر عن الصف المختار حاليًا في المودال.
+  const reportHistory = useMemo(() => {
+    const map = new Map(); // "date|grade" -> {date, grade}
+    (attRecords || []).forEach(r => {
+      if (r.status !== "a") return;
+      const key = `${r.date}|${r.grade}`;
+      if (!map.has(key)) map.set(key, { date: r.date, grade: r.grade });
+    });
+    return [...map.values()].sort((a, b) => a.date === b.date ? a.grade.localeCompare(b.grade) : (a.date < b.date ? -1 : 1));
+  }, [attRecords]);
+
   // زرار "غياب": يفتح دايمًا على آخر غياب اتسجل فعليًا (أي صف، أقرب تاريخ)
   // عشان يبان غياب حقيقي على طول من غير ما تحتاجي تدوسي على السهم.
   const openReport = () => {
-    const absenceRecords = (attRecords || []).filter(r => r.status === "a");
-    if (absenceRecords.length) {
-      const latest = absenceRecords.reduce((a, b) => (b.date > a.date ? b : a));
+    if (reportHistory.length) {
+      const latest = reportHistory[reportHistory.length - 1];
       setReportGrade(latest.grade);
       setReportDate(latest.date);
     } else {
@@ -244,13 +256,8 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
   // (لو موجود)، وإلا يفضل على النهاردة.
   const handleReportGradeChange = (g) => {
     setReportGrade(g);
-    const gradeAbsences = (attRecords || []).filter(r => r.grade === g && r.status === "a");
-    if (gradeAbsences.length) {
-      const latest = gradeAbsences.reduce((a, b) => (b.date > a.date ? b : a));
-      setReportDate(latest.date);
-    } else {
-      setReportDate(TODAY);
-    }
+    const gradeAbsences = reportHistory.filter(h => h.grade === g);
+    setReportDate(gradeAbsences.length ? gradeAbsences[gradeAbsences.length - 1].date : TODAY);
   };
 
   const handleReportDateChange = (d) => {
@@ -271,23 +278,24 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       });
   }, [reportOpen, attRecords, reportGrade, reportDate, students]);
 
-  // كل الأيام اللي فيها غياب فعلي مسجَّل لنفس الصف (لأي مجموعة) في مودال
-  // "غياب حصة" — بيتستخدموا في أسهم التنقل (يمين = قبل كده، شمال = بعد كده)
-  const reportDatesList = useMemo(() => {
-    const set = new Set((attRecords || []).filter(r => r.grade === reportGrade && r.status === "a").map(r => r.date));
-    return [...set].sort();
-  }, [attRecords, reportGrade]);
+  // موقع الصف/التاريخ الحاليين في تاريخ الغياب الكامل (بغض النظر عن الصف) —
+  // عشان أي سهم يجيب مباشرة أقرب غياب سابق/لاحق متسجل فعلاً، حتى لو كان
+  // في صف مختلف عن الصف المعروض دلوقتي.
+  const reportHistoryIdx = reportHistory.findIndex(h => h.date === reportDate && h.grade === reportGrade);
+  const hasPrevReportDate = reportHistoryIdx > 0 || (reportHistoryIdx === -1 && reportHistory.length > 0);
+  const hasNextReportDate = reportHistoryIdx !== -1 && reportHistoryIdx < reportHistory.length - 1;
 
-  const reportDateIdx = reportDatesList.indexOf(reportDate);
-  const hasPrevReportDate = reportDateIdx > 0 || (reportDateIdx === -1 && reportDatesList.length > 0);
-  const hasNextReportDate = reportDateIdx !== -1 && reportDateIdx < reportDatesList.length - 1;
+  const jumpToReportEntry = (entry) => {
+    setReportGrade(entry.grade);
+    setReportDate(entry.date);
+  };
 
   const goPrevReportDate = () => {
-    if (reportDateIdx > 0) handleReportDateChange(reportDatesList[reportDateIdx - 1]);
-    else if (reportDateIdx === -1 && reportDatesList.length) handleReportDateChange(reportDatesList[reportDatesList.length - 1]);
+    if (reportHistoryIdx > 0) jumpToReportEntry(reportHistory[reportHistoryIdx - 1]);
+    else if (reportHistoryIdx === -1 && reportHistory.length) jumpToReportEntry(reportHistory[reportHistory.length - 1]);
   };
   const goNextReportDate = () => {
-    if (reportDateIdx !== -1 && reportDateIdx < reportDatesList.length - 1) handleReportDateChange(reportDatesList[reportDateIdx + 1]);
+    if (reportHistoryIdx !== -1 && reportHistoryIdx < reportHistory.length - 1) jumpToReportEntry(reportHistory[reportHistoryIdx + 1]);
   };
 
   const toggleReportContacted = (recId) => {
@@ -788,9 +796,9 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                 </button>
               </div>
             </div>
-            {reportDatesList.length > 0 && (
+            {reportHistory.length > 0 && (
               <div className="text-slate-500 text-[11px] text-center">
-                {reportDateIdx >= 0 ? `سجل ${reportDateIdx + 1} من ${reportDatesList.length}` : `${reportDatesList.length} يوم فيه غياب مسجَّل — دوس → عشان تشوف آخرهم`}
+                {reportHistoryIdx >= 0 ? `سجل ${reportHistoryIdx + 1} من ${reportHistory.length}` : `${reportHistory.length} يوم فيه غياب مسجَّل — دوس → عشان تشوف آخرهم`}
               </div>
             )}
             <div className="border border-slate-700/40 rounded-xl overflow-hidden rtable-wrap">
