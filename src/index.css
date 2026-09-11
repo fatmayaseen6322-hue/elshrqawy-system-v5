@@ -656,3 +656,53 @@ body {
   table.rtable td.rt-name::before { content: none; }
   table.rtable td.rt-name > * { justify-content: flex-start !important; }
 }
+
+/* ══════════════════════════════════════════════════════
+   نسخة التليفون (Android/Capacitor) فقط — html.platform-android
+   لا تؤثر على اللاب توب (Tauri) ولا الاون لاين (ويب عادي).
+   ══════════════════════════════════════════════════════ */
+
+/* 1) منع الحاجة لتكبير/تدوير الشاشة: أي عنصر أعرض من الشاشة
+   يتقص تلقائيًا بدل ما يعمل سكرول أفقي عريض يحتاج لف الشاشة. */
+html.platform-android, html.platform-android body, html.platform-android #root {
+  overflow-x: hidden !important;
+  max-width: 100vw;
+}
+html.platform-android * {
+  max-width: 100%;
+}
+html.platform-android table.rtable-wrap,
+html.platform-android .rtable-wrap {
+  overflow-x: visible !important;
+}
+/* منع تكبير النص التلقائي من متصفح أندرويد لبعض العناصر الطويلة */
+html.platform-android {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* 2) إخفاء حرف الأفاتار جنب اسم الطالب — على التليفون فقط.
+   يفضل ظاهر عادي في اللاب توب والاون لاين. */
+html.platform-android .av-avatar {
+  display: none !important;
+}
+
+/* 3) تعطيل تأثيرات blur/backdrop-filter الثقيلة على أندرويد —
+   بعض أجهزة أندرويد (خصوصًا الأقدم) بترندر العنصر بلون أسود
+   صريح لما backdrop-filter مش مدعوم بالكامل بدل الشفافية،
+   وده بيظهر كـ"شاشة سودا" بمجرد فتح أي قسم فيه العنصر ده. */
+html.platform-android .aurora-orb-1,
+html.platform-android .aurora-orb-2,
+html.platform-android .aurora-orb-3 {
+  display: none !important;
+}
+html.platform-android [class*="backdrop-blur"],
+html.platform-android [style*="backdrop-filter"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.platform-android [data-theme="nova"] .nova-bg {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--card-bg) !important;
+}

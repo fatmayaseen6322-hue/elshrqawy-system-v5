@@ -227,7 +227,11 @@ class ChunkErrorBoundary extends Component {
   componentDidCatch(error) {
     const msg = String((error && error.message) || error || "");
     const isChunkError = /fetch dynamically imported module|Loading chunk|Importing a module script failed|dynamically imported module/i.test(msg);
-    if (isChunkError) {
+    // على نسخة التليفون (أندرويد) بالذات: أي خطأ (مش بس خطأ تحميل
+    // ملف) بيستاهل نفس محاولة التحديث التلقائي — عشان الشاشة متفضلش
+    // واقفة/سودا لما حد يدوس على أي قسم في الشريط الجانبي.
+    const isAndroid = typeof document !== "undefined" && document.documentElement.classList.contains("platform-android");
+    if (isChunkError || isAndroid) {
       const key = "app_chunk_reload_ts";
       const last = Number(sessionStorage.getItem(key) || 0);
       if (Date.now() - last > 10000) {
@@ -238,18 +242,22 @@ class ChunkErrorBoundary extends Component {
   }
   render() {
     if (this.state.hasError) {
+      // خلفية وألوان صريحة (مش معتمدة على CSS variables) عشان
+      // لو مشكلة الثيم نفسها هي سبب العطل، الرسالة تفضل ظاهرة
+      // ومش هتبقى "شاشة سودا" من غير أي كلام.
       return (
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center px-4">
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center px-4"
+          style={{ background: "#0f172a", minHeight: "100vh" }}>
           <div className="text-4xl">🔄</div>
-          <div className="font-bold text-sm" style={{ color: "var(--text-primary, #fff)" }}>
+          <div className="font-bold text-sm" style={{ color: "#ffffff" }}>
             في تحديث جديد للبرنامج — جارٍ التحديث تلقائيًا...
           </div>
-          <div className="text-xs" style={{ color: "var(--text-muted, #94a3b8)" }}>
+          <div className="text-xs" style={{ color: "#94a3b8" }}>
             لو الصفحة ما اتحدّتش لوحدها خلال ثواني، دوسي على الزرار
           </div>
           <button onClick={() => window.location.reload()}
             className="px-4 py-2 rounded-xl text-white text-sm font-bold"
-            style={{ background: "var(--accent, #2563eb)" }}>
+            style={{ background: "#2563eb" }}>
             تحديث الصفحة الآن
           </button>
         </div>

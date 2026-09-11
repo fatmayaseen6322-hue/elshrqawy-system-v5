@@ -14,7 +14,7 @@ export function Av({ name, size = "md" }) {
   const sz = size === "sm" ? "w-9 h-9 text-sm" : size === "lg" ? "w-14 h-14 text-xl" : "w-10 h-10 text-sm";
   const cs = ["from-blue-600 to-violet-700","from-emerald-600 to-teal-700","from-rose-600 to-pink-700","from-amber-600 to-orange-700","from-cyan-600 to-blue-700"];
   return (
-    <div className={`${sz} bg-gradient-to-br ${cs[safeName.charCodeAt(0) % 5]} flex items-center justify-center font-bold text-white shrink-0`}
+    <div className={`av-avatar ${sz} bg-gradient-to-br ${cs[safeName.charCodeAt(0) % 5]} flex items-center justify-center font-bold text-white shrink-0`}
       style={{ borderRadius: "var(--radius-md)" }}>
       {safeName[0]}
     </div>
