@@ -148,6 +148,12 @@ export function useRecordSync(collectionName, records, setRecords) {
           },
           () => setState({ status: "error", message: "تعذّرت المزامنة اللحظية (تأكد من صلاحيات Firestore والنت)" })
         );
+
+        // ── إصلاح "رجوع بيانات قديمة": أي تعديل حصل في الجلسة اللي فاتت
+        // ولسه معلّق (لم يترفع للسحابة لأي سبب — قفل الصفحة قبل ما
+        // الـ 3 ثواني ديباونس تخلص، انقطاع نت لحظي، إلخ) هيترفع فورًا
+        // دلوقتي، من غير ما نستنى تعديل جديد أو حدث "النت رجع".
+        if (!cancelled) pushChanges(false);
       } catch (e) {
         setState({ status: "error", message: "تعذّر تفعيل المزامنة" });
       }
@@ -171,6 +177,24 @@ export function useRecordSync(collectionName, records, setRecords) {
     const onOnline = () => pushChanges(false);
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
+  }, [pushChanges]);
+
+  // ── إصلاح "رجوع بيانات قديمة" (تكملة): حدث "online" في المتصفح مش
+  // موثوق 100% خصوصًا على الموبايل، وده كان بيسبب إن تعديل حصل ولسه
+  // معلّق يفضل واقف من غير ما يترفع لحد ما يحصل تعديل تاني بالصدفة —
+  // وأثناء الوقت ده أي جهاز تاني يشوف بيانات قديمة. الحل: (أ) أي مرة
+  // المستخدم يسيب الصفحة/يقفل الشاشة (تبديل تاب، قفل الموبايل) ادفع
+  // أي تعديل معلّق فورًا (visibilitychange بيشتغل أوثق من beforeunload
+  // على الموبايل)، و(ب) محاولة دورية كل 20 ثانية كشبكة أمان أخيرة.
+  useEffect(() => {
+    const flushPending = () => { if (document.visibilityState === "hidden") pushChanges(false); };
+    document.addEventListener("visibilitychange", flushPending);
+    window.addEventListener("pagehide", () => pushChanges(false));
+    const retryTimer = setInterval(() => pushChanges(false), 20000);
+    return () => {
+      document.removeEventListener("visibilitychange", flushPending);
+      clearInterval(retryTimer);
+    };
   }, [pushChanges]);
 
   const forcePush = useCallback(() => pushChanges(true), [pushChanges]);
