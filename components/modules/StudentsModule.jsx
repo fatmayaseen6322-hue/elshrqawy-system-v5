@@ -264,17 +264,24 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
     const studentFinRecords = (finRecords || []).filter(r => r.studentId === s.id);
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
 
+    // طالب مصاريفه صفر (خصم = الرسوم كاملة) → مش بيدفع مصاريف خالص، فمينفعش
+    // يتحسب "متأخر" ولا يدخل في أي حساب سداد — يُعتبر دايمًا مسدّد بالكامل.
+    const studentFeeAmount = Math.max(0, (settings?.gradeFees?.[s.grade] || 0) - (s.discount || 0));
+    const isFeeExempt = studentFeeAmount === 0;
+
     // اتسجّل بعد يوم 25 من الشهر الحالي نفسه، أو الشهر ده مُعفى يدويًا؟ → مفيش مصاريف مطلوبة منه خالص عن الشهر ده
-    const feeWaivedThisMonth = (joinYearNum === currentYearNum && joinMonthNum === currentMonthNum && joinDayNum > 25) || isMonthExempt(s, currentMonthNum, currentYearNum);
+    const feeWaivedThisMonth = isFeeExempt || (joinYearNum === currentYearNum && joinMonthNum === currentMonthNum && joinDayNum > 25) || isMonthExempt(s, currentMonthNum, currentYearNum);
     const currentMonthActuallyPaid = isMonthPaid(currentMonthNum, currentYearNum);
     const currentMonthPaid = currentMonthActuallyPaid || feeWaivedThisMonth;
 
     const overdueMonths = [];
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
-    for (let m = startMonth; m < currentMonthNum; m++) {
-      if (isMonthBlocked(s, m, currentYearNum)) continue; // شهر بلوك — مش دَين
-      if (isMonthExempt(s, m, currentYearNum)) continue; // شهر مُعفى يدويًا — مش دَين
-      if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(m);
+    if (!isFeeExempt) {
+      for (let m = startMonth; m < currentMonthNum; m++) {
+        if (isMonthBlocked(s, m, currentYearNum)) continue; // شهر بلوك — مش دَين
+        if (isMonthExempt(s, m, currentYearNum)) continue; // شهر مُعفى يدويًا — مش دَين
+        if (!isMonthPaid(m, currentYearNum)) overdueMonths.push(m);
+      }
     }
 
     // نسبة السداد الحقيقية: مبنية على نفس بيانات finRecords اللي بتحسب

@@ -180,6 +180,9 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
     const studentFinRecords = finRecords.filter(r => r.studentId === s.id);
     const isMonthPaid = (m, y) => studentFinRecords.some(r => r.month === m && r.year === y && (r.amount || 0) > 0);
     const startMonth = (joinYearNum === currentYearNum) ? joinMonthNum : 1;
+    // طالب مصاريفه صفر (خصم = الرسوم كاملة) مش بيدفع مصاريف خالص — منتعتبروش متأخر أبدًا
+    const studentFee = Math.max(0, (gradeFees?.[s.grade] || 0) - (s.discount || 0));
+    if (studentFee === 0) return null;
     for (let m = startMonth; m < currentMonthNum; m++) {
       if (isMonthBlocked(s, m, currentYearNum)) continue;
       if (isMonthExempt(s, m, currentYearNum)) continue;

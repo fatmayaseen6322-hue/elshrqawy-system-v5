@@ -650,9 +650,10 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
       hasJoinedByMonth(s, effMonth, effYear) &&
       !isMonthBlocked(s, effMonth, effYear) &&
       !isMonthExempt(s, effMonth, effYear) &&
+      getExpectedFeeForMonth(s, effMonth, effYear, safeSettings.gradeFees) > 0 &&
       !monthRecords.some(r => r.studentId === s.id)
     );
-  }, [baseTableStudents, financeMode, effMonth, effYear, monthRecords]);
+  }, [baseTableStudents, financeMode, effMonth, effYear, monthRecords, safeSettings.gradeFees]);
 
   const getRecord = studentId => monthRecords.find(r => r.studentId === studentId) || null;
 
@@ -737,6 +738,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         hasJoinedByMonth(s, m, regYear) &&
         !isMonthBlocked(s, m, regYear) &&
         !isMonthExempt(s, m, regYear) &&
+        getExpectedFeeForMonth(s, m, regYear, safeSettings.gradeFees) > 0 &&
         !safeRecords.some(r => r.studentId === s.id && r.month === m && r.year === regYear)
       );
       if (hasLate) months.push(m);
@@ -764,10 +766,11 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
         hasJoinedByMonth(s, regMonth, regYear) &&
         !isMonthBlocked(s, regMonth, regYear) &&
         !isMonthExempt(s, regMonth, regYear) &&
+        getExpectedFeeForMonth(s, regMonth, regYear, safeSettings.gradeFees) > 0 &&
         !safeRecords.some(r => r.studentId === s.id && r.month === regMonth && r.year === regYear)
       );
     });
-  }, [financeMode, safeStudents, safeRecords, regMonth, regYear]);
+  }, [financeMode, safeStudents, safeRecords, regMonth, regYear, safeSettings.gradeFees]);
 
   // ── إجمالي المبلغ المطلوب عن الشهر/السنة المختارين (الماضي) لكل صف
   // + إجمالي عام — بنفس شكل lateGradeTotals بالظبط ──
@@ -781,6 +784,7 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
           hasJoinedByMonth(s, regMonth, regYear) &&
           !isMonthBlocked(s, regMonth, regYear) &&
           !isMonthExempt(s, regMonth, regYear) &&
+          getExpectedFeeForMonth(s, regMonth, regYear, safeSettings.gradeFees) > 0 &&
           !safeRecords.some(r => r.studentId === s.id && r.month === regMonth && r.year === regYear)
         )
         .reduce((a, s) => a + getExpectedFeeForMonth(s, regMonth, regYear, safeSettings.gradeFees), 0);
