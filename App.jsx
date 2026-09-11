@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, Component } from "react";
 import { SIDEBAR_NAV, TODAY } from "./constants";
 import { fmt, waLink, lsGet, lsSet } from "./utils";
 import useAppData from "./hooks/useAppData";
@@ -215,6 +215,50 @@ function AbsentNotifRow({ a, onToggleContacted }) {
   );
 }
 
+// ── #ChunkErrorBoundary: بعد كل تحديث جديد للبرنامج، أسماء ملفات الكود
+// المحمّلة كسول (lazy) بتتغيّر. لو حد كان فاتح البرنامج من قبل التحديث
+// (خصوصًا على الموبايل اللي بيسيب التاب فاتح لفترة طويلة) وحاول يفتح صفحة
+// جديدة، هيحاول يجيب ملف بإسم قديم اتمسح من السيرفر → شاشة بيضا من غير أي
+// رسالة. الحل: نمسك الخطأ ده تحديدًا ونعمل تحديث تلقائي للصفحة مرة واحدة
+// بدل ما يقف على شاشة بيضا.
+class ChunkErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error) {
+    const msg = String((error && error.message) || error || "");
+    const isChunkError = /fetch dynamically imported module|Loading chunk|Importing a module script failed|dynamically imported module/i.test(msg);
+    if (isChunkError) {
+      const key = "app_chunk_reload_ts";
+      const last = Number(sessionStorage.getItem(key) || 0);
+      if (Date.now() - last > 10000) {
+        sessionStorage.setItem(key, String(Date.now()));
+        window.location.reload();
+      }
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-center px-4">
+          <div className="text-4xl">🔄</div>
+          <div className="font-bold text-sm" style={{ color: "var(--text-primary, #fff)" }}>
+            في تحديث جديد للبرنامج — جارٍ التحديث تلقائيًا...
+          </div>
+          <div className="text-xs" style={{ color: "var(--text-muted, #94a3b8)" }}>
+            لو الصفحة ما اتحدّتش لوحدها خلال ثواني، دوسي على الزرار
+          </div>
+          <button onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-xl text-white text-sm font-bold"
+            style={{ background: "var(--accent, #2563eb)" }}>
+            تحديث الصفحة الآن
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   // 🔗 بوابة الطالب: لينك مستقل تمامًا (?portal=1) — بيتفتح من قسم
   // الامتحانات → الويب → "رابط المجموعة". لازم يتشيّك هنا فورًا قبل أي
@@ -224,9 +268,11 @@ export default function App() {
   const portalParams = new URLSearchParams(window.location.search);
   if (portalParams.get("portal") === "1") {
     return (
-      <Suspense fallback={<ModuleLoading />}>
-        <StudentPortal grade={portalParams.get("grade") || ""} group={portalParams.get("group") || ""} />
-      </Suspense>
+      <ChunkErrorBoundary>
+        <Suspense fallback={<ModuleLoading />}>
+          <StudentPortal grade={portalParams.get("grade") || ""} group={portalParams.get("group") || ""} />
+        </Suspense>
+      </ChunkErrorBoundary>
     );
   }
 
@@ -656,6 +702,7 @@ export default function App() {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl mx-auto">
+            <ChunkErrorBoundary key={safePage}>
             <Suspense fallback={<ModuleLoading />}>
             {safePage === "attendance" && <AttendanceModule students={students || []} setStudents={setStudents} attRecords={attRecords || []} setAttRecords={setAttRecords} settings={settings} role={currentRole.role} currentUserName={currentRole.name || null} addActivity={addActivity} jumpTo={attendanceJump} onJumpDone={() => setAttendanceJump(null)} />}
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} centerExams={centerExams || []} settings={settings} role={currentRole.role} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} studentsPushNow={studentsPushNow} />}
@@ -667,6 +714,7 @@ export default function App() {
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} attRecords={attRecords || []} />}
             {safePage === "block"      && <BlockModule      students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} setWebExams={setWebExams} addActivity={addActivity} />}
             </Suspense>
+            </ChunkErrorBoundary>
           </div>
         </main>
       </div>
@@ -706,9 +754,11 @@ export default function App() {
       {/* Print Status Toast — يظهر تلقائياً عند أي طباعة */}
       <PrintStatusToast />
       {showSettings && (
-        <Suspense fallback={<ModuleLoading />}>
-          <SettingsModule settings={settings} setSettings={setSettings} students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} examQs={examQs || []} setExamQs={setExamQs} cloudBackupState={cloudBackupState} backupToCloud={backupToCloud} restoreFromCloud={restoreFromCloud} liveSyncState={liveSyncState} firestoreUsagePct={firestoreUsagePct} addActivity={addActivity} onClose={() => setShowSettings(false)} />
-        </Suspense>
+        <ChunkErrorBoundary>
+          <Suspense fallback={<ModuleLoading />}>
+            <SettingsModule settings={settings} setSettings={setSettings} students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} examQs={examQs || []} setExamQs={setExamQs} cloudBackupState={cloudBackupState} backupToCloud={backupToCloud} restoreFromCloud={restoreFromCloud} liveSyncState={liveSyncState} firestoreUsagePct={firestoreUsagePct} addActivity={addActivity} onClose={() => setShowSettings(false)} />
+          </Suspense>
+        </ChunkErrorBoundary>
       )}
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
