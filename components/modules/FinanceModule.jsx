@@ -284,9 +284,9 @@ function StatementCellModal({ student, month, year, record, activeReceivers, def
       <Modal title="🔒 تعديل كشف المصاريف" onClose={onClose}>
         <div className="space-y-4">
           <div className="text-slate-400 text-sm text-center">
-            التعديل في كشف المصاريف يحتاج باسورد المستر
+            التعديل في كشف المصاريف يحتاج كلمة سر "كشف المصاريف"
           </div>
-          <Field label="باسورد المستر" error={err}>
+          <Field label="كلمة سر كشف المصاريف" error={err}>
             <input
               ref={inputRef}
               type="password" value={pw} autoFocus
