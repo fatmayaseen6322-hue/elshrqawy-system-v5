@@ -40,7 +40,8 @@ export function useRecordSync(collectionName, records, setRecords) {
     if (!navigator.onLine) return;
     try {
       const { collection, doc, writeBatch } = await import("firebase/firestore");
-      const { db } = await import("../src/firebase");
+      const { db, authReady } = await import("../src/firebase");
+      await authReady; // #SecureRules: الكتابة بقت محتاجة auth != null
 
       const current    = recordsRef.current || [];
       const snapshot   = force ? {} : lsGet(snapKey, {});

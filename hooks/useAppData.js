@@ -298,7 +298,8 @@ export default function useAppData() {
 
       if (hasAnything) {
         const { doc, setDoc } = await import("firebase/firestore");
-        const { db } = await import("../src/firebase");
+        const { db, authReady } = await import("../src/firebase");
+        await authReady; // #SecureRules: elshrqawy_daily_backups بقى محتاج auth
         const payload = {
           finRecords:        newFin,
           attRecords:        newAtt,
@@ -373,7 +374,8 @@ export default function useAppData() {
     setCloudBackupState({ status: "downloading", message: "" });
     try {
       const { collection, getDocs, query, orderBy } = await import("firebase/firestore");
-      const { db } = await import("../src/firebase");
+      const { db, authReady } = await import("../src/firebase");
+      await authReady; // #SecureRules
       const snaps = await getDocs(query(collection(db, "elshrqawy_daily_backups"), orderBy("savedAt", "asc")));
       if (snaps.empty) {
         setCloudBackupState({ status: "error", message: "مفيش نسخ احتياطية محفوظة على السحابة" });
@@ -489,7 +491,8 @@ export default function useAppData() {
     if (!navigator.onLine) return;
     try {
       const { doc, setDoc } = await import("firebase/firestore");
-      const { db } = await import("../src/firebase");
+      const { db, authReady } = await import("../src/firebase");
+      await authReady; // #SecureRules: elshrqawy_live_state بقى محتاج auth
 
       // نفس فكرة "ميرفعش إلا لو هو نفسه اللي عدّل محليًا فعلاً" — عشان
       // جهاز فاتح بنسخة قديمة من الإعدادات ميمسحش تعديل حصل على جهاز
@@ -563,7 +566,8 @@ export default function useAppData() {
     }
     try {
       const { doc, getDoc } = await import("firebase/firestore");
-      const { db } = await import("../src/firebase");
+      const { db, authReady } = await import("../src/firebase");
+      await authReady; // #SecureRules
       const snap = await getDoc(doc(db, "elshrqawy_live_state", "main"));
       if (!snap.exists()) {
         const ts = Date.now();
@@ -586,7 +590,8 @@ export default function useAppData() {
     (async () => {
       try {
         const { doc, onSnapshot } = await import("firebase/firestore");
-        const { db } = await import("../src/firebase");
+        const { db, authReady } = await import("../src/firebase");
+        await authReady; // #SecureRules
         if (cancelled) return;
         unsub = onSnapshot(
           doc(db, "elshrqawy_live_state", "main"),
