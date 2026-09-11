@@ -790,7 +790,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
         {/* الفلاتر الستة في صف أفقي واحد — بيسمح بالتمرير الأفقي على
             الشاشات الضيقة جدًا (موبايل) عشان محدش يتقصّ من الشكل. */}
         <div className="flex items-stretch gap-1.5 overflow-x-auto">
-          <div className="shrink-0 w-[92px]">
+          <div className="shrink-0 w-[150px]">
             <Sel value={grade} onChange={e => handleGradeChange(e.target.value)}>
               {GRADES_LIST.map(g => <option key={g}>{g}</option>)}
             </Sel>
