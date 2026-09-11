@@ -7,11 +7,29 @@ const STATUS_COLOR = { present: "text-emerald-400", late: "text-amber-400", abse
 
 // ══════════════════════════════════════════════════════════════
 // 🔗 بوابة الطالب — صفحة عامة مستقلة عن باقي النظام
-// بتتفتح من "لينك المجموعة" (قسم الامتحانات → الويب)، بتقرأ آخر نسخة
-// لحظية من Firebase (elshrqawy_live_state/main) وتديها لأي طالب عنده
-// اسم + رقم مسجَّل له من شاشة "تسجيل طالب" في نظام الإدارة.
+// بتتفتح من "لينك المجموعة" (قسم الامتحانات → الويب)، بتقرأ من كولكشنز
+// السجلات المنفصلة على Firebase (elshrqawy_students, elshrqawy_fin_records,
+// elshrqawy_att_records, elshrqawy_web_exams, elshrqawy_center_exams —
+// كل سجل مستند لوحده، بدل مستند واحد كبير) وتديها لأي طالب عنده اسم +
+// رقم مسجَّل له من شاشة "تسجيل طالب" في نظام الإدارة.
 // لا تحتاج تسجيل دخول كمستر/Assist ولا تلمس بيانات الجهاز المحلي.
 // ══════════════════════════════════════════════════════════════
+
+// بتقرا كولكشن سجلات كامل (أو مفلتر بشرط/شروط) وترجعه كأراي عادي —
+// بتتجاهل تلقائيًا أي سجل اتحذف (_deleted) وبتشيل حقول المزامنة الداخلية.
+async function fetchRecordCollection(db, name, whereClauses = []) {
+  const { collection, getDocs, query, where } = await import("firebase/firestore");
+  const constraints = whereClauses.map(([field, op, val]) => where(field, op, val));
+  const snap = await getDocs(query(collection(db, name), ...constraints));
+  return snap.docs
+    .map(d => {
+      const data = d.data();
+      if (data._deleted) return null;
+      const { _deleted, _updatedAt, ...rest } = data;
+      return { ...rest, id: rest.id !== undefined ? rest.id : d.id };
+    })
+    .filter(Boolean);
+}
 
 export default function StudentPortal({ grade, group }) {
   const [name, setNameVal] = useState("");
@@ -28,12 +46,9 @@ export default function StudentPortal({ grade, group }) {
     if (!name.trim() || !sid.trim()) { setErr("اكتب اسمك والرقم المسجل"); return; }
     setLoading(true);
     try {
-      const { doc, getDoc } = await import("firebase/firestore");
       const { db } = await import("../src/firebase");
-      const snap = await getDoc(doc(db, "elshrqawy_live_state", "main"));
-      if (!snap.exists()) { setErr("النظام لسه ما عملش أي مزامنة سحابية — كلّمي إدارة السنتر"); setLoading(false); return; }
-      const data = snap.data();
-      const list = data.students || [];
+      const list = await fetchRecordCollection(db, "elshrqawy_students");
+      if (!list.length) { setErr("النظام لسه ما عملش أي مزامنة سحابية — كلّمي إدارة السنتر"); setLoading(false); return; }
       const typedName = normalizeAr(name);
       const typedId   = sid.trim();
       const found = list.find(s =>
@@ -41,7 +56,16 @@ export default function StudentPortal({ grade, group }) {
         normalizeAr(s.name || "").includes(typedName)
       );
       if (!found) { setErr("الاسم أو الرقم المسجل غلط"); setLoading(false); return; }
-      setCloud(data);
+
+      // بعد التأكد من الطالب، هات بس سجلاته هو (مصاريف/غياب) وامتحانات
+      // صفه (ويب/مركز) — مش كل سجلات كل الطلاب، توفيرًا للقراءات.
+      const [finRecords, attRecords, webExams, centerExams] = await Promise.all([
+        fetchRecordCollection(db, "elshrqawy_fin_records",  [["studentId", "==", found.id]]),
+        fetchRecordCollection(db, "elshrqawy_att_records",  [["studentId", "==", found.id]]),
+        fetchRecordCollection(db, "elshrqawy_web_exams",    [["grade", "==", found.grade], ["group", "==", found.group]]),
+        fetchRecordCollection(db, "elshrqawy_center_exams", [["grade", "==", found.grade]]),
+      ]);
+      setCloud({ finRecords, attRecords, webExams, centerExams });
       setStudent(found);
     } catch (e) {
       setErr("تعذّر الاتصال — تأكد من النت وحاول تاني");

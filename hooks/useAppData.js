@@ -4,6 +4,7 @@ import {
   INIT_STUDENTS, INIT_SETTINGS, INIT_FIN_RECORDS,
   WEB_EXAMS, CENTER_EXAMS, EXAM_QS,
 } from "../data";
+import { useRecordSync } from "./useRecordSync";
 
 // ══════════════════════════════════════════════════════════════
 // useAppData — المصدر الوحيد لكل بيانات التطبيق
@@ -27,12 +28,7 @@ const KEYS = {
   cloudSync:   "app_cloud_sync_state", // #Cloud (تراكمي)
   liveSyncTs:  "app_live_sync_ts",    // #LiveSync (مزامنة تلقائية لحظية)
   trashedDup:  "app_trashed_dup_students", // #TrashDup — سلة مهملات حذف التكرار (شهرين)
-  studentsSyncSnapshot: "app_live_sync_students_snapshot", // #LiveSyncFix — آخر نسخة طلاب اتزامنت فعليًا (لمنع رجوع المحذوف/البلوك)
-  settingsSyncSnapshot: "app_live_sync_settings_snapshot", // #LiveSyncFix2 — نفس الإصلاح بالظبط لكن للإعدادات (باسوردات المستلمين... إلخ)
-  finRecordsSyncSnapshot:  "app_live_sync_fin_records_snapshot",  // #LiveSyncFix3 — نفس الإصلاح للمصاريف (منع رجوع دفعة اتمسحت/اتعدلت)
-  attRecordsSyncSnapshot:  "app_live_sync_att_records_snapshot",  // #LiveSyncFix3 — نفس الإصلاح للحضور
-  webExamsSyncSnapshot:    "app_live_sync_web_exams_snapshot",    // #LiveSyncFix3 — نفس الإصلاح لامتحانات الويب
-  centerExamsSyncSnapshot: "app_live_sync_center_exams_snapshot", // #LiveSyncFix3 — نفس الإصلاح لامتحانات المركز
+  settingsSyncSnapshot: "app_live_sync_settings_snapshot", // آخر نسخة إعدادات اترفعت فعليًا (منع رجوع باسورد قديم)
 };
 
 const TRASH_RETENTION_MS = 60 * 24 * 60 * 60 * 1000; // شهرين (60 يوم)
@@ -113,6 +109,23 @@ export default function useAppData() {
   const [webExams,    setWebExams]    = usePersisted(KEYS.webExams,    loadWebExams);
   const [centerExams, setCenterExams] = usePersisted(KEYS.centerExams, loadCenterExams);
   const [examQs,      setExamQs]      = usePersisted(KEYS.examQs,      loadExamQs);
+
+  // ── #RecordSync (حل جذري): كل نوع بيانات ليه سجلات (طلاب/مصاريف/غياب/
+  // امتحانات) بيتزامن على مستوى "السجل الواحد" بدل "القائمة كلها كبلوك"
+  // — عشان جهازين يعدّلوا حاجتين مختلفتين في نفس الوقت من غير ما حد يمسح
+  // تعديل التاني (تفصيل الحل والسبب في hooks/useRecordSync.js).
+  const studentsSync    = useRecordSync("elshrqawy_students",     students,    setStudents);
+  const finRecordsSync  = useRecordSync("elshrqawy_fin_records",  finRecords,  setFinRecords);
+  const attRecordsSync  = useRecordSync("elshrqawy_att_records",  attRecords,  setAttRecords);
+  const webExamsSync    = useRecordSync("elshrqawy_web_exams",    webExams,    setWebExams);
+  const centerExamsSync = useRecordSync("elshrqawy_center_exams", centerExams, setCenterExams);
+  // مرجع بكل دوال "ادفع كل حاجة فورًا" عشان زرار "رفع نسخة على السحابة"
+  // اليدوي يقدر يستخدمها (تفصيل الاستخدام تحت في runIncrementalCloudBackup)
+  const recordForcePushRef = useRef([]);
+  recordForcePushRef.current = [
+    studentsSync.forcePush, finRecordsSync.forcePush, attRecordsSync.forcePush,
+    webExamsSync.forcePush, centerExamsSync.forcePush,
+  ];
 
   // ── #TrashDup: سلة مهملات خاصة بحذف "التكرار" بس (من برج المراقبة) ──
   // أي طالب بيتحذف بسبب تكرار بيتحط هنا شهرين قبل ما يتشال نهائيًا،
@@ -328,10 +341,14 @@ export default function useAppData() {
       // الحي. الحل: أي رفع يدوي (force=true) لازم كمان يدفع نسخة كاملة
       // لمستند المزامنة اللحظية على طول، عشان أي جهاز تاني فاتح الموقع
       // (أونلاين) ياخد التحديث فورًا من غير ما ينتظر زرار "استرجاع".
-      if (force && pushLiveStateRef.current) {
+      if (force) {
         const ts = Date.now();
         lsSet(KEYS.liveSyncTs, ts);
-        await pushLiveStateRef.current(ts, true);
+        if (pushLiveStateRef.current) await pushLiveStateRef.current(ts, true);
+        // ادفع كل أنواع السجلات (طلاب/مصاريف/غياب/امتحانات) فورًا بالكامل
+        // عشان أي جهاز تاني فاتح الموقع ياخد نسخة "رفع نسخة على السحابة"
+        // اليدوية دي على طول، من غير ما يستنى تعديل جديد يحصل فيها.
+        await Promise.all(recordForcePushRef.current.map(fn => fn()));
       }
 
       setCloudBackupState(hasAnything
@@ -454,13 +471,14 @@ export default function useAppData() {
     }
   }, []);
 
-  // ── #LiveSync: مزامنة تلقائية بين أي جهاز أونلاين (فون النت) والنسخة
-  // المحلية على اللاب توب (أوفلاين) — بدون أي زرار يدوي.
-  // الفكرة: كل تغيير في الطلاب أو الإعدادات (إضافة/حذف/تعديل) بيتحفظ محليًا
-  // زي العادة فورًا، وكمان (لو فيه نت وقتها) بيترفع نسخة كاملة على Firebase
-  // مع وقت التحديث. أي جهاز تاني (زي اللاب توب لما يوصله نت) بيقارن وقته
-  // المحلي بوقت السحابة، ولو السحابة أحدث بيسحب النسخة الجديدة تلقائيًا
-  // ويحدّث نفسه — كله من غير تدخّل يدوي.
+  // ── #LiveSync (الإعدادات بس): مزامنة تلقائية للإعدادات (باسوردات
+  // المستر/الأسيست/المستلمين، الشعار، إلخ) بين الأجهزة — بدون أي زرار
+  // يدوي. الإعدادات مستند واحد صغير (مش أراي كبير بيكبر مع الوقت) فمفيش
+  // داعي يترفع كسجلات منفصلة زي الطلاب/المصاريف/الغياب/الامتحانات
+  // (دول بقوا يترفعوا سجل سجل عبر useRecordSync فوق — ده اللي حل مشكلة
+  // "المزامنة مختلفة بين الأجهزة"، لأن الإعدادات نادرًا ما يتعدّل فيها
+  // حقلين مختلفين في نفس اللحظة من جهازين، وأصلاً فيها حماية للباسوردات
+  // من الكتابة فوق بعض تحت).
   const [liveSyncState, setLiveSyncState] = useState({ status: "idle", message: "" });
   const [firestoreUsagePct, setFirestoreUsagePct] = useState(0);
   const isApplyingRemote = useRef(false);
@@ -473,84 +491,16 @@ export default function useAppData() {
       const { doc, setDoc } = await import("firebase/firestore");
       const { db } = await import("../src/firebase");
 
-      // ── إصلاح جذري نهائي لمشكلة "رجوع الطلاب المحذوفين/البلوك بعد
-      // تكرار المحاولة" ────────────────────────────────────────────
-      // السبب الحقيقي للمشكلة: أي جهاز فاتح بنسخة قديمة من قائمة
-      // الطلاب (فيها لسه الطالب المكرر اللي اتحذف أو اتعمله بلوك على
-      // جهاز تاني) — لو عمل أي تعديل بسيط خالص (سجّل حضور، حصّل
-      // مصاريف...) كان بيرفع نسخته القديمة الكاملة من الطلاب، فيمسح
-      // أثر الحذف/البلوك اللي حصل فعليًا على الجهاز التاني من غير أي
-      // تنبيه. الحل: الجهاز ميرفعش قائمة الطلاب في السحابة إلا لو هو
-      // نفسه اللي فعلاً عدّل فيها محليًا (بالمقارنة بآخر نسخة اتزامنت
-      // معاه فعلاً) — أي تعديل تاني (حضور/مصاريف/امتحانات) بيترفع
-      // عادي زي ما هو من غير ما يلمس قائمة الطلاب خالص.
-      const currentStudentsJSON = JSON.stringify(lsGet(KEYS.students, []));
-      const lastSyncedJSON      = lsGet(KEYS.studentsSyncSnapshot, null);
-      const studentsChangedLocally = forceFull || lastSyncedJSON === null || currentStudentsJSON !== lastSyncedJSON;
-
-      // ── #LiveSyncFix2: نفس الإصلاح بالظبط بتاع الطلاب، لكن للإعدادات ──
-      // كان أي جهاز فاتح بنسخة قديمة من الإعدادات (مثلاً قبل ما تحطي
-      // باسورد شخصي لمستلم/اسيست معيّن) بيرفع نسخته القديمة كاملة عند أي
-      // تعديل بسيط تاني (حضور/مصاريف)، فيمسح الباسورد الجديد اللي
-      // اتحفظ من جهاز تاني من غير أي تنبيه. الحل: نفس فكرة الطلاب —
-      // الجهاز ميرفعش "settings" في السحابة إلا لو هو نفسه اللي عدّلها
-      // محليًا فعلاً (بالمقارنة بآخر نسخة اتزامنت معاه).
+      // نفس فكرة "ميرفعش إلا لو هو نفسه اللي عدّل محليًا فعلاً" — عشان
+      // جهاز فاتح بنسخة قديمة من الإعدادات ميمسحش تعديل حصل على جهاز
+      // تاني بمجرد أي تعديل بسيط تاني.
       const currentSettingsJSON = JSON.stringify(lsGet(KEYS.settings, {}));
       const lastSyncedSettingsJSON = lsGet(KEYS.settingsSyncSnapshot, null);
       const settingsChangedLocally = forceFull || lastSyncedSettingsJSON === null || currentSettingsJSON !== lastSyncedSettingsJSON;
+      if (!settingsChangedLocally) return;
 
-      // ── #LiveSyncFix3: نفس إصلاح الطلاب/الإعدادات بالظبط، لكن لباقي
-      // البيانات (مصاريف/حضور/امتحانات). كانت هذه الحقول بترفع دايمًا
-      // بلا شرط (زي أول نسخة من الإصلاح) — يعني لو جهاز فاتح بنسخة قديمة
-      // من finRecords (مثلاً قبل ما تتمسح دفعة اتلغت/اتراجع عنها على
-      // جهاز تاني) وعمل أي تعديل بسيط تاني (زي تسجيل حضور)، كان بيرفع
-      // نسخته القديمة الكاملة من finRecords فيرجّع الدفعة الملغاة تاني
-      // من غير أي تنبيه (السبب الحقيقي وراء "شلت إنه دفع وبرضو راجع
-      // كأنه دافع"). نفس الحل: كل حقل ميترفعش إلا لو اتغيّر محليًا فعلاً
-      // بالمقارنة بآخر نسخة اتزامنت معاه.
-      const currentFinJSON = JSON.stringify(lsGet(KEYS.finRecords, []));
-      const finChangedLocally = forceFull || lsGet(KEYS.finRecordsSyncSnapshot, null) === null || currentFinJSON !== lsGet(KEYS.finRecordsSyncSnapshot, null);
-
-      const currentAttJSON = JSON.stringify(lsGet(KEYS.attRecords, []));
-      const attChangedLocally = forceFull || lsGet(KEYS.attRecordsSyncSnapshot, null) === null || currentAttJSON !== lsGet(KEYS.attRecordsSyncSnapshot, null);
-
-      const currentWebExamsJSON = JSON.stringify(lsGet(KEYS.webExams, []));
-      const webExamsChangedLocally = forceFull || lsGet(KEYS.webExamsSyncSnapshot, null) === null || currentWebExamsJSON !== lsGet(KEYS.webExamsSyncSnapshot, null);
-
-      const currentCenterExamsJSON = JSON.stringify(lsGet(KEYS.centerExams, []));
-      const centerExamsChangedLocally = forceFull || lsGet(KEYS.centerExamsSyncSnapshot, null) === null || currentCenterExamsJSON !== lsGet(KEYS.centerExamsSyncSnapshot, null);
-
-      const payload = { updatedAt: ts };
-      if (studentsChangedLocally) {
-        payload.students = JSON.parse(currentStudentsJSON);
-        lsSet(KEYS.studentsSyncSnapshot, currentStudentsJSON);
-      }
-      if (settingsChangedLocally) {
-        payload.settings = JSON.parse(currentSettingsJSON);
-        lsSet(KEYS.settingsSyncSnapshot, currentSettingsJSON);
-      }
-      // #StudentPortal: لازم finRecords/attRecords/webExams/centerExams
-      // تترفع أول مرة (لو مفيش سناب شوت أصلاً) عشان بوابة الطالب تشتغل
-      // حتى لو الجهاز ده لسه ما عدلش فيهم — نفس منطق "null = أول مرة".
-      if (finChangedLocally) {
-        payload.finRecords = JSON.parse(currentFinJSON);
-        lsSet(KEYS.finRecordsSyncSnapshot, currentFinJSON);
-      }
-      if (attChangedLocally) {
-        payload.attRecords = JSON.parse(currentAttJSON);
-        lsSet(KEYS.attRecordsSyncSnapshot, currentAttJSON);
-      }
-      if (webExamsChangedLocally) {
-        payload.webExams = JSON.parse(currentWebExamsJSON);
-        lsSet(KEYS.webExamsSyncSnapshot, currentWebExamsJSON);
-      }
-      if (centerExamsChangedLocally) {
-        payload.centerExams = JSON.parse(currentCenterExamsJSON);
-        lsSet(KEYS.centerExamsSyncSnapshot, currentCenterExamsJSON);
-      }
-      // merge:true إجباري هنا — عشان لو حذفنا "students"/"settings" من الـ
-      // payload (مفيش تعديل محلي فيهم)، الحقل يفضل زي ما هو في السحابة
-      // بدل ما يتمسح تمامًا (setDoc من غير merge بيستبدل المستند بالكامل).
+      const payload = { updatedAt: ts, settings: JSON.parse(currentSettingsJSON) };
+      lsSet(KEYS.settingsSyncSnapshot, currentSettingsJSON);
       await setDoc(doc(db, "elshrqawy_live_state", "main"), payload, { merge: true });
       setFirestoreUsagePct(getFirestoreUsagePct(payload));
       setLiveSyncState({ status: "success", message: "تمت المزامنة التلقائية ✓" });
@@ -560,33 +510,14 @@ export default function useAppData() {
   }, []);
   pushLiveStateRef.current = pushLiveState;
 
-  // بتطبّق نسخة سحابية (جاية من getDoc أو من onSnapshot) على البيانات
-  // المحلية — بتاخد بالها من كل أنواع البيانات (طلاب/مصاريف/غياب/امتحانات)
-  // مش الطلاب والإعدادات بس زي أول نسخة من الميزة دي.
+  // بتطبّق الإعدادات الجاية من السحابة (جاية من getDoc أو من onSnapshot)
   const applyCloudSnapshot = useCallback((cloud) => {
     if (!cloud) return;
-    setFirestoreUsagePct(getFirestoreUsagePct(cloud));
     const localTs = lsGet(KEYS.liveSyncTs, 0);
     if (!cloud.updatedAt || cloud.updatedAt <= localTs) {
-      // ── إصلاح: كان بيرجع من غير ما يحدّث liveSyncState خالص، فالكارت
-      // في الإعدادات كان بيفضل واقف على "جاري التحقق من الاتصال..." لحد
-      // ما يحصل تحديث فعلي من جهاز تاني — حتى لو كل حاجة شغالة تمام
-      // ومفيش حاجة جديدة أصلاً. دلوقتي بنأكد إن الاتصال تمام ومتزامن. ──
       setLiveSyncState(s => (s.status === "idle" ? { status: "success", message: "متصلة ومتزامنة ✓" } : s));
       return;
     }
-
-    // ── إصلاح جذري لمشكلة "رجوع الطلاب المكررين بعد الحذف/البلوك" ──
-    // لو فيه تعديل محلي حصل من ثانية/اتنين ولسه في نافذة الـ 3 ثواني
-    // قبل ما يترفع على السحابة (pushTimer لسه شغال)، وفي نفس اللحظة
-    // وصل تحديث من جهاز تاني (onSnapshot) — كان الكود القديم بيستبدل
-    // البيانات المحلية بالنسخة الجاية من السحابة فورًا، ويمسح التايمر
-    // المجدوَل، فيضيع تعديلك المحلي (زي حذف طالب مكرر) قبل ما يوصل
-    // للسحابة أصلاً من غير أي رسالة خطأ. فمرة تانية أي جهاز يعمل push
-    // كانت بترجع النسخة القديمة اللي فيها التكرار وكأن حذفك ماحصلش.
-    // الحل: لو فيه تعديل محلي مستني الرفع، ارفعيه فورًا الأول (بدل
-    // الانتظار) وتجاهلي التحديث الجاي من السحابة مؤقتًا — هيوصلك تاني
-    // صح بعد ما رفعك يخلص عن طريق onSnapshot نفسه.
     if (pushTimer.current) {
       clearTimeout(pushTimer.current);
       pushTimer.current = null;
@@ -597,12 +528,10 @@ export default function useAppData() {
     }
 
     isApplyingRemote.current = true;
-    setStudents(cloud.students || []);
     setSettings(prev => {
-      // ── نفس مبدأ إصلاح الاسترجاع اليدوي: حتى في المزامنة اللحظية بين
-      // الأجهزة، أي باسورد (مستر/أسيست/مستلم) محفوظ محليًا بيتفضّل دايمًا
-      // على أي نسخة جاية من جهاز/سحابة تانية، عشان محدش يفقد باسورد
-      // اتحفظ لسه من غير قصد بسبب فرق توقيت بسيط بين الأجهزة.
+      // أي باسورد (مستر/أسيست/مستلم) محفوظ محليًا بيتفضّل دايمًا على أي
+      // نسخة جاية من جهاز/سحابة تانية، عشان محدش يفقد باسورد اتحفظ لسه
+      // من غير قصد بسبب فرق توقيت بسيط بين الأجهزة.
       const cloudSettings = cloud.settings || {};
       const localReceivers = prev?.receivers || [];
       const cloudReceivers = cloudSettings.receivers || localReceivers;
@@ -620,33 +549,12 @@ export default function useAppData() {
         password:        prev?.password        || cloudSettings.password,
         cashierPassword: prev?.cashierPassword || cloudSettings.cashierPassword,
       };
-      // #LiveSyncFix2: نحدّث سناب شوت الإعدادات بنفس النسخة اللي قبلناها من
-      // السحابة، عشان لو الجهاز ده عمل push بعد كده من غير ما يلمس
-      // الإعدادات، ميرفعش نسخة قديمة (زي قبل ما تتحفظ باسوردات المستلمين)
-      // فتمسح تعديل حصل على جهاز تاني.
       lsSet(KEYS.settingsSyncSnapshot, JSON.stringify(merged));
       return merged;
     });
-    // ── #LiveSyncFix3: زي الطلاب بالظبط — لو مفيش حقل معيّن في نسخة
-    // السحابة دي (مش راجع أصلاً)، سيبي القيمة المحلية الحالية زي ما هي
-    // بدل ما تمسحها بمصفوفة فاضية (كان ده بيحصل لو "cloud.finRecords"
-    // مش موجودة في نفس الدفعة دي).
-    if (cloud.finRecords    !== undefined) setFinRecords(cloud.finRecords);
-    if (cloud.attRecords    !== undefined) setAttRecords(cloud.attRecords);
-    if (cloud.webExams      !== undefined) setWebExams(cloud.webExams);
-    if (cloud.centerExams   !== undefined) setCenterExams(cloud.centerExams);
-    // بعد قبول أي نسخة جاية من السحابة، لازم نحدّث "آخر نسخة اتزامنت
-    // فعليًا" لكل حقل بنفس القيمة — عشان لو الجهاز ده عمل push بعد كده
-    // من غير ما يلمس الحقل ده أصلاً، ميرفعش نسخة قديمة تمسح تعديل حصل
-    // على جهاز تاني (نفس الإصلاح الجذري بتاع الطلاب/الإعدادات فوق).
-    lsSet(KEYS.studentsSyncSnapshot, JSON.stringify(cloud.students || []));
-    if (cloud.finRecords    !== undefined) lsSet(KEYS.finRecordsSyncSnapshot,    JSON.stringify(cloud.finRecords));
-    if (cloud.attRecords    !== undefined) lsSet(KEYS.attRecordsSyncSnapshot,    JSON.stringify(cloud.attRecords));
-    if (cloud.webExams      !== undefined) lsSet(KEYS.webExamsSyncSnapshot,      JSON.stringify(cloud.webExams));
-    if (cloud.centerExams   !== undefined) lsSet(KEYS.centerExamsSyncSnapshot,   JSON.stringify(cloud.centerExams));
     lsSet(KEYS.liveSyncTs, cloud.updatedAt);
     setLiveSyncState({ status: "success", message: "تم تحديث البيانات من جهاز تاني تلقائيًا ✓" });
-  }, [setStudents, setSettings, setFinRecords, setAttRecords, setWebExams, setCenterExams]);
+  }, [setSettings, pushLiveState]);
 
   const pullLiveState = useCallback(async () => {
     if (!navigator.onLine) {
@@ -658,11 +566,6 @@ export default function useAppData() {
       const { db } = await import("../src/firebase");
       const snap = await getDoc(doc(db, "elshrqawy_live_state", "main"));
       if (!snap.exists()) {
-        // ── إصلاح: أول مرة يشتغل فيها النظام، مفيش مستند "elshrqawy_live_state"
-        // خالص على السحابة، فالكود القديم كان بيرجع من غير ما يعمل حاجة
-        // ومن غير ما يحدّث الحالة — فالكارت يفضل واقف على "جاري التحقق"
-        // للأبد. الحل: نرفع نسخة أولى فورًا من بيانات الجهاز ده عشان
-        // "ننشئ" المستند ونبدأ المزامنة على طول من غير ما نستنى أول تعديل.
         const ts = Date.now();
         lsSet(KEYS.liveSyncTs, ts);
         await pushLiveState(ts);
@@ -674,10 +577,8 @@ export default function useAppData() {
     }
   }, [applyCloudSnapshot, pushLiveState]);
 
-  // أول ما الصفحة تتفتح: اسحب أحدث نسخة فورًا (لو النت شغال)، وبعدين
-  // فضّل "مستمع" (onSnapshot) شغال طول الوقت — أي جهاز تاني يغيّر حاجة
-  // على السحابة، الجهاز ده بيستلم التحديث لحظيًا من غير ما يحتاج refresh
-  // أو ينتظر رجوع النت. ده اللي بيخلي التليفون واللاب توب "متزامنين أونلاين".
+  // أول ما الصفحة تتفتح: اسحب الإعدادات فورًا (لو النت شغال)، وبعدين
+  // فضّل "مستمع" (onSnapshot) شغال طول الوقت لتحديثات الإعدادات بس.
   useEffect(() => {
     let unsub = null;
     let cancelled = false;
@@ -699,12 +600,7 @@ export default function useAppData() {
     return () => { cancelled = true; if (unsub) unsub(); };
   }, [pullLiveState, applyCloudSnapshot]);
 
-  // ── #LiveSyncOfflineFix: لو الجهاز كان بيعدّل والنت مقطوع وقتها،
-  // pushLiveState كان بيرجع فورًا من غير ما يعمل حاجة (navigator.onLine
-  // = false) ومفيش أي محاولة تانية لرفع التعديل ده لما النت يرجع —
-  // فالتعديل يفضل عالق محليًا للأبد لحد ما يحصل تعديل جديد. الحل:
-  // أول ما النت يرجع (حدث "online")، ادفعي فورًا آخر نسخة محلية على طول
-  // من غير ما تستني تعديل جديد.
+  // لما النت يرجع بعد انقطاع — ادفع تعديل الإعدادات العالق فورًا
   useEffect(() => {
     const onOnline = () => {
       const ts = Date.now();
@@ -715,8 +611,7 @@ export default function useAppData() {
     return () => window.removeEventListener("online", onOnline);
   }, [pushLiveState]);
 
-  // أي تغيير حقيقي (من المستخدم) في الطلاب أو الإعدادات → ارفع نسخة جديدة
-  // (بعد 3 ثواني هدوء عشان ميرفعش مرة لكل حرف بيتكتب)
+  // أي تغيير حقيقي في الإعدادات بس → ارفع نسخة جديدة (بعد 3 ثواني هدوء)
   useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return; }
     if (isApplyingRemote.current) { isApplyingRemote.current = false; return; } // تحديث جاي من السحابة نفسها، متبقاش ترفعه تاني
@@ -726,7 +621,7 @@ export default function useAppData() {
     pushTimer.current = setTimeout(() => pushLiveState(ts), 3000);
     return () => clearTimeout(pushTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, settings, finRecords, attRecords, webExams, centerExams]);
+  }, [settings]);
 
 
   const cloudAutoRan = useRef(false);
@@ -735,6 +630,22 @@ export default function useAppData() {
     cloudAutoRan.current = true;
     runIncrementalCloudBackup(false);
   }, [runIncrementalCloudBackup]);
+
+  // ── حالة المزامنة المجمّعة للعرض في الإعدادات: لو أي نوع بيانات (إعدادات/
+  // طلاب/مصاريف/غياب/امتحانات) فيه خطأ، اظهري الخطأ ده. لو الكل تمام، اظهري
+  // "متزامنة". firestoreUsagePct بقى مش له معنى (كل سجل مستند صغير لوحده،
+  // مش مستند واحد بيكبر) فبيفضل 0 دايمًا (شريط الاستهلاك بيختفي تلقائيًا).
+  const recordSyncStates = [
+    studentsSync.state, finRecordsSync.state, attRecordsSync.state,
+    webExamsSync.state, centerExamsSync.state,
+  ];
+  const combinedLiveSyncState = (() => {
+    const withError = [liveSyncState, ...recordSyncStates].find(s => s.status === "error");
+    if (withError) return withError;
+    const anySuccess = [liveSyncState, ...recordSyncStates].some(s => s.status === "success");
+    if (anySuccess) return { status: "success", message: "كل البيانات متزامنة ✓" };
+    return { status: "idle", message: "" };
+  })();
 
   return {
     students,    setStudents,
@@ -754,7 +665,7 @@ export default function useAppData() {
     // #Cloud
     cloudBackupState, backupToCloud, restoreFromCloud,
     // #LiveSync
-    liveSyncState,
+    liveSyncState: combinedLiveSyncState,
     firestoreUsagePct,
     // #TrashDup
     trashedDupStudents, moveDupToTrash, restoreDupFromTrash,
