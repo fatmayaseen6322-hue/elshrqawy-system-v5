@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { GRADES_LIST, MONTHS_AR, TODAY } from "../../constants";
 import { pct, scC, isBlocked, normalizeAr, isMonthBlocked, isMonthExempt, getStatementMonths } from "../../utils";
 import { smartPrint } from "../../utils/print/printRouter";
-import { Bar } from "../ui";
+import { Bar, GradeCircles } from "../ui";
 
 // أرقام برج المراقبة بالإنجليزي (Latin digits) بدل الأرقام العربية (١٢٣) —
 // طلب صريح: هنا بس، باقي الموديولات (المصاريف مثلاً) لسه بتستخدم fmt/fmtM العادية
@@ -218,6 +218,21 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
     grades: groupByGrade(examStudents),
   };
 
+  // طلاب عندهم خصم على مصاريفهم (discount > 0) أو معفيين من شهور معينة
+  // (exemptMonths) — بيظهر مستطيل "الخصم" للمستر بس في برج المراقبة
+  const discountStudents = students
+    .filter(s => (s.discount || 0) > 0 || (s.exemptMonths || []).length > 0)
+    .map(s => {
+      const fee    = gradeFees?.[s.grade] || 0;
+      const net    = Math.max(0, fee - (s.discount || 0));
+      return { name: s.name, group: s.group, grade: s.grade, discount: s.discount || 0, netFee: net, free: net === 0, exemptMonths: s.exemptMonths || [] };
+    });
+  const discountSection = {
+    title: "الخصم", icon: "🏷️",
+    cols: ["اسم الطالب","المجموعة","الخصم"],
+    grades: groupByGrade(discountStudents),
+  };
+
   // طلاب بدون أي رقم هاتف مسجَّل (لا رقم الطالب ولا رقم ولي الأمر) — بيظهر مستطيل بعد "الامتحانات" وقبل "الإيرادات"
   const noPhoneStudents = students
     .filter(s => !(s.parentPhone && s.parentPhone.trim()) && !(s.phone && s.phone.trim()))
@@ -228,7 +243,7 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
     grades: groupByGrade(noPhoneStudents),
   };
 
-  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, absenceSection, examsSection, noPhoneSection, absenceByStudentId: attStats };
+  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, absenceSection, examsSection, noPhoneSection, discountSection, absenceByStudentId: attStats };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -432,6 +447,8 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [oldDebtorsGrade, setOldDebtorsGrade] = useState(null);
   const [showNoPhone, setShowNoPhone] = useState(false);
   const [noPhoneGrade, setNoPhoneGrade] = useState(null);
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [discountGrade, setDiscountGrade] = useState(null);
   const [showLog, setShowLog] = useState(false);
   const [logCategory, setLogCategory] = useState(null);
   const [logPickedDate, setLogPickedDate] = useState("");
@@ -972,6 +989,63 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     );
   }
 
+  // ── صفحة "الخصم" — للمستر بس. مستطيل واحد في برج المراقبة، وبالضغط
+  // عليه بتفتح دواير الصفوف (زي دواير الحضور/المصاريف)، وبالضغط على أي
+  // دايرة بيظهروا الطلاب اللي عندهم خصم أو معفيين من شهور في الصف ده.
+  if (showDiscount) {
+    const gradesWithDiscount = dd.discountSection.grades.map(g => g.grade);
+    const gradeList = discountGrade ? dd.discountSection.grades.find(g => g.grade === discountGrade)?.students || [] : [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setShowDiscount(false); setDiscountGrade(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <h2 className="text-white font-bold text-sm">🏷️ الخصم</h2>
+          <span className="w-10" />
+        </div>
+        {!discountGrade ? (
+          gradesWithDiscount.length === 0 ? (
+            <div className="text-center text-slate-500 text-xs py-8">مفيش أي طالب عنده خصم أو إعفاء حاليًا</div>
+          ) : (
+            <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4">
+              <GradeCircles grades={gradesWithDiscount} value={discountGrade} onChange={g => setDiscountGrade(g)} />
+            </div>
+          )
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setDiscountGrade(null)} className="text-slate-400 hover:text-white text-xs flex items-center gap-1">← كل الصفوف</button>
+              <span className="text-white font-bold text-sm">{discountGrade}</span>
+            </div>
+            {gradeList.length === 0 ? (
+              <div className="text-center text-slate-500 text-xs py-8">مفيش طلاب عندهم خصم أو إعفاء في الصف ده</div>
+            ) : (
+              <div className="space-y-2">
+                {gradeList.map((s, i) => (
+                  <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-white text-sm font-bold">{s.name}</div>
+                      <div className="text-slate-500 text-xs">مجموعة {s.group}</div>
+                    </div>
+                    <div className="text-left shrink-0">
+                      {s.free ? (
+                        <span className="text-emerald-400 text-xs font-bold">🆓 معفى بالكامل</span>
+                      ) : s.discount > 0 ? (
+                        <span className="text-amber-400 text-xs font-bold">خصم {fmtM(s.discount)} ج</span>
+                      ) : null}
+                      {s.exemptMonths.length > 0 && (
+                        <div className="text-sky-400 text-[11px] mt-0.5">معفى {s.exemptMonths.length} شهر</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {isAssist && (
@@ -1019,6 +1093,12 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
             <span className="text-2xl">🧑‍💼</span>
             <div className="text-2xl font-bold text-blue-400">{(settings?.receivers || []).length}</div>
             <div className="text-slate-400 text-xs">المس</div>
+          </button>
+          <button onClick={() => setShowDiscount(true)}
+            className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
+            <span className="text-2xl">🏷️</span>
+            <div className="text-2xl font-bold text-amber-400">{dd.discountSection.grades.reduce((a, g) => a + g.students.length, 0)}</div>
+            <div className="text-slate-400 text-xs">الخصم</div>
           </button>
         </div>
       )}
