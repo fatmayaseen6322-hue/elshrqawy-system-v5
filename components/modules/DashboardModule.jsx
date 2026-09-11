@@ -168,6 +168,15 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
   const totalDebt = students.reduce((a, s) => a + getRealDue(s), 0);
   const gradeDebts = GRADES_LIST.map(g => ({ grade: g, count: students.filter(s => s.grade === g).reduce((a, s) => a + getRealDue(s), 0) }));
 
+  // إجمالي الخصم لكل صف + إجمالي عام — نفس منطق إجمالي الديون بالظبط
+  const totalDiscount = students.reduce((a, s) => a + (s.discount || 0), 0);
+  const gradeDiscounts = GRADES_LIST.map(g => ({ grade: g, count: students.filter(s => s.grade === g).reduce((a, s) => a + (s.discount || 0), 0) }));
+  const discountStudentsList = students
+    .filter(s => (s.discount || 0) > 0)
+    .map(s => ({ name: s.name, grade: s.grade, discount: s.discount || 0 }))
+    .sort((a, b) => b.discount - a.discount);
+  const gradeDiscountStudents = GRADES_LIST.map(g => ({ grade: g, list: discountStudentsList.filter(x => x.grade === g) }));
+
   // أقدم شهر متأخر (من شهور سابقة فقط — مش الشهر الحالي) لكل طالب — عشان
   // صفحة "الطلاب المتأخرين من شهور سابقة" بجوار كارت إجمالي الديون في برج المراقبة
   const getOldestPrevOwedMonth = s => {
@@ -243,7 +252,7 @@ export function buildDashboardData(students, finRecords, gradeFees, attRecords) 
     grades: groupByGrade(noPhoneStudents),
   };
 
-  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt }, gradeCounts, gradeDebts, gradeDebtStudents, absenceSection, examsSection, noPhoneSection, discountSection, absenceByStudentId: attStats };
+  return { stats: { total, active, temp, totalRevenue, revToday, revWeek, revMonth, totalDebt, totalDiscount }, gradeCounts, gradeDebts, gradeDebtStudents, gradeDiscounts, gradeDiscountStudents, absenceSection, examsSection, noPhoneSection, discountSection, absenceByStudentId: attStats };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -445,6 +454,8 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [period, setPeriod] = useState("today");
   const [showOldDebtors, setShowOldDebtors] = useState(false);
   const [oldDebtorsGrade, setOldDebtorsGrade] = useState(null);
+  const [showDiscountStudents, setShowDiscountStudents] = useState(false);
+  const [discountStudentsGrade, setDiscountStudentsGrade] = useState(null);
   const [showNoPhone, setShowNoPhone] = useState(false);
   const [noPhoneGrade, setNoPhoneGrade] = useState(null);
   const [showDiscount, setShowDiscount] = useState(false);
@@ -616,6 +627,53 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
                   <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center justify-between">
                     <span className="text-white text-sm font-bold">{s.name}</span>
                     <span className="text-red-400 text-xs font-bold shrink-0">متأخر من شهر {s.monthLabel}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── صفحة "الطلاب اللي عندهم خصم" — منفصلة عن برج المراقبة، بتتفتح
+  // من زرار 👤▾ بجوار كارت إجمالي الخصم، وترجع لبرج المراقبة بزرار الرجوع فوق
+  if (showDiscountStudents) {
+    const gradeList = discountStudentsGrade ? dd.gradeDiscountStudents.find(g => g.grade === discountStudentsGrade)?.list || [] : [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <button onClick={() => { setShowDiscountStudents(false); setDiscountStudentsGrade(null); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+          <h2 className="text-white font-bold text-sm">الطلاب اللي عندهم خصم</h2>
+          <span className="w-10" />
+        </div>
+        {!discountStudentsGrade ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {dd.gradeDiscountStudents.map((g, i) => (
+              <button key={i} onClick={() => setDiscountStudentsGrade(g.grade)}
+                className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 text-center hover:bg-slate-800 transition-colors">
+                <div className="text-white font-bold text-sm">{g.grade}</div>
+                <div className={`text-xs mt-1 ${g.list.length ? "text-emerald-400 font-bold" : "text-slate-500"}`}>
+                  {g.list.length ? `${g.list.length} طالب عنده خصم` : "لا يوجد"}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button onClick={() => setDiscountStudentsGrade(null)} className="text-slate-400 hover:text-white text-xs flex items-center gap-1">← كل الصفوف</button>
+              <span className="text-white font-bold text-sm">{discountStudentsGrade}</span>
+            </div>
+            {gradeList.length === 0 ? (
+              <div className="text-center text-slate-500 text-xs py-8">مفيش طلاب عندهم خصم في الصف ده</div>
+            ) : (
+              <div className="space-y-2">
+                {gradeList.map((s, i) => (
+                  <div key={i} className="bg-slate-800/60 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center justify-between">
+                    <span className="text-white text-sm font-bold">{s.name}</span>
+                    <span className="text-emerald-400 text-xs font-bold shrink-0">خصم {fmtM(s.discount)} ج</span>
                   </div>
                 ))}
               </div>
@@ -1082,6 +1140,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
           <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />
           <KPICard icon="💰" label={`المحصّل (${periodLabels[effectivePeriod]})`} value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
           <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" gradeBreakdown={dd.gradeDebts} formatValue={fmtM} onNamesClick={() => setShowOldDebtors(true)} namesLabel="الطلاب المتأخرين من شهور سابقة" />
+          <KPICard icon="🏷️" label="إجمالي الخصم" value={fmtM(dd.stats.totalDiscount)} sub="ج.م" color="#34d399" gradeBreakdown={dd.gradeDiscounts} formatValue={fmtM} onNamesClick={() => setShowDiscountStudents(true)} namesLabel="الطلاب اللي عندهم خصم" />
           <button onClick={() => setShowDup(true)}
             className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
             <span className="text-2xl">🧬</span>
