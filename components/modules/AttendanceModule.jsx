@@ -225,19 +225,32 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attRecords, reportDate]);
 
-  // زرار "غياب": يفتح دايمًا على اليوم الحالي، والصف اللي معروض هو أول
-  // صف من الصفوف اللي اتسجّل لها غياب النهاردة (لو الصف المختار حاليًا
-  // مش من ضمنهم).
+  // زرار "غياب": يفتح دايمًا على آخر غياب اتسجل فعليًا (أي صف، أقرب تاريخ)
+  // عشان يبان غياب حقيقي على طول من غير ما تحتاجي تدوسي على السهم.
   const openReport = () => {
-    setReportDate(TODAY);
-    const options = gradesWithAttendanceOn(TODAY);
-    const g = options.includes(grade) ? grade : (options[0] || grade);
-    setReportGrade(g);
+    const absenceRecords = (attRecords || []).filter(r => r.status === "a");
+    if (absenceRecords.length) {
+      const latest = absenceRecords.reduce((a, b) => (b.date > a.date ? b : a));
+      setReportGrade(latest.grade);
+      setReportDate(latest.date);
+    } else {
+      setReportGrade(grade);
+      setReportDate(TODAY);
+    }
     setReportOpen(true);
   };
 
+  // تغيير الصف من جوّه المودال: ينقل تلقائي لآخر غياب متسجل لهذا الصف
+  // (لو موجود)، وإلا يفضل على النهاردة.
   const handleReportGradeChange = (g) => {
     setReportGrade(g);
+    const gradeAbsences = (attRecords || []).filter(r => r.grade === g && r.status === "a");
+    if (gradeAbsences.length) {
+      const latest = gradeAbsences.reduce((a, b) => (b.date > a.date ? b : a));
+      setReportDate(latest.date);
+    } else {
+      setReportDate(TODAY);
+    }
   };
 
   const handleReportDateChange = (d) => {
