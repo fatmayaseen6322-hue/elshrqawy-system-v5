@@ -460,6 +460,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [noPhoneGrade, setNoPhoneGrade] = useState(null);
   const [showDiscount, setShowDiscount] = useState(false);
   const [discountGrade, setDiscountGrade] = useState(null);
+  const [discBreakdownOpen, setDiscBreakdownOpen] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [logCategory, setLogCategory] = useState(null);
   const [logPickedDate, setLogPickedDate] = useState("");
@@ -1140,7 +1141,6 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
           <KPICard icon="👥" label="إجمالي الطلاب" value={dd.stats.total} sub={`${dd.stats.active} نشط · ${dd.stats.temp} مؤقت`} color="#60a5fa" gradeBreakdown={dd.gradeCounts} />
           <KPICard icon="💰" label={`المحصّل (${periodLabels[effectivePeriod]})`} value={fmtM(revVal)} sub="ج.م" color="#fbbf24" />
           <KPICard icon="📉" label="إجمالي الديون" value={fmtM(dd.stats.totalDebt)} sub="ج.م" color="#f87171" gradeBreakdown={dd.gradeDebts} formatValue={fmtM} onNamesClick={() => setShowOldDebtors(true)} namesLabel="الطلاب المتأخرين من شهور سابقة" />
-          <KPICard icon="🏷️" label="إجمالي الخصم" value={fmtM(dd.stats.totalDiscount)} sub="ج.م" color="#34d399" gradeBreakdown={dd.gradeDiscounts} formatValue={fmtM} onNamesClick={() => setShowDiscountStudents(true)} namesLabel="الطلاب اللي عندهم خصم" />
           <button onClick={() => setShowDup(true)}
             className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
             <span className="text-2xl">🧬</span>
@@ -1153,12 +1153,29 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
             <div className="text-2xl font-bold text-blue-400">{(settings?.receivers || []).length}</div>
             <div className="text-slate-400 text-xs">المس</div>
           </button>
-          <button onClick={() => setShowDiscount(true)}
-            className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
-            <span className="text-2xl">🏷️</span>
-            <div className="text-2xl font-bold text-amber-400">{dd.discountSection.grades.reduce((a, g) => a + g.students.length, 0)}</div>
-            <div className="text-slate-400 text-xs">الخصم</div>
-          </button>
+          <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 relative">
+            <div className="flex items-center justify-between">
+              <span className="text-2xl">🏷️</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setShowDiscountStudents(true)} className="text-amber-400 text-sm leading-none" title="الطلاب اللي عندهم خصم">👤▾</button>
+                <button onClick={() => setDiscBreakdownOpen(o => !o)} className="text-emerald-400 text-sm leading-none">▾</button>
+              </div>
+            </div>
+            <button onClick={() => setShowDiscount(true)} className="text-right">
+              <div className="text-2xl font-bold text-amber-400">{dd.discountSection.grades.reduce((a, g) => a + g.students.length, 0)}</div>
+              <div className="text-slate-400 text-xs">الخصم</div>
+              <div className="text-slate-500 text-xs mt-1">{fmtM(dd.stats.totalDiscount)} ج.م</div>
+            </button>
+            {discBreakdownOpen && (
+              <div className="absolute top-12 left-3 right-3 bg-slate-900 border border-slate-700/60 rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
+                {dd.gradeDiscounts.map((g, i) => (
+                  <button key={i} onClick={() => { setShowDiscount(true); setDiscountGrade(g.grade); setDiscBreakdownOpen(false); }} className="w-full px-3 py-2 text-right text-xs text-slate-200 hover:bg-slate-800 flex justify-between border-b border-slate-800 last:border-0">
+                    <span>{g.grade}</span><span className="text-blue-400 font-bold">{fmtM(g.count)} ج</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
       {isAssist && (
