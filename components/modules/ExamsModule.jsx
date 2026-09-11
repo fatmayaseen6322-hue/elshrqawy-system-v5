@@ -1985,13 +1985,32 @@ function ExamEditModal({ exam, setCenterExams, onClose }) {
   );
 }
 
-function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, setCenterExams, setWordDocs }) {
+function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, setCenterExams, setWordDocs, wordDocs }) {
   const [grade,   setGrade]   = useState("");
   const [unit,    setUnit]    = useState("");
   const [lesson,  setLesson]  = useState("");
   const [examId,  setExamId]  = useState("");
   const [creatingNew, setCreatingNew] = useState(false);
   const [openStudent, setOpenStudent] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  // #WordEditor: زرار "فتح الوورد" في شاشة الطلاب — بيفتح صفحة جديدة
+  // فيها ملف الوورد المرتبط بنفس الامتحان المختار حاليًا (نفس اللي
+  // اتقرا وقت رفع الامتحان)، من غير ما نغيّر مكتبة "فتح الوورد" العامة.
+  const openExamWordInNewPage = () => {
+    const doc = (wordDocs || []).find(d => d.examId === selectedExam?.id);
+    if (!doc) { setToast({ msg: "مفيش ملف Word مرفوع لهذا الامتحان (لازم يكون اتحمّل بصيغة .docx)", type: "error" }); return; }
+    const win = window.open("", "_blank");
+    if (!win) { setToast({ msg: "المتصفح منع فتح صفحة جديدة — اسمحي بالنوافذ المنبثقة وحاولي تاني", type: "error" }); return; }
+    win.document.write(
+      `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${doc.name}</title>` +
+      `<style>body{font-family:Arial,Tahoma,sans-serif;background:#f1f5f9;margin:0;padding:24px;}` +
+      `.page{max-width:800px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;` +
+      `box-shadow:0 4px 20px rgba(0,0,0,0.08);line-height:1.8;font-size:15px;color:#0f172a;}` +
+      `</style></head><body><div class="page">${doc.html}</div></body></html>`
+    );
+    win.document.close();
+  };
 
   const maxUnits = grade ? unitsCountFor(grade) : 0;
   const gradeStudents = useMemo(() => students.filter(s => s.grade === grade && !isBlocked(s)), [students, grade]);
@@ -2083,7 +2102,12 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
         {selectedExam.fileName || "امتحان يدوي"} — {selectedExam.numQuestions} سؤال — {grade} — و{unit} د{lesson}
       </div>
 
+      {selectedExam.fileType === "docx" && (
+        <Btn variant="primary" className="w-full" onClick={openExamWordInNewPage}>📄 فتح الوورد (صفحة جديدة)</Btn>
+      )}
+
       <ExamPartsConfig exam={selectedExam} setCenterExams={setCenterExams} numQ={selectedExam.numQuestions || 0} />
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
 
       {gradeStudents.length === 0
         ? <div className="text-center py-10 text-slate-600"><div className="text-4xl mb-2">📭</div><div className="text-sm">لا يوجد طلاب في هذا الصف</div></div>
@@ -3374,7 +3398,7 @@ export default function ExamsModule({ students, setStudents, addActivity, questi
         )}
 
         {activePanel === "errors" && wordEditorOpen && <WordEditorPanel wordDocs={wordDocs || []} setWordDocs={setWordDocs} />}
-        {activePanel === "errors" && !wordEditorOpen && <ExamCorrectionFlow students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} setWordDocs={setWordDocs} />}
+        {activePanel === "errors" && !wordEditorOpen && <ExamCorrectionFlow students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} setWordDocs={setWordDocs} wordDocs={wordDocs} />}
         {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} setCenterExams={setCenterExams} role={role} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
