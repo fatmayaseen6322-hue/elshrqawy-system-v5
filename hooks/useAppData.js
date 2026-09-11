@@ -22,6 +22,7 @@ const KEYS = {
   webExams:    "app_web_exams",
   centerExams: "app_center_exams",
   examQs:      "app_exam_questions",
+  wordDocs:    "app_word_docs",      // #WordEditor — ملفات الوورد المحفوظة جوه البرنامج
   activityLog: "app_activity_log",    // #4
   lastBackup:  "app_last_backup_ts",  // #1
   session:     "app_session",         // #7
@@ -40,6 +41,7 @@ function loadAttRecords()  { return lsGet(KEYS.attRecords, []); }
 function loadWebExams()    { return lsGet(KEYS.webExams, WEB_EXAMS); }
 function loadCenterExams() { return lsGet(KEYS.centerExams, CENTER_EXAMS); }
 function loadExamQs()      { return lsGet(KEYS.examQs, EXAM_QS.map(q => ({ ...q }))); }
+function loadWordDocs()    { return lsGet(KEYS.wordDocs, []); }
 function loadActivityLog() { return lsGet(KEYS.activityLog, []); }  // #4
 // #TrashDup: بيشيل تلقائيًا أي عنصر عدّى عليه شهرين من وقت الحذف
 function loadTrashedDup() {
@@ -109,6 +111,7 @@ export default function useAppData() {
   const [webExams,    setWebExams]    = usePersisted(KEYS.webExams,    loadWebExams);
   const [centerExams, setCenterExams] = usePersisted(KEYS.centerExams, loadCenterExams);
   const [examQs,      setExamQs]      = usePersisted(KEYS.examQs,      loadExamQs);
+  const [wordDocs,    setWordDocs]    = usePersisted(KEYS.wordDocs,    loadWordDocs);
 
   // ── #RecordSync (حل جذري): كل نوع بيانات ليه سجلات (طلاب/مصاريف/غياب/
   // امتحانات) بيتزامن على مستوى "السجل الواحد" بدل "القائمة كلها كبلوك"
@@ -119,12 +122,17 @@ export default function useAppData() {
   const attRecordsSync  = useRecordSync("elshrqawy_att_records",  attRecords,  setAttRecords);
   const webExamsSync    = useRecordSync("elshrqawy_web_exams",    webExams,    setWebExams);
   const centerExamsSync = useRecordSync("elshrqawy_center_exams", centerExams, setCenterExams);
+  // #WordEditor: ملفات الوورد (المرفوعة أو المكتوبة جوه البرنامج) بتتزامن
+  // بنفس طريقة باقي السجلات — عشان محتوى الملف يبقى محفوظ فعليًا جوه
+  // البرنامج (Firestore + localStorage) مش معتمد على نسخة الملف الأصلية
+  // على اللاب توب خالص.
+  const wordDocsSync    = useRecordSync("elshrqawy_word_docs",    wordDocs,    setWordDocs);
   // مرجع بكل دوال "ادفع كل حاجة فورًا" عشان زرار "رفع نسخة على السحابة"
   // اليدوي يقدر يستخدمها (تفصيل الاستخدام تحت في runIncrementalCloudBackup)
   const recordForcePushRef = useRef([]);
   recordForcePushRef.current = [
     studentsSync.forcePush, finRecordsSync.forcePush, attRecordsSync.forcePush,
-    webExamsSync.forcePush, centerExamsSync.forcePush,
+    webExamsSync.forcePush, centerExamsSync.forcePush, wordDocsSync.forcePush,
   ];
 
   // ── #TrashDup: سلة مهملات خاصة بحذف "التكرار" بس (من برج المراقبة) ──
@@ -664,6 +672,8 @@ export default function useAppData() {
     webExams,    setWebExams,
     centerExams, setCenterExams,
     examQs,      setExamQs,
+    // #WordEditor
+    wordDocs,    setWordDocs,
     // #4
     activityLog, addActivity,
     // #7

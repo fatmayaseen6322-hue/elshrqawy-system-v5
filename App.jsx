@@ -316,6 +316,7 @@ export default function App() {
     webExams,    setWebExams,
     centerExams, setCenterExams,
     examQs,      setExamQs,
+    wordDocs,    setWordDocs,
     activityLog, addActivity,   // #4
     currentRole, setCurrentRole, // #7
     storageWarn,                 // #1
@@ -716,7 +717,7 @@ export default function App() {
             {safePage === "students"   && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} setFinRecords={setFinRecords} attRecords={attRecords || []} setAttRecords={setAttRecords} webExams={webExams || []} centerExams={centerExams || []} settings={settings} role={currentRole.role} jumpTo={jumpStudent} onJumpDone={() => setJumpStudent(null)} addActivity={addActivity} studentsPushNow={studentsPushNow} />}
             {safePage === "addStudent" && <StudentsModule   students={students || []} setStudents={setStudents} finRecords={finRecords || []} settings={settings} addActivity={addActivity} startAdd onDone={() => setPage("students")} studentsPushNow={studentsPushNow} />}
             {safePage === "finance"    && <FinanceModule    students={students || []} settings={settings} setSettings={setSettings} finRecords={finRecords || []} setFinRecords={setFinRecords} setStudents={setStudents} addActivity={addActivity} role={currentRole.role} currentUserName={currentRole.name || null} jumpTo={financeJump} onJumpDone={() => setFinanceJump(null)} financeMode={financeMode} setFinanceMode={setFinanceMode} />}
-            {safePage === "exams"      && <ExamsModule      students={students || []} setStudents={setStudents} addActivity={addActivity} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} role={currentRole.role} />}
+            {safePage === "exams"      && <ExamsModule      students={students || []} setStudents={setStudents} addActivity={addActivity} questions={examQs || []} setQuestions={setExamQs} webExams={webExams || []} setWebExams={setWebExams} centerExams={centerExams || []} setCenterExams={setCenterExams} wordDocs={wordDocs || []} setWordDocs={setWordDocs} role={currentRole.role} />}
             {safePage === "dashboard"  && <DashboardModule  students={students || []} finRecords={finRecords || []} attRecords={attRecords || []} settings={settings} role={currentRole.role} setStudents={setStudents} setFinRecords={setFinRecords} setAttRecords={setAttRecords} webExams={webExams || []} setWebExams={setWebExams} addActivity={addActivity} activityLog={activityLog || []} jumpTo={dashboardJump} onJumpDone={() => setDashboardJump(null)} showToast={showToast} sectionJump={dashboardSectionJump} onSectionJumpDone={() => setDashboardSectionJump(null)} trashedDupStudents={trashedDupStudents || []} moveDupToTrash={moveDupToTrash} restoreDupFromTrash={restoreDupFromTrash} />}
             {safePage === "call"       && <CallModule       students={students || []} />}
             {safePage === "whatsapp"   && <WhatsappModule   students={students || []} settings={settings} attRecords={attRecords || []} />}

@@ -1985,7 +1985,7 @@ function ExamEditModal({ exam, setCenterExams, onClose }) {
   );
 }
 
-function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, setCenterExams }) {
+function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, setCenterExams, setWordDocs }) {
   const [grade,   setGrade]   = useState("");
   const [unit,    setUnit]    = useState("");
   const [lesson,  setLesson]  = useState("");
@@ -2061,6 +2061,7 @@ function ExamCorrectionFlow({ students, setStudents, addActivity, centerExams, s
           <ExamFileUploadInline
             grade={grade} unit={unit} lesson={lesson}
             setCenterExams={setCenterExams}
+            setWordDocs={setWordDocs}
             onDone={id => { setExamId(id); setCreatingNew(false); }}
           />
           <Btn variant="ghost" className="w-full" onClick={() => setCreatingNew(false)}>رجوع</Btn>
@@ -2942,6 +2943,18 @@ async function extractTextFromDocx(f) {
   return result?.value || "";
 }
 
+// ── #WordEditor: تحويل ملف Word (.docx) لـ HTML قابل للتعديل، وتخزينه هو
+// نفسه (مش بس اسم الملف) جوه البرنامج — عشان أي مستخدم يفتحه ويعدّل فيه
+// من أي جهاز من غير ما يحتاج النسخة الأصلية على اللاب توب تاني. سقف حجم
+// (~700 ألف حرف) عشان نفضل بعيد عن حد الـ 1 ميجابايت لكل مستند Firestore.
+const WORD_DOC_MAX_CHARS = 700000;
+async function convertDocxToEditableHtml(f) {
+  const mammoth = await import("mammoth");
+  const arrayBuffer = await f.arrayBuffer();
+  const result = await mammoth.convertToHtml({ arrayBuffer });
+  return result?.value || "";
+}
+
 let pdfjsLibPromise = null;
 async function getPdfjsLib() {
   if (!pdfjsLibPromise) {
@@ -3060,7 +3073,7 @@ function parseQuestionsFromText(rawText) {
 // نفس منطق القراءة التلقائية (OCR/Word/PDF) لكن للصف/الوحدة/الدرس
 // اللي المستخدم مختارهم بالفعل من الدوائر فوق.
 // ══════════════════════════════════════════════════════════════
-function ExamFileUploadInline({ grade, unit, lesson, setCenterExams, onDone }) {
+function ExamFileUploadInline({ grade, unit, lesson, setCenterExams, setWordDocs, onDone }) {
   const [dragOver, setDragOver]     = useState(false);
   const [analyzing, setAnalyzing]   = useState(false);
   const [toast, setToast]           = useState(null);
@@ -3103,6 +3116,24 @@ function ExamFileUploadInline({ grade, unit, lesson, setCenterExams, onDone }) {
     };
     setCenterExams(p => [newExam, ...(p || [])]);
     setToast({ msg: `✓ تم رفع ${f.name} — جاري قراءة عدد الأسئلة تلقائيًا (مجانًا)...`, type: "success" });
+
+    // #WordEditor: لو الملف Word، خزّني نسخة قابلة للتعديل جوه البرنامج
+    // نفسه (مش بس اسمه) — عشان تتفتح وتتعدّل من "فتح الوورد" من أي جهاز
+    // من غير ما نحتاج نسخة الملف الأصلية على اللاب توب تاني.
+    if (ext === "docx" && setWordDocs) {
+      try {
+        const html = await convertDocxToEditableHtml(f);
+        if (html && html.length <= WORD_DOC_MAX_CHARS) {
+          setWordDocs(p => [{
+            id: `wd_${examId}`, examId, name: f.name,
+            grade, unit, lesson, html,
+            createdAt: Date.now(), updatedAt: Date.now(),
+          }, ...(p || [])]);
+        } else if (html) {
+          setToast({ msg: "⚠️ الملف كبير جدًا — اتقرا واتحفظت بياناته لكن مش هيبقى متاح للتعديل كصفحة وورد جوه البرنامج", type: "error" });
+        }
+      } catch { /* التحويل فشل — الرفع الأساسي والقراءة التلقائية فوق اتمت عادي */ }
+    }
 
     setAnalyzing(true);
     const result = await analyzeExamFile(f, ext);
@@ -3184,23 +3215,166 @@ function ExamFileUploadInline({ grade, unit, lesson, setCenterExams, onDone }) {
   );
 }
 
-export default function ExamsModule({ students, setStudents, addActivity, questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams, role }) {
+// ══════════════════════════════════════════════════════════════
+// #WordEditor — صفحة "فتح الوورد": قايمة الملفات المحفوظة جوه البرنامج
+// + صفحة تحرير شكلها زي صفحة Word عادية (خلفية بيضا، خط، تنسيق بسيط)
+// أي حفظ بيتسجل في بيانات البرنامج (wordDocs) مش على اللاب توب.
+// ══════════════════════════════════════════════════════════════
+function WordEditorPanel({ wordDocs, setWordDocs }) {
+  const [openId, setOpenId]   = useState(null);
+  const [toast, setToast]     = useState(null);
+  const [dirty, setDirty]     = useState(false);
+  const ref  = useRef(null);
+  const editorRef = useRef(null);
+  const openDoc = (wordDocs || []).find(d => d.id === openId) || null;
+
+  const uploadNew = async f => {
+    if (!f) return;
+    const ext = f.name.split(".").pop().toLowerCase();
+    if (ext !== "docx") { setToast({ msg: "لازم ملف Word بصيغة .docx", type: "error" }); return; }
+    try {
+      const html = await convertDocxToEditableHtml(f);
+      if (html.length > WORD_DOC_MAX_CHARS) { setToast({ msg: "⚠️ الملف كبير جدًا عشان يتفتح للتعديل جوه البرنامج", type: "error" }); return; }
+      const id = `wd_${Date.now()}`;
+      setWordDocs(p => [{ id, name: f.name, html, createdAt: Date.now(), updatedAt: Date.now() }, ...(p || [])]);
+      setOpenId(id);
+      setToast({ msg: `✓ اتفتح ${f.name}`, type: "success" });
+    } catch { setToast({ msg: "تعذّرت قراءة الملف", type: "error" }); }
+  };
+
+  const newBlank = () => {
+    const id = `wd_${Date.now()}`;
+    setWordDocs(p => [{ id, name: "مستند جديد", html: "<p></p>", createdAt: Date.now(), updatedAt: Date.now() }, ...(p || [])]);
+    setOpenId(id);
+  };
+
+  const saveOpenDoc = () => {
+    if (!openDoc || !editorRef.current) return;
+    const html = editorRef.current.innerHTML;
+    setWordDocs(p => (p || []).map(d => d.id === openDoc.id ? { ...d, html, updatedAt: Date.now() } : d));
+    setDirty(false);
+    setToast({ msg: "✓ اتحفظ جوه البرنامج", type: "success" });
+  };
+
+  const deleteDoc = id => {
+    setWordDocs(p => (p || []).filter(d => d.id !== id));
+    if (openId === id) setOpenId(null);
+  };
+
+  const fmt = (cmd) => { document.execCommand(cmd, false, null); editorRef.current?.focus(); setDirty(true); };
+
+  if (openDoc) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <button onClick={() => { if (dirty && !confirm("فيه تعديلات لسه ما اتحفظتش — تقفل من غير حفظ؟")) return; setOpenId(null); }}
+            className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع للملفات</button>
+          <div className="flex-1 text-white font-bold text-sm truncate">{openDoc.name}</div>
+          <Btn variant="success" onClick={saveOpenDoc}>💾 حفظ</Btn>
+        </div>
+        <div className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-2 flex items-center gap-1 flex-wrap">
+          <button onClick={() => fmt("bold")} className="w-9 h-9 rounded-lg bg-slate-900 text-white font-black hover:bg-slate-700">B</button>
+          <button onClick={() => fmt("italic")} className="w-9 h-9 rounded-lg bg-slate-900 text-white italic hover:bg-slate-700">I</button>
+          <button onClick={() => fmt("underline")} className="w-9 h-9 rounded-lg bg-slate-900 text-white underline hover:bg-slate-700">U</button>
+          <div className="w-px h-6 bg-slate-700 mx-1" />
+          <button onClick={() => fmt("insertUnorderedList")} className="px-3 h-9 rounded-lg bg-slate-900 text-white text-sm hover:bg-slate-700">• قائمة</button>
+          <button onClick={() => fmt("justifyRight")} className="px-3 h-9 rounded-lg bg-slate-900 text-white text-sm hover:bg-slate-700">يمين</button>
+          <button onClick={() => fmt("justifyCenter")} className="px-3 h-9 rounded-lg bg-slate-900 text-white text-sm hover:bg-slate-700">وسط</button>
+          {dirty && <span className="text-amber-400 text-xs mr-auto">● تعديلات لسه محفوظتش</span>}
+        </div>
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          dir="rtl"
+          onInput={() => setDirty(true)}
+          dangerouslySetInnerHTML={{ __html: openDoc.html }}
+          className="bg-white text-slate-900 rounded-2xl p-6 min-h-[60vh] shadow-lg leading-loose text-[15px] focus:outline-none"
+          style={{ fontFamily: "Arial, Tahoma, sans-serif" }}
+        />
+        {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <Btn variant="primary" className="w-full" onClick={() => ref.current?.click()}>📤 رفع ملف Word</Btn>
+        <Btn variant="ghost" className="w-full" onClick={newBlank}>➕ مستند فارغ جديد</Btn>
+      </div>
+      <input ref={ref} type="file" accept=".docx" className="hidden" onChange={e => { uploadNew(e.target.files?.[0]); e.target.value = ""; }} />
+
+      {(wordDocs || []).length === 0 ? (
+        <div className="text-center py-10 text-slate-500 text-sm">مفيش ملفات وورد محفوظة جوه البرنامج لسه</div>
+      ) : (
+        <div className="space-y-2">
+          {(wordDocs || []).map(d => (
+            <div key={d.id} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-3 flex items-center gap-3">
+              <span className="text-2xl">📄</span>
+              <button className="flex-1 text-right" onClick={() => setOpenId(d.id)}>
+                <div className="text-white font-bold text-sm truncate">{d.name}</div>
+                <div className="text-slate-500 text-xs mt-0.5">آخر حفظ: {new Date(d.updatedAt || d.createdAt).toLocaleString("ar-EG")}</div>
+              </button>
+              <Btn variant="ghost" size="sm" onClick={() => setOpenId(d.id)}>فتح</Btn>
+              <Btn variant="danger" size="sm" onClick={() => { if (confirm("حذف الملف نهائيًا؟")) deleteDoc(d.id); }}>🗑</Btn>
+            </div>
+          ))}
+        </div>
+      )}
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </div>
+  );
+}
+
+export default function ExamsModule({ students, setStudents, addActivity, questions, setQuestions, webExams, setWebExams, centerExams, setCenterExams, wordDocs, setWordDocs, role }) {
   const [activePanel, setActivePanel] = useState(null);
+  const [wordEditorOpen, setWordEditorOpen] = useState(false);
 
   if (activePanel) {
     const panel = PANELS.find(p => p.key === activePanel);
     return (
       <div className="space-y-4">
-        <button onClick={() => setActivePanel(null)} className="text-slate-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">← الرجوع للامتحانات</button>
-        <div className={`bg-gradient-to-br ${panel.color} rounded-2xl p-4 flex items-center gap-3 shadow-lg ${panel.glow}`}>
-          <span className="text-3xl">{panel.icon}</span>
-          <div>
-            <div className="text-white font-black">{panel.label}</div>
-            <div className="text-white/70 text-xs mt-0.5">{panel.desc}</div>
-          </div>
-        </div>
+        <button onClick={() => { setActivePanel(null); setWordEditorOpen(false); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">← الرجوع للامتحانات</button>
 
-        {activePanel === "errors"     && <ExamCorrectionFlow     students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} />}
+        {activePanel === "errors" ? (
+          // #WordEditor: مستطيل "التصحيح" اتقسم لاتنين جنب بعض في نفس
+          // الخط الأفقي — يمين "تصحيح" (زي ما كان)، وشمال زرار جديد
+          // "فتح الوورد" بيفتح صفحة تحرير Word كاملة جوه البرنامج.
+          <div className="flex items-stretch gap-2">
+            <button
+              onClick={() => setWordEditorOpen(false)}
+              className={`flex-1 bg-gradient-to-br ${panel.color} rounded-2xl p-4 flex items-center gap-3 shadow-lg ${panel.glow} text-right transition-all ${!wordEditorOpen ? "ring-2 ring-white/40" : "opacity-80"}`}
+            >
+              <span className="text-3xl">{panel.icon}</span>
+              <div>
+                <div className="text-white font-black">تصحيح</div>
+                <div className="text-white/70 text-xs mt-0.5">تصحيح أوراق الامتحانات</div>
+              </div>
+            </button>
+            <button
+              onClick={() => setWordEditorOpen(true)}
+              className={`flex-1 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-4 flex items-center gap-3 shadow-lg shadow-indigo-500/10 text-right transition-all ${wordEditorOpen ? "ring-2 ring-white/40" : "opacity-80"}`}
+            >
+              <span className="text-3xl">📝</span>
+              <div>
+                <div className="text-white font-black">فتح الوورد</div>
+                <div className="text-white/70 text-xs mt-0.5">تحرير ملفات Word جوه البرنامج</div>
+              </div>
+            </button>
+          </div>
+        ) : (
+          <div className={`bg-gradient-to-br ${panel.color} rounded-2xl p-4 flex items-center gap-3 shadow-lg ${panel.glow}`}>
+            <span className="text-3xl">{panel.icon}</span>
+            <div>
+              <div className="text-white font-black">{panel.label}</div>
+              <div className="text-white/70 text-xs mt-0.5">{panel.desc}</div>
+            </div>
+          </div>
+        )}
+
+        {activePanel === "errors" && wordEditorOpen && <WordEditorPanel wordDocs={wordDocs || []} setWordDocs={setWordDocs} />}
+        {activePanel === "errors" && !wordEditorOpen && <ExamCorrectionFlow students={students} setStudents={setStudents} addActivity={addActivity} centerExams={centerExams} setCenterExams={setCenterExams} setWordDocs={setWordDocs} />}
         {activePanel === "correction" && <ExamErrorsFlow         students={students} centerExams={centerExams} setCenterExams={setCenterExams} role={role} />}
         {activePanel === "web"        && <ExamPanelCurriculum    webExams={webExams} students={students} />}
       </div>
