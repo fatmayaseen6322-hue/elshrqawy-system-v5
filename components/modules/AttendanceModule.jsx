@@ -258,6 +258,25 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       });
   }, [reportOpen, attRecords, reportGrade, reportDate, students]);
 
+  // كل الأيام اللي فيها غياب فعلي مسجَّل لنفس الصف (لأي مجموعة) في مودال
+  // "غياب حصة" — بيتستخدموا في أسهم التنقل (يمين = قبل كده، شمال = بعد كده)
+  const reportDatesList = useMemo(() => {
+    const set = new Set((attRecords || []).filter(r => r.grade === reportGrade && r.status === "a").map(r => r.date));
+    return [...set].sort();
+  }, [attRecords, reportGrade]);
+
+  const reportDateIdx = reportDatesList.indexOf(reportDate);
+  const hasPrevReportDate = reportDateIdx > 0 || (reportDateIdx === -1 && reportDatesList.length > 0);
+  const hasNextReportDate = reportDateIdx !== -1 && reportDateIdx < reportDatesList.length - 1;
+
+  const goPrevReportDate = () => {
+    if (reportDateIdx > 0) handleReportDateChange(reportDatesList[reportDateIdx - 1]);
+    else if (reportDateIdx === -1 && reportDatesList.length) handleReportDateChange(reportDatesList[reportDatesList.length - 1]);
+  };
+  const goNextReportDate = () => {
+    if (reportDateIdx !== -1 && reportDateIdx < reportDatesList.length - 1) handleReportDateChange(reportDatesList[reportDateIdx + 1]);
+  };
+
   const toggleReportContacted = (recId) => {
     setAttRecords(prev => (prev || []).map(r => r.id === recId ? { ...r, contacted: !r.contacted } : r));
   };
@@ -740,8 +759,27 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
               <Sel value={reportGrade} onChange={e => handleReportGradeChange(e.target.value)}>
                 {reportGradeOptions.map(g => <option key={g}>{g}</option>)}
               </Sel>
-              <DatePicker value={reportDate} onChange={handleReportDateChange} max={TODAY} />
+              <div className="flex items-center gap-1.5">
+                <button onClick={goPrevReportDate} disabled={!hasPrevReportDate}
+                  title="الغياب المسجَّل اللي قبل كده"
+                  className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
+                  <ChevronIcon dir="right" />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <DatePicker value={reportDate} onChange={handleReportDateChange} max={TODAY} />
+                </div>
+                <button onClick={goNextReportDate} disabled={!hasNextReportDate}
+                  title="الغياب المسجَّل اللي بعد كده"
+                  className="w-8 h-8 shrink-0 rounded-lg bg-slate-700/60 border border-slate-600/40 text-slate-300 disabled:opacity-25 flex items-center justify-center">
+                  <ChevronIcon dir="left" />
+                </button>
+              </div>
             </div>
+            {reportDatesList.length > 0 && (
+              <div className="text-slate-500 text-[11px] text-center">
+                {reportDateIdx >= 0 ? `سجل ${reportDateIdx + 1} من ${reportDatesList.length}` : `${reportDatesList.length} يوم فيه غياب مسجَّل — دوس → عشان تشوف آخرهم`}
+              </div>
+            )}
             <div className="border border-slate-700/40 rounded-xl overflow-hidden rtable-wrap">
               <table className="w-full text-sm rtable">
                 <thead>
