@@ -254,7 +254,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
       .filter(r => r.grade === reportGrade && r.date === reportDate && r.status === "a")
       .map(r => {
         const st = (students || []).find(s => s.id === r.studentId);
-        return { recId: r.id, name: st?.name || r.studentId, group: r.group, reason: r.reason || "—", contacted: !!r.contacted };
+        return { recId: r.id, name: st?.name || r.studentId, group: r.group, reason: r.reason || "—", contacted: !!r.contacted, parentPhone: st?.parentPhone || "" };
       });
   }, [reportOpen, attRecords, reportGrade, reportDate, students]);
 
@@ -748,7 +748,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                   <tr className="led-thead bg-slate-900/60 text-slate-400 text-xs">
                     <th className="text-right px-3 py-2">الطالب</th>
                     <th className="text-right px-3 py-2">السبب</th>
-                    <th className="text-center px-3 py-2 w-16">تواصل</th>
+                    <th className="text-center px-3 py-2 w-16">اتصال</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -761,12 +761,18 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                         <div className="text-slate-500 text-[12px]">مجموعة {r.group}</div>
                       </td>
                       <td className="px-3 py-2 text-slate-300 text-xs" data-label="السبب">{r.reason}</td>
-                      <td className="px-3 py-2 text-center" data-label="تواصل">
-                        <button onClick={() => toggleReportContacted(r.recId)}
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold ${r.contacted ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}
-                          title={r.contacted ? "تم التواصل — اضغط للتراجع" : "لم يتم التواصل — اضغط للتأكيد"}>
-                          {r.contacted ? "✓" : "✗"}
-                        </button>
+                      <td className="px-3 py-2 text-center" data-label="اتصال">
+                        {r.parentPhone ? (
+                          <a href={`tel:${r.parentPhone}`}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center font-bold bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors mx-auto"
+                            title={`اتصال بولي الأمر — ${r.parentPhone}`}>
+                            📞
+                          </a>
+                        ) : (
+                          <span className="w-7 h-7 rounded-lg flex items-center justify-center font-bold bg-slate-700/30 text-slate-600 mx-auto" title="لا يوجد رقم مسجّل">
+                            📞
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
