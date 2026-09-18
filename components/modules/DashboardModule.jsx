@@ -444,6 +444,161 @@ function ReportButtons({ students, finRecords, settings, role = "admin" }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// وقت السداد — 7 دوائر (الصفوف) → لكل صف زرارين: جدول (يوم الدفع في كل
+// شهر من 8 لـ 6) + إنذار (اللي ما دفعوش الشهر اللي فات بس).
+// ══════════════════════════════════════════════════════════════
+const PAY_CIRCLES = [
+  { key: "أولى إعدادي",      abbr: "1ع" },
+  { key: "ثانية إعدادي",     abbr: "2ع" },
+  { key: "ثالثة إعدادي",     abbr: "3ع" },
+  { key: "أولى ثانوي",       abbr: "1ث" },
+  { key: "ثانية ثانوي",      abbr: "2ث" },
+  { key: "ثالثة ثانوي",      abbr: "3ث" },
+  { key: "ثانية ثانوي أزهر", abbr: "2أ", azhar: true },
+];
+const isAzharSecond = g => { const n = normalizeAr(g || ""); return n.includes("ازهر") && n.includes("ثاني"); };
+const inPayCircle = (c, s) => c.azhar ? isAzharSecond(s.grade) : s.grade === c.key;
+
+// الرسوم المطلوبة عن شهر معيّن (نفس قاعدة صفحة المصاريف: بعد 25 = صفر، بعد 15 = نص)
+function expectedFeeFor(s, m, y, gradeFees) {
+  if (isMonthBlocked(s, m, y) || isMonthExempt(s, m, y)) return 0;
+  const base = Math.max(0, (gradeFees?.[s.grade] || 0) - (s.discount || 0));
+  const parts = (s.joinDate || "").split("-");
+  if (parts.length === 3) {
+    const jY = parseInt(parts[0], 10), jM = parseInt(parts[1], 10), jD = parseInt(parts[2], 10);
+    if (jY > y || (jY === y && jM > m)) return 0;
+    if (jY === y && jM === m) { if (jD > 25) return 0; if (jD > 15) return Math.round(base / 2); }
+  }
+  return base;
+}
+
+// المتأخرين عن سداد الشهر اللي فات (مدفعوش أي مبلغ عن الشهر ده)
+export function buildPayWarnings(students, finRecords, gradeFees) {
+  const curY = parseInt(TODAY.slice(0, 4), 10), curM = parseInt(TODAY.slice(5, 7), 10);
+  const m = curM === 1 ? 12 : curM - 1;
+  const y = curM === 1 ? curY - 1 : curY;
+  if (m > 6 && m < 8) return { month: m, year: y, list: [] }; // يوليو: مفيش شهر دراسي
+  const paid = new Set((finRecords || []).filter(r => r.month === m && r.year === y && (r.amount || 0) > 0).map(r => r.studentId));
+  const list = (students || [])
+    .map(s => ({ s, fee: expectedFeeFor(s, m, y, gradeFees) }))
+    .filter(x => x.fee > 0 && !paid.has(x.s.id))
+    .map(x => ({ id: x.s.id, name: x.s.name, group: x.s.group, grade: x.s.grade, fee: x.fee }));
+  return { month: m, year: y, list };
+}
+
+function PayTimingPage({ students, finRecords, warnings, onBack }) {
+  const [sel, setSel]   = useState(null);   // index الدايرة
+  const [view, setView] = useState(null);   // "table" | "warn"
+
+  const months = useMemo(() => {
+    const curY = parseInt(TODAY.slice(0, 4), 10), curM = parseInt(TODAY.slice(5, 7), 10);
+    return getStatementMonths(curM >= 8 ? curY : curY - 1);
+  }, []);
+
+  const payDays = useMemo(() => {
+    const map = {};
+    (finRecords || []).forEach(r => {
+      if ((r.amount || 0) <= 0 || !r.timestamp) return;
+      const k = `${r.studentId}|${r.month}|${r.year}`;
+      if (map[k]) return;
+      const d = parseInt(r.timestamp.slice(8, 10), 10);
+      if (!isNaN(d)) map[k] = d;
+    });
+    return map;
+  }, [finRecords]);
+
+  const circle = sel !== null ? PAY_CIRCLES[sel] : null;
+  const gradeStudents = useMemo(() => {
+    if (!circle) return [];
+    return (students || []).filter(s => inPayCircle(circle, s))
+      .sort((a, b) => normalizeAr(a.name).localeCompare(normalizeAr(b.name), "ar"));
+  }, [students, circle]);
+  const gradeWarn = useMemo(() => circle ? warnings.list.filter(w => inPayCircle(circle, w)) : [], [warnings, circle]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="text-slate-400 hover:text-white text-sm flex items-center gap-1">← رجوع</button>
+        <h2 className="text-white font-bold text-sm">⏰ وقت السداد</h2>
+        <span className="w-10" />
+      </div>
+
+      <div className="flex items-center justify-between gap-1.5 overflow-x-auto py-1">
+        {PAY_CIRCLES.map((c, i) => (
+          <button key={c.key} onClick={() => { setSel(i); setView(null); }} title={c.key}
+            className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold border transition-colors ${sel === i ? "bg-blue-600 border-blue-400 text-white" : "bg-slate-800/60 border-slate-700/40 text-slate-300 hover:bg-slate-800"}`}>
+            {c.abbr}
+          </button>
+        ))}
+      </div>
+
+      {circle && (
+        <div className="space-y-3">
+          <div className="text-center text-white font-bold text-sm">{circle.key}</div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => setView("table")}
+              className={`rounded-2xl py-3 text-sm font-bold border transition-colors ${view === "table" ? "bg-blue-600 border-blue-400 text-white" : "bg-slate-800/60 border-slate-700/40 text-slate-200 hover:bg-slate-800"}`}>📋 جدول</button>
+            <button onClick={() => setView("warn")}
+              className={`rounded-2xl py-3 text-sm font-bold border transition-colors ${view === "warn" ? "bg-red-600 border-red-400 text-white" : "bg-slate-800/60 border-slate-700/40 text-slate-200 hover:bg-slate-800"}`}>🚨 إنذار</button>
+          </div>
+
+          {view === "table" && (
+            gradeStudents.length === 0 ? (
+              <div className="text-center text-slate-500 text-xs py-8">مفيش طلاب في الصف ده</div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-700/40">
+                <table className="min-w-max w-full text-xs text-center">
+                  <thead>
+                    <tr className="bg-slate-800 text-slate-300">
+                      <th className="sticky right-0 bg-slate-800 px-3 py-2 text-right font-bold">الطالب</th>
+                      {months.map(({ month, year }) => (
+                        <th key={`${year}-${month}`} className="px-2.5 py-2 font-bold">{month}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {gradeStudents.map(s => (
+                      <tr key={s.id} className="bg-slate-900/40">
+                        <td className="sticky right-0 bg-slate-900 px-3 py-2 text-right text-white font-bold whitespace-nowrap">{s.name}</td>
+                        {months.map(({ month, year }) => {
+                          const d = payDays[`${s.id}|${month}|${year}`];
+                          return <td key={`${year}-${month}`} className={`px-2.5 py-2 ${d ? "text-emerald-400 font-bold" : "text-slate-700"}`}>{d || "·"}</td>;
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+
+          {view === "warn" && (
+            <div className="space-y-2">
+              <div className="text-center text-slate-400 text-xs">المتأخرين عن سداد شهر {MONTHS_AR[warnings.month - 1]}</div>
+              {gradeWarn.length === 0 ? (
+                <div className="text-center text-slate-500 text-xs py-8">مفيش متأخرين في الصف ده 🎉</div>
+              ) : (
+                <div className="rounded-2xl border border-slate-700/40 overflow-hidden divide-y divide-slate-800">
+                  {gradeWarn.map(w => (
+                    <div key={w.id} className="bg-slate-800/60 px-4 py-3 flex items-center justify-between text-xs">
+                      <div className="text-right">
+                        <div className="text-white font-bold text-sm">{w.name}</div>
+                        {w.group && <div className="text-slate-500 mt-0.5">مجموعة {w.group}</div>}
+                      </div>
+                      <span className="text-red-400 font-bold shrink-0">{fmtM(w.fee)} ج</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // MODULE 5: DASHBOARD
 // Receives finRecords instead of payments
 // ══════════════════════════════════════════════════════════════
@@ -469,6 +624,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const [showDup, setShowDup] = useState(false);
   const [confirmDeleteDup, setConfirmDeleteDup] = useState(null);
   const [showReceiversCompare, setShowReceiversCompare] = useState(false);
+  const [showPayTiming, setShowPayTiming] = useState(false);
   // ── تنبيه الأسست: رسائل ثابتة على الشاشة متختفيش إلا لما تدوس على
   // قسم "المتأخرين" وبعده "بدون أرقام" — عشان تتأكد إنها فعلاً شافتهم
   const [ackLate, setAckLate] = useState(false);
@@ -510,6 +666,7 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
   const dd = useMemo(() => buildDashboardData(students, finRecords, settings?.gradeFees, attRecords), [students, finRecords, settings?.gradeFees, attRecords]);
   const alerts = students.filter(s => s.score < 60 || (dd.absenceByStudentId?.[s.id]?.absent || 0) > 8 || (s.totalFees - s.paid) > 1200);
   const dupData = useMemo(() => buildDuplicatesData(studentsProp), [studentsProp]);
+  const payWarnings = useMemo(() => buildPayWarnings(students, finRecords, settings?.gradeFees), [students, finRecords, settings?.gradeFees]);
 
   // ══════════════════════════════════════════════════════════════
   // جدول مقارنة المستلمين ("المس") — لكل مستلم (مس)، عدد الطلاب اللي
@@ -572,7 +729,6 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     addActivity?.("استرجاع من سلة المهملات", `${name} — اترجع من سلة المهملات`);
     showToast?.(`↩️ تم استرجاع ${name}`, "success");
   };
-  const todayAtt = useMemo(() => buildTodayAttendance(attRecords, students), [attRecords, students]);
 
   // Assist: يشوف المحصّل + قائمة المتأخرين بالاسم + الغياب — بدون إجمالي عدد الطلاب أو إجمالي الديون
   const isAssist = role === "assist";
@@ -590,6 +746,10 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAssist]);
+
+  if (showPayTiming) {
+    return <PayTimingPage students={students} finRecords={finRecords} warnings={payWarnings} onBack={() => setShowPayTiming(false)} />;
+  }
 
   // ── صفحة "الطلاب المتأخرين من شهور سابقة" — منفصلة عن برج المراقبة، بتتفتح
   // من زرار 👤▾ بجوار كارت إجمالي الديون، وترجع لبرج المراقبة بزرار الرجوع فوق
@@ -1176,6 +1336,12 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
               </div>
             )}
           </div>
+          <button onClick={() => setShowPayTiming(true)}
+            className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 flex flex-col gap-1 text-right hover:bg-slate-800 transition-colors">
+            <span className="text-2xl">⏰</span>
+            <div className={`text-2xl font-bold ${payWarnings.list.length > 0 ? "text-red-400" : "text-emerald-400"}`}>{payWarnings.list.length}</div>
+            <div className="text-slate-400 text-xs">وقت السداد</div>
+          </button>
         </div>
       )}
       {isAssist && (
@@ -1206,12 +1372,6 @@ export default function DashboardModule({ students: studentsProp, finRecords: fi
             ))
           )}
         </div>
-      )}
-      {!isAssist && (
-        <>
-          <ProblemSection data={todayAtt} idRef={refs.todayAtt} />
-          <ProblemSection data={dd.absenceSection}  idRef={refs.absence}  />
-        </>
       )}
       {!isAssist && (
         <button onClick={() => setShowLog(true)}
