@@ -113,7 +113,6 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
   const [confirmDel, setConfirmDel] = useState(null);
   const [blockReason, setBlockReason] = useState("");
   const [showImport, setShowImport] = useState(false);
-  const [openErrKey, setOpenErrKey] = useState(null);
 
   useEffect(() => {
     if (jumpTo) {
@@ -312,15 +311,22 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
       return Object.values(bucket).sort((a, b) => b.count - a.count);
     })();
 
-    // ── أخطاء الأسئلة المسجّلة من قسم "الأخطاء" (وحدة/درس ← أرقام الأسئلة) ──
+    // ── مستوى الطالب في كل وحدة/درس (نسبة مئوية) بدل عرض أرقام الأسئلة
+    // الغلط — نفس طريقة حساب "المستوى الحقيقي" فوق، لكن لكل وحدة/درس
+    // لوحده: 100% ناقص نسبة النقط الغلط من إجمالي نقط امتحان هذه الوحدة/الدرس.
     const errorsByLesson = (() => {
       const bucket = {};
       (s.examErrors || []).forEach(e => {
         const key = `${e.unit}__${e.lesson}`;
-        if (!bucket[key]) bucket[key] = { unit: e.unit, lesson: e.lesson, items: [] };
+        if (!bucket[key]) bucket[key] = { unit: e.unit, lesson: e.lesson, grade: e.grade, items: [] };
         bucket[key].items.push(e);
       });
-      return Object.values(bucket).sort((a, b) => (a.unit - b.unit) || (a.lesson - b.lesson));
+      return Object.values(bucket).map(g => {
+        const exam = (centerExams || []).find(ex => ex.grade === g.grade && String(ex.unit) === String(g.unit) && String(ex.lesson) === String(g.lesson));
+        const totalPts = exam ? (exam.numQuestions || 0) * (exam.pointsPerQuestion || 0) : 0;
+        const levelPct = totalPts > 0 ? Math.max(0, Math.round(100 - (g.items.length / totalPts) * 100)) : null;
+        return { ...g, levelPct };
+      }).sort((a, b) => (a.unit - b.unit) || (a.lesson - b.lesson));
     })();
 
     // ── المستوى الحقيقي: 100% ناقص نسبة النقط الغلط من إجمالي نقط الامتحانات
@@ -413,38 +419,20 @@ export default function StudentsModule({ students, setStudents, finRecords, setF
           )}
           {errorsByLesson.length > 0 && (
             <div className="mt-3 bg-slate-900/40 rounded-xl p-3">
-              <div className="text-slate-500 text-xs mb-1.5">🟥 أخطاء الأسئلة (وحدة / درس)</div>
+              <div className="text-slate-500 text-xs mb-1.5">🟥 مستوى الطالب في كل وحدة/درس</div>
               <div className="flex flex-wrap gap-1.5">
                 {errorsByLesson.map(g => {
                   const key = `${g.unit}__${g.lesson}`;
-                  const isOpen = openErrKey === key;
+                  const okLevel = g.levelPct === null || g.levelPct >= 65;
                   return (
-                    <button key={key} onClick={() => setOpenErrKey(isOpen ? null : key)}
-                      className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                        isOpen ? "bg-red-600 border-red-500 text-white" : "bg-red-500/15 border-red-500/20 text-red-400 hover:bg-red-500/25"}`}>
-                      وحدة {g.unit} - درس {g.lesson} ({g.items.length})
-                    </button>
+                    <span key={key}
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-bold ${
+                        okLevel ? "bg-emerald-500/15 border-emerald-500/20 text-emerald-400" : "bg-red-500/15 border-red-500/20 text-red-400"}`}>
+                      وحدة {g.unit} - درس {g.lesson}: {g.levelPct === null ? "—" : `${g.levelPct}%`}
+                    </span>
                   );
                 })}
               </div>
-              {openErrKey && (() => {
-                const g = errorsByLesson.find(x => `${x.unit}__${x.lesson}` === openErrKey);
-                if (!g) return null;
-                const qs = [...new Set(g.items.map(e => e.q))].sort((a, b) => a - b);
-                return (
-                  <div className="mt-2.5 space-y-1.5">
-                    {qs.map(q => {
-                      const pts = g.items.filter(e => e.q === q).map(e => e.p).sort((a, b) => a - b);
-                      return (
-                        <div key={q} className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/40 rounded-lg px-3 py-1.5">
-                          <span className="text-white text-xs font-bold shrink-0">سؤال {q}</span>
-                          <span className="text-red-300 text-xs">نقطة {pts.join("، ")}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
             </div>
           )}
           <ScoreHistoryChart student={s} />
