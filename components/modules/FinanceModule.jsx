@@ -616,13 +616,27 @@ export default function FinanceModule({ students, settings, finRecords, setFinRe
   const [dSelYear,      setDSelYear]      = useState(curYear);
   const [filtersOpen,   setFiltersOpen]   = useState(false); // إظهار/إخفاء فلاتر اليوم/الشهر/السنة أعلى سجل المصاريف
 
-  // تصفح إلكتروني بين الأيام (زي صفحات كتاب) — يوم قبل / يوم بعد
+  // تصفح بين الأيام — بدل ما تتنقل يوم بيوم وتعدي على أيام فاضية، بتروح
+  // على طول لأقرب يوم فيه معاملة فعلية في نفس الاتجاه (قبل/بعد). لو مفيش
+  // أي يوم تاني فيه معاملات في الاتجاه ده خالص، تتحرك يوم عادي زي الأول.
   const goDay = (delta) => {
-    const d = new Date(dSelYear, dSelMonth - 1, dSelDay);
-    d.setDate(d.getDate() + delta);
-    setDSelDay(d.getDate());
-    setDSelMonth(d.getMonth() + 1);
-    setDSelYear(d.getFullYear());
+    const distinctDays = [...new Set(safeRecords.map(r => r.timestamp?.slice(0, 10)).filter(Boolean))].sort();
+    const curStr = `${dSelYear}-${String(dSelMonth).padStart(2, "0")}-${String(dSelDay).padStart(2, "0")}`;
+    const target = delta < 0
+      ? [...distinctDays].reverse().find(d => d < curStr)
+      : distinctDays.find(d => d > curStr);
+    if (target) {
+      const [y, m, d] = target.split("-").map(Number);
+      setDSelYear(y);
+      setDSelMonth(m);
+      setDSelDay(d);
+      return;
+    }
+    const dt = new Date(dSelYear, dSelMonth - 1, dSelDay);
+    dt.setDate(dt.getDate() + delta);
+    setDSelDay(dt.getDate());
+    setDSelMonth(dt.getMonth() + 1);
+    setDSelYear(dt.getFullYear());
   };
 
   const dayRecords = useMemo(() => {
