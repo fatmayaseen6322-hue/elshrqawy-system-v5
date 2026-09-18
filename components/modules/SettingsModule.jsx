@@ -190,7 +190,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
   // ── باسورد شخصي لكل مستلم — لو دخل بيه حد البرنامج، بيتسجل باسمه
   // تلقائيًا في المصاريف (بدل اختيار المستلم يدويًا) وفي سجل الغياب ──
   const saveReceiverPwd = async (id) => {
-    if (pwdNew.length < 4) { setPwdErr("4 أحرف على الأقل"); return; }
+    if (pwdNew.length < 1) { setPwdErr("اكتب كلمة سر"); return; }
     const hashed = await hashPwdStored(pwdNew);
     save("receivers", (settings.receivers || []).map(r => r.id === id ? { ...r, password: hashed } : r), "✓ تم حفظ الباسورد");
     setPwdReceiverId(null); setPwdNew(""); setPwdErr("");
@@ -222,12 +222,12 @@ export default function SettingsModule({ settings, setSettings, students, setStu
     const r = new FileReader(); r.onload = ev => { save(field, ev.target.result, `✓ تم رفع ${label}`); }; r.readAsDataURL(f); e.target.value = "";
   };
   const changePwd = async () => {
-    if (newP.length < 6) { setPErr("6 أحرف على الأقل"); return; }
+    if (newP.length < 1) { setPErr("اكتب كلمة سر"); return; }
     const hashed = await hashPwdStored(newP);
     save("password", hashed, "✓ تم تغيير كلمة المرور"); setOldP(""); setNewP(""); setPErr(""); setView("main");
   };
   const changeRolePwd = async (roleKey, pwdKey, newVal, setErrFn, resetFns = []) => {
-    if (newVal.length < 4) { setErrFn("4 أحرف على الأقل"); return; }
+    if (newVal.length < 1) { setErrFn("اكتب كلمة سر"); return; }
     const hashed = await hashPwdStored(newVal);
     save(pwdKey, hashed, `✓ تم تغيير كلمة مرور ${roleKey}`); setErrFn("");
     resetFns.forEach(fn => fn(""));
@@ -236,7 +236,7 @@ export default function SettingsModule({ settings, setSettings, students, setStu
   // ── كلمة سر "كشف المصاريف" — مخزّنة نص صريح (زي باقي كلمات سر المصاريف
   // العادية) لأن شاشة تعديل الكشف بتقارنها مباشرة بدون تشفير ──
   const saveStatementPwd = () => {
-    if (fsP.length < 4) { setFsErr("4 أحرف على الأقل"); return; }
+    if (fsP.length < 1) { setFsErr("اكتب كلمة سر"); return; }
     save("financePassword", fsP, "✓ تم حفظ كلمة سر كشف المصاريف"); setFsErr(""); setFsP("");
     setView("passwords");
   };
