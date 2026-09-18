@@ -393,31 +393,14 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
     else setErr("كلمة مرور المستر غير صحيحة");
   };
 
-  // ── حفظ تلقائي بالكامل: مفيش زرار حفظ خالص — بمجرد ما المبلغ والمستلم
-  // يبقوا موجودين وصح، بيتسجل الدفعة على طول من غير أي ضغطة زرار.
-  // ده بيغطي حالة: مستلم مقفول (Assist) بس. أما المستر (مستلم مش مقفول)
-  // فـ لازم يأكد كل طالب بنفسه (اختيار من القائمة أو زرار "✓ تسجيل").
-  //
-  // #NoAutoRegisterOnOpen (حل جذري): الصف بيحتوي على عشرات الطلاب اللي
-  // لسه ما دفعوش، وكل واحد فيهم بيتفتح بالمبلغ الافتراضي (_defaultFee)
-  // والمستلم مقفول عليه (lockedReceiver) من أول لحظة تحميل — يعني شرط
-  // الحفظ فوق كان بيتحقق فورًا لكل الطلاب مع فتح الصف، وكل واحد فيهم
-  // كان بيتسجل "مدفوع" أوتوماتيك باسم الأسيست من غير ما هي تعمل أي حاجة.
-  // الحل: الـ effect ده لازم يشتغل بس لما حاجة تتغيّر فعليًا بعد ما
-  // الصف اتفتح (فعل حقيقي من المستخدمة) — مش أول مرة بيحسب فيها الشرط
-  // (اللي هي لحظة الفتح نفسها). firstRun بيتجاهل أول تشغيل للـ effect.
-  const firstRun = useRef(true);
-  useEffect(() => {
-    if (firstRun.current) { firstRun.current = false; return; }
-    if (lockedReceiver && !saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0) {
-      const rec = buildRec(receiverId, receiverName);
-      onSave(rec);
-      setLocalRecord(rec);
-      setSaved(true);
-      setEditing(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saved, receiverId, amount, lockedReceiver]);
+  // ── #NoAutoRegisterOnOpen (حل جذري نهائي): كان فيه "حفظ تلقائي بالكامل"
+  // للمستلم المقفول (Assist) — بيتسجل من غير أي ضغطة زرار خالص. اتضح إن
+  // ده غير آمن بنيويًا: أي إعادة رسم (re-render) للصفحة، حتى من غير أي فعل
+  // من المستخدمة، ممكن يخلي شرط الحفظ يتحقق تاني (lockedReceiver بييجي
+  // object جديد في كل رندر) ويسجل الدفعة من غير قصد — وده اللي كان بيرجّع
+  // المشكلة برغم أي إصلاح توقيتي. الحل النهائي: إلغاء الحفظ التلقائي
+  // بالكامل. أي دفعة، لأي دور (مستر أو أسيست)، لازم ضغطة فعلية على زرار
+  // "✓ تسجيل" — حاجة مستحيل كودياً تحصل من غير فعل بشري حقيقي (onClick).
 
   // ── تسجيل يدوي صريح للمستر: لما المستلم يبقى متعبى مسبقًا (من اختيار طالب
   // قبله) بس لسه محدش أكد إن الطالب ده فعلاً دفع ──
@@ -549,11 +532,9 @@ function FinRow({ student, index, record, globalReceiver, activeReceivers, locke
             ? (role === "admin"
                 ? <button onClick={requestEdit} className="w-9 h-8 rounded-lg bg-blue-700/25 border border-blue-600/30 text-blue-300 text-sm hover:bg-blue-700/40">✏️</button>
                 : <span className="text-slate-600 text-[10px]" title="التعديل متاح للمستر بس">—</span>)
-            : (!lockedReceiver && !saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0)
+            : (!saved && receiverId && amount !== "" && (parseInt(amount) || 0) > 0)
               ? <button onClick={confirmRegister} title="أكد إن الطالب ده فعلاً دفع" className="px-2 h-8 rounded-lg bg-emerald-700/30 border border-emerald-600/40 text-emerald-300 text-[11px] font-bold hover:bg-emerald-700/50 whitespace-nowrap">✓ تسجيل</button>
-              : lockedReceiver
-                ? <span className="text-slate-500 text-[10px]" title="بيتسجل تلقائي بمجرد فتح الصف">⏳ تلقائي</span>
-                : <span className="text-slate-600 text-[10px]" title="اختاري المستلم من القائمة الأول">اختر مستلم</span>
+              : <span className="text-slate-600 text-[10px]" title="اختاري المستلم من القائمة الأول">اختر مستلم</span>
           }
         </td>
         <td className="px-2 py-3 text-center" data-label="طباعة">
