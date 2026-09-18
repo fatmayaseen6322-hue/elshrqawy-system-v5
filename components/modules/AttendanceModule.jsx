@@ -923,7 +923,12 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     {role !== "assist" && (
                       <div className="w-6 h-6 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">{i + 1}</div>
                     )}
-                    <Av name={s.name} size="sm" />
+                    {/* طلب: حرف الأفاتار جنب الاسم واخد مساحة كبيرة في
+                        الموبايل — بيتخفي في الشاشات الصغيرة بس (أقل من
+                        md)، ويفضل ظاهر عادي في التابلت/الكمبيوتر. */}
+                    <div className="hidden md:block">
+                      <Av name={s.name} size="sm" />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-white text-sm font-bold break-words">{s.name}</div>
                       {session[s.id]?.guestFrom && (

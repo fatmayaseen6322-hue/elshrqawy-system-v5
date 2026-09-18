@@ -290,6 +290,10 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifs, setShowNotifs]     = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false); // #4
+  // طلب: في نسخة الموبايل، الشريط الجانبي (72px) يختفي افتراضيًا
+  // ويظهر بدله نقطة صغيرة — بالضغط عليها يظهر الشريط فوق المحتوى،
+  // عشان صفحة الأسماء (الحضور وغيرها) تاخد الشاشة كلها.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Printer Intelligence System
   const [showPrinterPicker, setShowPrinterPicker]   = useState(false);
   const [detectedPrinters,  setDetectedPrinters]    = useState([]);
@@ -474,9 +478,16 @@ export default function App() {
         <div className="absolute inset-0 pointer-events-none z-0" style={{ background: "rgba(2,6,23,0.80)" }} />
       )}
 
-      {/* ─── Sidebar ─── */}
-      <aside className="relative z-10 flex flex-col shrink-0"
-        style={{ width: "72px", background: "var(--sidebar-bg)", borderLeft: "1px solid var(--border)" }}>
+      {/* ─── Sidebar ───
+          طلب: في نسخة الموبايل (أصغر من md) الشريط ده مخفي افتراضيًا
+          وبيظهر بدله نقطة صغيرة ثابتة، وبالضغط عليها يظهر الشريط فوق
+          المحتوى (overlay) من غير ما ياخد مساحة ثابتة من الشاشة.
+          من شاشة md فما فوق، سلوكه القديم بالظبط (ثابت وظاهر دايمًا). */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMobileNavOpen(false)} />
+      )}
+      <aside className={`${mobileNavOpen ? "fixed inset-y-0 right-0 flex" : "hidden md:flex"} z-40 md:relative md:z-10 flex-col shrink-0`}
+        style={{ width: "72px", background: "var(--sidebar-bg)", borderLeft: "1px solid var(--border)", boxShadow: mobileNavOpen ? "var(--shadow-lg)" : "none" }}>
         <div className="flex flex-col items-center justify-center gap-2" style={{ height: "25%", minHeight: "140px", borderBottom: "1px solid var(--border)" }}>
           {settings?.logo
             ? <img src={settings.logo} alt="logo" className="w-10 h-10 object-cover" style={{ borderRadius: "var(--radius-md)" }} />
@@ -505,7 +516,7 @@ export default function App() {
             return (
               <div key={n.key} className="relative">
                 <button
-                  onClick={() => { setPage(n.key); if (n.key === "finance") setFinanceMode(null); }}
+                  onClick={() => { setPage(n.key); if (n.key === "finance") setFinanceMode(null); setMobileNavOpen(false); }}
                   className="relative flex flex-col items-center justify-center gap-1 transition-all duration-200"
                   style={{
                     width: "56px", height: "56px",
@@ -529,6 +540,16 @@ export default function App() {
           })}
         </nav>
       </aside>
+
+      {/* نقطة صغيرة لفتح الشريط الجانبي — تظهر في الموبايل فقط لما
+          يكون الشريط مقفول، مكانها في نفس حافة الشريط (يمين الشاشة). */}
+      {!mobileNavOpen && (
+        <button onClick={() => setMobileNavOpen(true)} title="فتح القائمة"
+          className="md:hidden fixed top-1/2 -translate-y-1/2 right-0 z-30 w-4 h-11 flex items-center justify-center"
+          style={{ background: "var(--sidebar-bg)", border: "1px solid var(--border)", borderRight: "none", borderRadius: "10px 0 0 10px" }}>
+          <span style={{ color: "var(--text-muted)", fontSize: "14px", lineHeight: 1 }}>•</span>
+        </button>
+      )}
 
       {/* ─── Main Content ─── */}
       <div className="relative z-10 flex-1 flex flex-col min-w-0 overflow-hidden">
