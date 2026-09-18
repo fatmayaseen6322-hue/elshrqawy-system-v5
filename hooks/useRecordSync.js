@@ -39,7 +39,7 @@ export function useRecordSync(collectionName, records, setRecords) {
   const pushChanges = useCallback(async (force = false) => {
     if (!navigator.onLine) return;
     try {
-      const { collection, doc, writeBatch } = await import("firebase/firestore");
+      const { collection, doc, writeBatch, getDocs } = await import("firebase/firestore");
       const { db, authReady } = await import("../src/firebase");
       await authReady; // #SecureRules: الكتابة بقت محتاجة auth != null
 
@@ -47,6 +47,28 @@ export function useRecordSync(collectionName, records, setRecords) {
       const snapshot   = force ? {} : lsGet(snapKey, {});
       const currentMap = {};
       current.forEach(r => { if (r && r.id !== undefined && r.id !== null) currentMap[String(r.id)] = r; });
+
+      // ══════════════════════════════════════════════════════════
+      // #NoResurrect (حل جذري لمشكلة "الأسماء المحذوفة بترجع"):
+      // جهاز لسه شايل نسخة قديمة محليًا (متأخر عن آخر تحديث، أو كان
+      // مقفول وقت الحذف) وبيعمل رفع force (زرار "رفع نسخة على السحابة")
+      // كان بيكتب فوق شاهد الحذف (_deleted:true) بتاع أي سجل اتحذف من
+      // جهاز تاني، ويرجّعه بـ _deleted:false بتوقيت جديد — فعليًا بيلغي
+      // الحذف من غير قصد. الحل: أي رفع force بيجيب أول حالة السحابة
+      // الفعلية الحالية، وأي سجل متعلّم هناك كمحذوف بيتجاهله من الرفع
+      // *و* بيتشال من نسخة الجهاز ده المحلية كمان (عشان يتصحح لوحده
+      // بدل ما يفضل يحاول يرجّعه في كل رفع تالي).
+      // ══════════════════════════════════════════════════════════
+      let selfHealedIds = [];
+      if (force) {
+        const remoteSnap = await getDocs(collection(db, collectionName));
+        remoteSnap.forEach(d => {
+          if (d.data()._deleted && d.id in currentMap) {
+            delete currentMap[d.id];
+            selfHealedIds.push(d.id);
+          }
+        });
+      }
 
       const ts = Date.now();
       const batch = writeBatch(db);
@@ -76,11 +98,15 @@ export function useRecordSync(collectionName, records, setRecords) {
         await batch.commit();
         lsSet(snapKey, snapshot);
       }
+      if (selfHealedIds.length) {
+        isApplyingRemote.current = true;
+        setRecords(Object.values(currentMap));
+      }
       setState({ status: "success", message: "متصلة ومتزامنة ✓" });
     } catch (e) {
       setState({ status: "error", message: "تعذّرت مزامنة البيانات (تأكد من النت وصلاحيات Firestore)" });
     }
-  }, [collectionName, snapKey]);
+  }, [collectionName, snapKey, setRecords]);
 
   // بيدمج سجلات جايه من السحابة (تعديل أو حذف) جوه القائمة المحلية
   const applyRemoteDocs = useCallback((docs) => {
