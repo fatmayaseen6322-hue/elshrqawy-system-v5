@@ -384,6 +384,39 @@ export default function useAppData() {
       const { collection, getDocs, query, orderBy } = await import("firebase/firestore");
       const { db, authReady } = await import("../src/firebase");
       await authReady; // #SecureRules
+
+      // ══════════════════════════════════════════════════════════
+      // #NoResurrectRestore (حل جذري — الجزء التاني من مشكلة "الأسماء
+      // المحذوفة بترجع"): "استرجاع من السحابة" بيقرا من أرشيف نسخ يومية
+      // تراكمي (elshrqawy_daily_backups) بيتجمع فيه كل سجل "جديد" شافه
+      // أي جهاز على مر الوقت — الأرشيف ده مبيعرفش حاجة عن أي حذف حصل
+      // بعد كده خالص (مفيش فيه مفهوم "اتحذف"). فكان ممكن ضغطة "استرجاع"
+      // ترجّع طالب أو دفعة اتحذفت من فترة، لأنها لسه موجودة في نسخة
+      // يومية قديمة. مصدر الحقيقة الفعلي دلوقتي هو المزامنة اللحظية لكل
+      // سجل (كولكشنز elshrqawy_students / elshrqawy_fin_records /
+      // elshrqawy_att_records اللي فيها شاهد _deleted صريح) — فبنجيب
+      // منها أول حالة كل سجل فعليًا موجود دلوقتي، وأي سجل مش موجود فيها
+      // (يعني اتحذف فعلاً) بيتمنع من الرجوع حتى لو لسه موجود في الأرشيف
+      // القديم.
+      // ══════════════════════════════════════════════════════════
+      const [liveStudentsSnap, liveFinSnap, liveAttSnap] = await Promise.all([
+        getDocs(collection(db, "elshrqawy_students")),
+        getDocs(collection(db, "elshrqawy_fin_records")),
+        getDocs(collection(db, "elshrqawy_att_records")),
+      ]);
+      const buildLiveIdSet = snap => {
+        const set = new Set();
+        snap.forEach(d => { if (!d.data()._deleted) set.add(d.id); });
+        return set;
+      };
+      // لو الكولكشن اللحظي لسه فاضي تمامًا (مفيش أي سجل خالص اترفع بيه)،
+      // يبقى المزامنة اللحظية لسه ما اتفعلتش/ما وصلتش، فمنسيبش الفلترة
+      // تمسح كل حاجة بالغلط — نرجع للسلوك القديم (بدون فلترة) في الحالة
+      // دي بس.
+      const liveStudentIds = liveStudentsSnap.size ? buildLiveIdSet(liveStudentsSnap) : null;
+      const liveFinIds     = liveFinSnap.size      ? buildLiveIdSet(liveFinSnap)      : null;
+      const liveAttIds     = liveAttSnap.size      ? buildLiveIdSet(liveAttSnap)      : null;
+
       const snaps = await getDocs(query(collection(db, "elshrqawy_daily_backups"), orderBy("savedAt", "asc")));
       if (snaps.empty) {
         setCloudBackupState({ status: "error", message: "مفيش نسخ احتياطية محفوظة على السحابة" });
@@ -399,8 +432,8 @@ export default function useAppData() {
       snaps.forEach(d => {
         const data = d.data();
         lastDate = data.savedAt?.split("T")[0] || d.id;
-        (data.finRecords || []).forEach(r => { finMap[r.id] = r; });
-        (data.attRecords || []).forEach(r => { attMap[r.id] = r; });
+        (data.finRecords || []).forEach(r => { if (!liveFinIds || liveFinIds.has(String(r.id))) finMap[r.id] = r; });
+        (data.attRecords || []).forEach(r => { if (!liveAttIds || liveAttIds.has(String(r.id))) attMap[r.id] = r; });
         (data.examChanges || []).forEach(c => { examSnap[c.studentId] = c; });
         (data.centerExamResults || []).forEach(c => { examResultsMap[c.id] = c; });
         if (data.students) fullStudents = data.students; // بترتيب الوقت (asc) فآخر واحد فيه students هو الأحدث
@@ -411,6 +444,9 @@ export default function useAppData() {
         if (data.activityLogFull) fullActivityLog = data.activityLogFull;
         if (data.trashedDupFull)  fullTrashedDup  = data.trashedDupFull;
       });
+      if (fullStudents && liveStudentIds) {
+        fullStudents = fullStudents.filter(s => liveStudentIds.has(String(s.id)));
+      }
 
       // دمج مع الموجود محليًا (مش استبدال كامل) — لأن رفع السحابة نفسه تراكمي
       setFinRecords(prev => Object.values({ ...Object.fromEntries((prev || []).map(r => [r.id, r])), ...finMap }));
