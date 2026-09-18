@@ -926,7 +926,7 @@ export default function AttendanceModule({ students, setStudents, attRecords, se
                     {/* طلب: حرف الأفاتار جنب الاسم واخد مساحة كبيرة في
                         الموبايل — بيتخفي في الشاشات الصغيرة بس (أقل من
                         md)، ويفضل ظاهر عادي في التابلت/الكمبيوتر. */}
-                    <div className="hidden md:block">
+                    <div className="hidden sm:block">
                       <Av name={s.name} size="sm" />
                     </div>
                     <div className="flex-1 min-w-0">

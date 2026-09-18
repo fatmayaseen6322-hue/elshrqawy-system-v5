@@ -484,9 +484,9 @@ export default function App() {
           المحتوى (overlay) من غير ما ياخد مساحة ثابتة من الشاشة.
           من شاشة md فما فوق، سلوكه القديم بالظبط (ثابت وظاهر دايمًا). */}
       {mobileNavOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMobileNavOpen(false)} />
+        <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setMobileNavOpen(false)} />
       )}
-      <aside className={`${mobileNavOpen ? "fixed inset-y-0 right-0 flex" : "hidden md:flex"} z-40 md:relative md:z-10 flex-col shrink-0`}
+      <aside className={`${mobileNavOpen ? "fixed inset-y-0 right-0 flex" : "hidden sm:flex"} z-40 sm:relative sm:z-10 flex-col shrink-0`}
         style={{ width: "72px", background: "var(--sidebar-bg)", borderLeft: "1px solid var(--border)", boxShadow: mobileNavOpen ? "var(--shadow-lg)" : "none" }}>
         <div className="flex flex-col items-center justify-center gap-2" style={{ height: "25%", minHeight: "140px", borderBottom: "1px solid var(--border)" }}>
           {settings?.logo
@@ -545,7 +545,7 @@ export default function App() {
           يكون الشريط مقفول، مكانها في نفس حافة الشريط (يمين الشاشة). */}
       {!mobileNavOpen && (
         <button onClick={() => setMobileNavOpen(true)} title="فتح القائمة"
-          className="md:hidden fixed top-1/2 -translate-y-1/2 right-0 z-30 w-4 h-11 flex items-center justify-center"
+          className="sm:hidden fixed top-1/2 -translate-y-1/2 right-0 z-30 w-4 h-11 flex items-center justify-center"
           style={{ background: "var(--sidebar-bg)", border: "1px solid var(--border)", borderRight: "none", borderRadius: "10px 0 0 10px" }}>
           <span style={{ color: "var(--text-muted)", fontSize: "14px", lineHeight: 1 }}>•</span>
         </button>
